@@ -70,7 +70,7 @@ McDermott) — Wikipedia's wins when the games list's coach isn't on the staff (
 
 **A coach's history** (`coachSeasons` in `fb.js`) is every team-season he was on the offensive staff, in any job: each job is sorted into
 HC / OC / PC (play-caller: the coordinator, or a head coach with none) / PGC / RGC / QB / RB / WR / TE / OL / Asst (`ROLE_CATS`). Coaches
-page: **Head coaches**, **Coordinators** (OC or play-caller) or **Every offensive coach** — the averages are over the seasons in the job
+page: **Head coaches**, **Coordinators** (OC or play-caller) or **All staff** — the averages are over the seasons in the job
 picked, the Teams and Every job columns over his whole history, a Find a coach box. A coach's page: his stints (club, seasons, jobs —
 "ATL 2016 offensive assistant · SF 2017–20 pass game specialist / coordinator · NYJ 2021–22 OC · LA 2023–25 OC · ARI 2026 head coach" for
 Mike LaFleur), the averages over every season, and a season table with his job and that year's head coach. Staffs are the season's
@@ -81,8 +81,29 @@ night and Thursday night games; nflverse refreshes overnight), and by hand (Acti
 seasons' staffs on top of this season's, `dry` builds without publishing). It publishes the way the baseball site's cloud run does: the built `data/` kept aside, reset to main, put back, stamped, one plain
 commit on top of main, never a force-push.
 
+**What staff history can and can't tell you (Sean, 13 Oct 2026: "my goal is to help identify cases like chuba and bucky where ppl going
+in thought they would be in committees but the reality is they are not ... with the staff history")**: tested before building on it (every
+team-season 2016-25; the RB1's carry share in his own games as the target; scratch `staff/roles.py`, `room.py`, `persist*.py`, `pccheck.py`):
+* *By job*: a staff member's history is his team-seasons before this one, shrunk n / (n + 3). Held out by season, the play-caller's history
+  predicts this season's lead-back share at r .00, play-caller + head coach .04, every role together .11 — position coaches add nothing.
+  The team's own split the year before: .21.
+* *The room*: the backs' prior-season opportunities a game (a rookie by draft round), the best one's share of the top two and his gap
+  over the second: r .33. Staff history on top of it: no gain (.32).
+* *Does a style repeat?* Same play-caller, same team, next year: r .36 (mostly the same backs). Same team, new play-caller: .16. A
+  play-caller who moves teams: −.38 (23 moves). After the room, a play-caller explains ~4% of the split, p .30 by permutation — chance.
+  Raw (room ignored) it reads 17%, which is the backs he kept, not him.
+* *What does travel*: the **RB share of targets** (a play-caller's next team r .40 on 23 moves, .2-.3 on other cuts; 24% of its variance by
+  coach) — the one scheme habit that follows him. Run rate, goal-line share and backs used don't.
+* *Who called plays*: **`data/playcallers.json`** — head coaches who called their own offense by team and seasons, hand-built from public
+  reporting (edit freely); `play_caller()` in `build_fb.py` uses it when that man is the head coach that season (the season in progress
+  follows the last listed season under the same head coach), else Wikipedia's "de facto", else the coordinator. It moved a third of
+  team-seasons' play-caller and sharpened nothing above (target share moves .17 next year / .28 first year at a new team vs his career).
+* *Mid-season changes*: the head coach is the games list's, game by game; a coordinator fired mid-season is missing from the final staff
+  and two coordinators listed in one season are both credited — left as is, since nothing here depends on it.
+On the site: the Coaches list and every coach's page carry a **What follows a coach** box (`findings()` in `fb.js`, `.findings`) saying
+the above; the third Coaches button is **All staff**. The bell-cow question goes to the projection model (the next to-do), which weighs the
+room, the market and the staff together.
+
 **Football to-dos** (Sean, 13 Oct 2026, parked until he says go):
-* *Staff history's niche logistics* ("we can figure out the more niche logistics there later"): weighting a season by his job
-  (play-caller vs position coach), mid-season firings and hirings (the final staff misses a fired coordinator — Greg Roman, Buffalo 2016),
-  who actually called plays when the title doesn't say, title changes within a season.
+* ~~Staff history's niche logistics~~ — done 13 Oct 2026, above.
 * *A projection model* that would have seen Gibbs's big year, Bucky Irving, Chuba Hubbard, Christian Watson and Parker Washington coming.
