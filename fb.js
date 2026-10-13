@@ -157,7 +157,7 @@
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
     nav.setAttribute("aria-label", "Pages");
-    for (const [h, lab] of [["#leaders", "Leaders"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"]]) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); nav.append(a); }
+    for (const [h, lab] of [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"]]) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); nav.append(a); }
     const sr = el("div", "srch"), inp = el("input"); inp.type = "search"; inp.placeholder = "Search players"; inp.setAttribute("aria-label", "Search players");
     const hits = el("div", "hits"); hits.hidden = true; sr.append(inp, hits);
     const ALL = Object.entries(IDX).map(([id, e]) => ({ id, e, k: e.n.toLowerCase(), last: Math.max(...e.s) }));
@@ -454,6 +454,74 @@
     main.append(el("p", "note", "Each week's bar is that game's carry split. The season row averages his snap share over the games he played here and gives his points per game here."));
   }
 
+  // ---------- Teams: expected and actual points by position ----------
+  // every team's PPR points a game from its QBs, RBs, WRs and TEs, and what those players' targets and carries were worth (Sean, 13 Oct 2026:
+  // "an xfp/g and points/g by team by position"), from the week rows so a traded player counts for the team he played for that week. A QB's
+  // xFP is his rushing xFP plus his actual passing points, as on the Leaders page (passing isn't priced): his week's points less his rushing and
+  // receiving points, plus his week's rushing xFP. Per game = over the team's games in the window.
+  const TPOS = ["QB", "RB", "WR", "TE"];
+  async function teamsPage(main) {
+    const y = SEASONS.includes(+S.tmSeason) ? +S.tmSeason : CUR, D = await ensure(y), F = D.meta.wfields, ix = (k) => F.indexOf(k);
+    const win = [0, 4, 8].includes(+S.tmWin) ? +S.tmWin : 0;
+    main.textContent = "";
+    main.append(el("h1", "ttl", "Teams"), el("p", "sub", "Each offense's PPR points a game by position, and the expected points (xFP) its targets and carries were worth. xFP says how good the opportunities were; FP − xFP is what the players did with them."));
+    const tools = el("div", "tools"), ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
+    for (const s of [...SEASONS].reverse()) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; ss.append(o); }
+    ss.addEventListener("change", () => { S.tmSeason = +ss.value; save(); route(); });
+    const seg = el("div", "seg");
+    for (const [v, lab] of [[0, "Season"], [4, "Last 4"], [8, "Last 8"]]) { const b = el("button", null, lab); b.type = "button"; b.setAttribute("aria-pressed", v === win); b.addEventListener("click", () => { S.tmWin = v; save(); route(); }); seg.append(b); }
+    tools.append(ss, seg); main.append(tools);
+    // team → week → position → [fp, xfp]
+    const acc = {};
+    for (const p of D.players) {
+      const g = posGroup(p.pos); if (!TPOS.includes(g)) continue;
+      // a QB's passing points by week: his week's points less his rushing / receiving ones, scaled so the weeks add to his season's
+      // passing points (the leftover is fumbles lost and two-point plays, which xFP leaves out)
+      const own = (r) => (r[ix("ruyd")] || 0) / 10 + 6 * (r[ix("rutd")] || 0) + (r[ix("rec")] || 0) + (r[ix("ryd")] || 0) / 10 + 6 * (r[ix("rtd")] || 0);
+      let k = 0; if (g === "QB") { const raw = p.w.reduce((a, r) => a + Math.max(0, (r[ix("fp")] || 0) - own(r)), 0); k = raw > 0 ? passFP(p) / raw : 0; }
+      for (const r of p.w) {
+        const tm = r[ix("tm")], wk = r[ix("wk")]; if (!tm) continue;
+        const fp = r[ix("fp")] || 0, xr = r[ix("xfp")] || 0;
+        const W = ((acc[tm] = acc[tm] || {})[wk] = acc[tm][wk] || {}), c = (W[g] = W[g] || [0, 0]);
+        c[0] += fp; c[1] += g === "QB" ? xr + k * Math.max(0, fp - own(r)) : xr;
+      }
+    }
+    const rows = Object.keys(acc).sort().map((tm) => {
+      let wks = Object.keys(acc[tm]).map(Number).sort((a, b) => a - b); if (win) wks = wks.slice(-win);
+      const n = wks.length, o = { tm, n };
+      for (const g of TPOS.concat(["ALL"])) {
+        let f = 0, x = 0; for (const w of wks) for (const [pg, c] of Object.entries(acc[tm][w])) if (g === "ALL" || pg === g) { f += c[0]; x += c[1]; }
+        o[g] = { fp: n ? f / n : null, xfp: n ? x / n : null };
+      }
+      return o;
+    });
+    const sortK = S.tmSort || "ALL:xfp", dir = S.tmDir || -1, [sg, sk] = sortK.split(":"), val = (r) => r[sg] && r[sg][sk];
+    const sb = (k) => () => { if (S.tmSort === k) S.tmDir = -(S.tmDir || -1); else { S.tmSort = k; S.tmDir = -1; } save(); route(); };
+    const NAME = { QB: "Quarterbacks", RB: "Running backs", WR: "Receivers", TE: "Tight ends", ALL: "All four" };
+    const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Tm", cls: "l fz2" }, { h: "G" }], end: 1 }];
+    for (const g of TPOS.concat(["ALL"])) groups.push({ name: NAME[g], end: 1, cols: [
+      { h: "xFP/G", t: g === "QB" ? "Rushing xFP plus actual passing points, per team game" : "Expected PPR points per team game from their targets and carries", onSort: sb(g + ":xfp"), lit: sortK === g + ":xfp" },
+      { h: "FP/G", t: "PPR points per team game", onSort: sb(g + ":fp"), lit: sortK === g + ":fp" },
+      { h: "+/−", t: "FP/G − xFP/G", onSort: sb(g + ":d"), lit: sortK === g + ":d" }] });
+    for (const r of rows) for (const g of TPOS.concat(["ALL"])) r[g].d = r[g].fp != null && r[g].xfp != null ? r[g].fp - r[g].xfp : null;
+    rows.sort((a, b) => { const va = val(a), vb = val(b); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
+    const pct = (g, k, v) => { const s = rows.map((r) => r[g][k]).filter((x) => x != null).sort((a, b) => a - b); let lo = 0; for (const x of s) if (x < v) lo++; return 100 * lo / Math.max(s.length - 1, 1); };
+    const t = table(groups, { tall: true });
+    rows.forEach((r, i) => {
+      const cells = [td(String(i + 1), "fz"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(r.n))];
+      for (const g of TPOS.concat(["ALL"])) for (const k of ["xfp", "fp", "d"]) {
+        const v = r[g][k], c = td(k === "d" ? sgn(v) : num(v)); if (v != null) paint(c, pct(g, k, v)); if (sortK === g + ":" + k) c.style.fontWeight = "700"; cells.push(c);
+      }
+      t.addRow(cells);
+    });
+    const avg = (g, k) => { const v = rows.map((r) => r[g][k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const ac = [td(""), td("League avg", "l fz2"), td("")];
+    for (const g of TPOS.concat(["ALL"])) for (const k of ["xfp", "fp", "d"]) ac.push(td(k === "d" ? sgn(avg(g, k)) : num(avg(g, k))));
+    t.addRow(ac, "tot first");
+    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
+    main.append(t.box, el("p", "note", "Every cell is coloured by where that team ranks among the 32 on it (red high). Tap a column name to sort, a team for its backfield week by week. A QB's xFP prices his rushing only and counts his passing points as they were (as on Leaders), so the QB +/− is rushing over expected less fumbles. Fumbles lost and two-point conversions are in FP but not xFP."));
+  }
+
   // ---------- Role Watch ----------
   // who is getting more (or less) of his team's work than the drafts expected (Sean, 13 Oct 2026: "help identify cases like chuba and
   // bucky where ppl going in thought they would be in committees but the reality is they are not"). data/proj-<y>.js from
@@ -649,7 +717,7 @@
     const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => x.classList.toggle("on", x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches")));
     const main = $("main"); main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "player" ? player(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : leaders(main);
+    const go = page === "player" ? player(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
