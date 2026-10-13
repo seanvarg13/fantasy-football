@@ -39,7 +39,8 @@ a { color: inherit; }
 .hits button { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 7px 10px; }
 .hits button:hover, .hits button.cur { background: var(--surface-2); }
 .hits small { color: var(--muted); }
-@media (max-width: 640px) { .srch { flex: 1 1 100%; } .nav { gap: 6px; } .nav a { font-size: 14px; padding: 0 7px; height: 30px; } }
+@media (max-width: 640px) { .srch { flex: 1 1 100%; } .nav { gap: 4px; flex-wrap: nowrap; min-width: 0; } .nav a { flex: 1 1 auto; justify-content: center; font-size: 13px; padding: 0 4px; height: 30px; white-space: nowrap; } }
+@media (max-width: 380px) { .nav { gap: 3px; } .nav a { font-size: 12px; padding: 0 3px; } }
 
 main { max-width: 1180px; margin: 0 auto; padding-block: 6px 56px; padding-inline: 16px; }
 .load { color: var(--muted); padding: 40px 0; }

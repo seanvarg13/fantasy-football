@@ -135,3 +135,15 @@ projected rest-of-season share 10+ points over the drafts' for a back, 4+ for a 
   later (29% → 41% to date, +7 after week 3; got 51%); Parker Washington 2025 flagged from week 3 (+6, got 21% of targets); Christian
   Watson 2022 flagged after week 11 (his breakout was week 10). **Gibbs 2024 is not a share story** — his share held at 47-55% all
   season; his year was efficiency and touchdowns, which a usage board can't see.
+
+## Teams (Sean, 13 Oct 2026: "an xfp/g and points/g by team by position")
+
+The **Teams** page (`#teams`, `teamsPage()` in `fb.js`, second in the nav) lists every offense with xFP/G, FP/G and +/− (FP − xFP) for its
+QBs, RBs, WRs (and FBs with the RBs) and TEs, and all four together, per team game, for a season or its last 4 / 8 games. It sums the
+week rows (`w`), so a traded player counts for the team he played for that week, and a team's games are the weeks any of its players
+has a row. Every cell is coloured by its rank among the 32 (red high), every column sorts, a team opens its backfield page, and a
+League avg row closes the table. **A QB's xFP is his rushing xFP plus his actual passing points**, as on Leaders (passing isn't priced):
+the week rows carry no passing line, so each week's passing points are his points less his rushing / receiving ones, scaled so his
+weeks add up to his season's `passFP` — a single-team QB's season matches Leaders exactly. Fumbles lost and two-point plays are in FP
+but not xFP, so the QB +/− is rushing over expected less fumbles. The phone nav fits five pages on one line (the 640px / 380px rules
+in `fb.css`).
