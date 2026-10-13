@@ -297,6 +297,19 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
 
 # ---------- team-seasons: coaches and RB usage ----------
 HC_FIX = {"Klint Kubliak": "Klint Kubiak"}   # nfldata's games list misspells him; Wikipedia's staffs are the spelling the coaches join on
+PLAYCALLERS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "playcallers.json"))) \
+    if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "playcallers.json")) else {}
+
+
+def play_caller(y, tm, head, staff, current):
+    """A head coach who called his own offense (data/playcallers.json, hand-built) when he's the man in charge that season; else
+    Wikipedia's "de facto" head coach (staff.json's pc); else nobody named, which the site reads as the coordinator."""
+    for a, b, n in PLAYCALLERS.get(tm, []) if isinstance(PLAYCALLERS.get(tm), list) else []:
+        if head == n and (a <= y <= b or (current and b == y - 1)):
+            return n
+    return (staff.get(f"{y}:{tm}") or {}).get("pc")
+
+
 def team_seasons(y, games, players, t, c, snaps, pos, staff, current=False):
     g = games[(games.season == y) & (games.game_type == "REG")]
     hc = defaultdict(list)
@@ -337,7 +350,7 @@ def team_seasons(y, games, players, t, c, snaps, pos, staff, current=False):
         gl = tc[tc.yardline_100 <= 5]; gl1 = gl[gl.week.isin(w1)]
         team_tg = t[t.posteam == tm]
         rec = dict(
-            tm=tm, hc=head, oc=(staff.get(f"{y}:{tm}") or {}).get("oc"), pc=(staff.get(f"{y}:{tm}") or {}).get("pc"),
+            tm=tm, hc=head, oc=(staff.get(f"{y}:{tm}") or {}).get("oc"), pc=play_caller(y, tm, head, staff, current),
             st=(staff.get(f"{y}:{tm}") or {}).get("off") or [],   # the whole offensive staff, [role, name], for the coaches' histories
             rbcar=len(tc), rbtgt=len(tt), tmtgt=len(team_tg), tmcar=int(len(c[c.posteam == tm])),
             rb1g=len(w1), rb1car=round(100 * float(sh.get(rb1["id"], 0)), 1),

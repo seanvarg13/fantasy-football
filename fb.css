@@ -149,3 +149,8 @@ table.br { border-collapse: separate; border-spacing: 0; font: 11px/1.25 var(--t
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin: 8px 0; }
 .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -1px; }
 @media (prefers-reduced-motion: no-preference) { .fill, .bub { transition: width .25s, left .25s; } }
+/* the Coaches pages' findings box */
+.findings { margin: 14px 0 12px; padding: 10px 14px; border-left: 3px solid var(--stripe); background: var(--surface); }
+.findings h3 { margin: 0 0 6px; font: 700 18px/1.2 var(--display); }
+.findings ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); max-width: 75ch; }
+.findings b { color: var(--ink); }
