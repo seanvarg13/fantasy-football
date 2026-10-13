@@ -157,7 +157,7 @@
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
     nav.setAttribute("aria-label", "Pages");
-    for (const [h, lab] of [["#leaders", "Leaders"], ["#backfields", "Backfields"], ["#coaches", "Coaches"]]) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); nav.append(a); }
+    for (const [h, lab] of [["#leaders", "Leaders"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"]]) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); nav.append(a); }
     const sr = el("div", "srch"), inp = el("input"); inp.type = "search"; inp.placeholder = "Search players"; inp.setAttribute("aria-label", "Search players");
     const hits = el("div", "hits"); hits.hidden = true; sr.append(inp, hits);
     const ALL = Object.entries(IDX).map(([id, e]) => ({ id, e, k: e.n.toLowerCase(), last: Math.max(...e.s) }));
@@ -454,6 +454,71 @@
     main.append(el("p", "note", "Each week's bar is that game's carry split. The season row averages his snap share over the games he played here and gives his points per game here."));
   }
 
+  // ---------- Role Watch ----------
+  // who is getting more (or less) of his team's work than the drafts expected (Sean, 13 Oct 2026: "help identify cases like chuba and
+  // bucky where ppl going in thought they would be in committees but the reality is they are not"). data/proj-<y>.js from
+  // tools/build_proj.py: per player the market's preseason share (a fit on ADP alone), the model's preseason share, and week by week his
+  // share to date, last three games, the projected rest-of-season share and points. Past seasons are held out, so a flag is what the
+  // board would have said then. A back's share is of his team's RB carries + targets, a receiver's of his team's targets.
+  const RW_FLAG = { RB: 10, WR: 4 };
+  async function roleWatch(main) {
+    const yrs = SEASONS.filter((y) => y >= 2017), y = yrs.includes(+S.rwSeason) ? +S.rwSeason : yrs[yrs.length - 1];
+    await loadScript(`data/proj-${y}.js`).catch(() => {});
+    const D = (window.FBP || {})[y]; main.textContent = "";
+    if (!D) { main.append(el("p", "load", "No Role Watch for that season yet.")); return; }
+    const meta = D.meta, last = meta.weeks, K = Math.min(Math.max(1, +S.rwWeek || last), last), pos = ["RB", "WR", "TE"].includes(S.rwPos) ? S.rwPos : "RB";
+    const g = pos === "RB" ? "RB" : "WR", mkt = meta.market, past = y < CUR || K < last, thr = RW_FLAG[g];
+    main.append(el("h1", "ttl", "Role Watch"), el("p", "sub", pos === "RB"
+      ? "Each back's share of his team's running-back carries and targets, in the games he played, against the share the drafts expected. Red: more work than the market priced in."
+      : "Each receiver's share of his team's targets, in the games he played, against the share the drafts expected. Red: more work than the market priced in."));
+    const tools = el("div", "tools"), seg = el("div", "seg");
+    for (const p of ["RB", "WR", "TE"]) { const b = el("button", null, p); b.type = "button"; b.setAttribute("aria-pressed", p === pos); b.addEventListener("click", () => { S.rwPos = p; save(); route(); }); seg.append(b); }
+    const ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
+    for (const s of [...yrs].reverse()) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; ss.append(o); }
+    ss.addEventListener("change", () => { S.rwSeason = +ss.value; S.rwWeek = null; save(); route(); });
+    const ws = el("select", "sel"); ws.setAttribute("aria-label", "As of week");
+    for (let k = last; k >= 1; k--) { const o = el("option", null, `After week ${k}`); o.value = k; if (k === K) o.selected = true; ws.append(o); }
+    ws.addEventListener("change", () => { S.rwWeek = +ws.value; save(); route(); });
+    tools.append(seg, ss, ws); main.append(tools);
+    // his line as of week K: the latest week he played up to K
+    const F = meta.wfields, ix = (k) => F.indexOf(k);
+    let rows = D.rows.filter((r) => (pos === "RB" ? r.g === "RB" : r.pos === pos)).map((r) => {
+      let w = null; for (const x of r.w) if (x[0] <= K) w = x;
+      if (!w) return null;
+      const base = mkt ? r.mk : r.pre, d = w[ix("proj")] - base;
+      return { r, w, base, d };
+    }).filter((x) => x && x.w[ix("g")] >= 2 && (x.w[ix("proj")] >= (g === "RB" ? 12 : 6) || x.r.adp));
+    const adpRank = new Map(); D.rows.filter((r) => r.adp && (pos === "RB" ? r.g === "RB" : r.pos === pos)).sort((a, b) => a.adp - b.adp).forEach((r, i) => adpRank.set(r.id, i + 1));
+    const sortK = S.rwSort || "d", dir = S.rwDir || -1;
+    const val = (x, k) => k === "d" ? x.d : k === "adp" ? (x.r.adp || 999) : k === "mk" ? x.base : k === "td" ? x.w[ix("td")] : k === "l3" ? x.w[ix("l3")] : k === "proj" ? x.w[ix("proj")] : k === "pts" ? x.w[ix("pts")] : k === "rest" ? x.w[ix("rest")] : null;
+    rows.sort((a, b) => { const va = val(a, sortK), vb = val(b, sortK); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
+    const sb = (k) => () => { if (S.rwSort === k) S.rwDir = -(S.rwDir || -1); else { S.rwSort = k; S.rwDir = k === "adp" ? 1 : -1; } save(); route(); };
+    const col = (h, k, t) => ({ h, t, onSort: sb(k), lit: sortK === k });
+    const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }, col("ADP", "adp", "Preseason PPR ADP, and his rank at the position")], end: 1 },
+      { name: "Preseason", end: 1, cols: [col(mkt ? "Drafts" : "Model", "mk", mkt ? "The share his ADP implied: what the market expected" : "No preseason ADP was saved for this season, so this is the model's preseason share (last season and the draft, without ADP)")].concat(mkt ? [{ h: "Model", t: "The model's preseason share: ADP plus last season and the draft" }] : []) },
+      { name: `Through week ${K}`, end: 1, cols: [{ h: "G" }, col("Share", "td", "His share in the games he played"), col("Last 3", "l3", "His share in his last three games")] },
+      { name: "Rest of season", end: 1, cols: [col("Proj", "proj", "Projected share for the rest of the season: to date, last three and preseason, weighted by what held up in past seasons"), col(mkt ? "vs drafts" : "vs model", "d", "Projected share minus the preseason expectation"), col("Pts/G", "pts", "Projected PPR points a game for the rest of the season")]
+        .concat(past ? [col("Actual", "rest", "His actual share over the rest of the season (3+ games)"), { h: "Act pts", t: "His actual PPR points a game over the rest of the season" }] : []) }];
+    const t = table(groups, { tall: true });
+    const projs = rows.map((x) => x.w[ix("proj")]).sort((a, b) => a - b), prc = (v) => { let lo = 0; for (const z of projs) if (z < v) lo++; return 100 * lo / Math.max(projs.length - 1, 1); };
+    rows.forEach((x, i) => {
+      const r = x.r, w = x.w, nm = cellLink(r.n, "#player/" + r.id, "l fz2");
+      if (x.d >= thr) { const tg = el("span", "tag rwflag", "More work"); nm.append(" ", tg); }
+      const dc = td(sgn(x.d)); paint(dc, 50 + 50 * Math.max(-1, Math.min(1, x.d / (thr * 2)))); dc.style.fontWeight = "700";
+      const pj = td(pc(w[ix("proj")])); paint(pj, prc(w[ix("proj")]));
+      const cells = [td(String(i + 1), "fz"), nm, td(r.tm), td(r.adp ? `${num(r.adp, 0)} · ${pos}${adpRank.get(r.id)}` : "–"), td(pc(x.base))];
+      if (mkt) cells.push(td(pc(r.pre)));
+      cells.push(td(String(w[ix("g")])), td(pc(w[ix("td")])), td(w[ix("l3")] == null ? "–" : pc(w[ix("l3")])), pj, dc, td(num(w[ix("pts")])));
+      if (past) cells.push(td(w[ix("rest")] == null ? "–" : pc(w[ix("rest")])), td(w[ix("restpts")] == null ? "–" : num(w[ix("restpts")])));
+      t.addRow(cells);
+    });
+    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
+    main.append(t.box);
+    const bt = g === "RB" ? "Backtest 2017-25, every season held out of its own fit, after week 3: the projection's rest-of-season share r .87 against .79 for the drafts' expectation; backs flagged More work (10+ points over the drafts) turned into 15+ point misses by the market 43% of the time (15% for everyone) and beat it by 15 points of share on average."
+      : "Backtest 2017-25, every season held out of its own fit, after week 3: the projection's rest-of-season share r .87 against .76 for the drafts' expectation; receivers flagged More work (4+ points of targets over the drafts) beat the market by 5+ points 57% of the time (20% for everyone), by 6 on average.";
+    main.append(el("p", "note", `${rows.length} players with 2+ games. ${bt} Most backfield turns are an injury or a benching ahead of him, so check back each week. ${mkt ? "" : "This season has no saved preseason ADP (the snapshot service only keeps the last week), so the comparison is with the model's own preseason line; from 2027 the August ADP is saved before Week 1."}`));
+  }
+
   // ---------- Coaches ----------
   // a coach's history is every team-season he was on the offensive staff, in any role (Sean, 13 Oct 2026: "do it based on who is on
   // the offense ... include every team he coached on"): teams.js carries each team-season's offensive staff as [role, name] (`st`,
@@ -584,7 +649,7 @@
     const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => x.classList.toggle("on", x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches")));
     const main = $("main"); main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "player" ? player(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : leaders(main);
+    const go = page === "player" ? player(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
