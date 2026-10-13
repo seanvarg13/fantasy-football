@@ -101,9 +101,37 @@ team-season 2016-25; the RB1's carry share in his own games as the target; scrat
 * *Mid-season changes*: the head coach is the games list's, game by game; a coordinator fired mid-season is missing from the final staff
   and two coordinators listed in one season are both credited — left as is, since nothing here depends on it.
 On the site: the Coaches list and every coach's page carry a **What follows a coach** box (`findings()` in `fb.js`, `.findings`) saying
-the above; the third Coaches button is **All staff**. The bell-cow question goes to the projection model (the next to-do), which weighs the
-room, the market and the staff together.
+the above; the third Coaches button is **All staff**. The bell-cow question is Role Watch's (below), which reads it from the weekly usage, since the staff
+added nothing.
 
 **Football to-dos** (Sean, 13 Oct 2026, parked until he says go):
 * ~~Staff history's niche logistics~~ — done 13 Oct 2026, above.
-* *A projection model* that would have seen Gibbs's big year, Bucky Irving, Chuba Hubbard, Christian Watson and Parker Washington coming.
+* ~~A projection model~~ — Role Watch, 13 Oct 2026, below. Not built: a points projection page, Role Watch on the player page.
+
+## Role Watch (Sean, 13 Oct 2026: "help identify cases like chuba and bucky where ppl going in thought they would be in committees but
+the reality is they are not in committees and are featured")
+
+The **Role Watch** page (`#roles`, `roleWatch()` in `fb.js`) lists every back, receiver and tight end with his share of his team's work
+— a back's carries + targets over his team's running-back carries + targets, a receiver's or tight end's targets over his team's targets,
+always in the games he played — against what the drafts expected, after any week of any season 2017 on. **More work** (`.rwflag`) marks a
+projected rest-of-season share 10+ points over the drafts' for a back, 4+ for a receiver / tight end (`RW_FLAG`).
+
+* **Build**: `tools/build_proj.py` (after `build_fb.py`; the workflow's Role Watch step, non-fatal) reads `data/fb-<y>.js`, `data/index.js`
+  and `data/adp/ppr-<y>.json` and writes `data/proj-<y>.js` (`window.FBP[y]`: `meta.wfields` names each week row's fields). `--check`
+  prints the backtest. Columns: **Drafts** (`mk`) = a fit of share on ADP alone (his ADP, his rank among his team's same-group players,
+  the two best teammates' ADP); **Model** (`pre`) = that plus last season's share and games, rookie / draft round, age, and for a back the
+  best-drafted teammate's share and round; **Proj** = a + b·share to date + c·last three + d·preseason, weights per group and per week
+  (week 12's past it), each season scored with weights fitted on the others; **Pts/G** the same for PPR points.
+* **ADP**: `data/adp/ppr-2016…2025.json` are Fantasy Football Calculator's last pre-kickoff week, saved by hand on 13 Oct 2026. The service
+  serves only its last seven days, so 2026 has none and its comparison is the model's own preseason line. `tools/fetch_adp.py` (the
+  workflow's Preseason ADP step, from 15 August; scheduled runs then only save it and publish) keeps the newest week that ended before
+  kickoff (the Thursday after Labor Day) and never touches the file after — so 2027 on has a market column.
+* **What it found** (2017-25, after week 3, every season held out): the market is good preseason (ADP's share vs the full season r .73;
+  last season + the draft without ADP .65; both .74) — the edge is the first weeks, which beat any preseason line. Rest-of-season share r
+  .87 against .79 for the drafts' (receivers .87 / .76). Backs flagged More work were 15+ point misses by the market 43% of the time (15%
+  for everyone) and beat it by 15 points on average; receivers flagged beat it by 5+ 57% of the time (20%). Staff history added nothing
+  to it (above). Most backfield turns are an injury or benching ahead of him, so the board is a weekly read, not a preseason one.
+* **Sean's cases**: Hubbard 2024 flagged after week 3 (drafts 36%, 61% to date, projected 53%, got 82%); Irving 2024 not flagged until
+  later (29% → 41% to date, +7 after week 3; got 51%); Parker Washington 2025 flagged from week 3 (+6, got 21% of targets); Christian
+  Watson 2022 flagged after week 11 (his breakout was week 10). **Gibbs 2024 is not a share story** — his share held at 47-55% all
+  season; his year was efficiency and touchdowns, which a usage board can't see.
