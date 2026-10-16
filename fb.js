@@ -74,6 +74,12 @@
       tdoe: ((p.rtd || 0) + (p.rutd || 0)) - ((p.xtr || 0) + (p.xtu || 0)),
       epadb: p.db ? p.epa / p.db : null, cpoe: p.cpoe, sackp: p.db ? 100 * p.sk / p.db : null,
       ruxg: (p.xu || 0) / g, carg: (p.car || 0) / g,
+      // the skill stats (16 Oct 2026): Next Gen's season row (sep / cush / nyoe, eff / tlos / box8) and PFR's charted counts over PFR's
+      // own receptions, targets and carries
+      sep: p.sep, cush: p.cush, nyoe: p.nyoe, eff: p.eff, tlos: p.tlos, box8: p.box8,
+      // (null under 10 catches / 15 targets / 20 carries — PFR's season in progress lags the play-by-play by a week or two)
+      brkr: p.pfrrec >= 10 ? 100 * p.btkr / p.pfrrec : null, dropp: p.pfrtgt >= 15 ? 100 * p.drops / p.pfrtgt : null,
+      brka: p.pfratt >= 20 ? 100 * p.btka / p.pfratt : null, ybca: p.pfratt >= 20 ? p.ybc / p.pfratt : null, yaca: p.pfratt >= 20 ? p.ryac / p.pfratt : null,
     };
     memo.set(p, m); return m;
   }
@@ -112,11 +118,26 @@
     tdoe: { h: "TDOE", d: 1, s: 1, hib: 1, t: "Touchdowns over expected" },
     epadb: { h: "EPA/db", d: 2, s: 1, hib: 1, t: "Expected points added per dropback" }, cpoe: { h: "CPOE", d: 1, s: 1, hib: 1, t: "Completion % over expected" },
     sackp: { h: "Sack%", d: 1, p: 1, hib: 0 }, ruxg: { h: "Rush xFP/G", d: 1, hib: 1 }, carg: { h: "Car/G", d: 1, hib: 1 },
+    // skills (16 Oct 2026; Sean: "wide receiver separation metrics ... rb broken tackles and skill stuff"): what he does with the ball, as
+    // against the opportunity xFP prices. The tooltips carry what each one is worth (2018-25, qualified seasons): its tie to the season's
+    // points per target / opportunity and to points over expected, and how well it repeats year to year — separation is a steady trait
+    // that barely touches points; the catch-and-run stats explain this season's FPOE and carry a little forward; broken tackles are noise
+    sep: { h: "Sep", d: 1, hib: 1, t: "Next Gen Stats: yards of separation from the nearest defender at the throw, on his targets. Repeats year to year at r .58 — but only +.14 with points per target and nothing with next season's points: a trait, not a points driver" },
+    cush: { h: "Cushion", d: 1, hib: 1, t: "Next Gen Stats: yards the nearest defender gave him at the snap, on his targets. Repeats at r .46; a weak tie to points either way (−.14 with FP / G)" },
+    nyoe: { h: "YAC+ (NGS)", d: 1, s: 1, hib: 1, t: "Next Gen Stats: yards after the catch over what the catch point, defenders and blockers expected, per catch. +.36 with points per target and +.35 with points over expected this season; repeats at r .35" },
+    brkr: { h: "BrkT/Rec", d: 1, p: 1, hib: 1, t: "PFR's charted broken tackles per catch. +.12 with points per target; repeats at r .31" },
+    dropp: { h: "Drop%", d: 1, p: 1, hib: 0, t: "PFR's charted drops per target. −.15 with points per target; repeats at only r .12 — nearly noise" },
+    brka: { h: "BrkT/Att", d: 1, p: 1, hib: 1, t: "PFR's charted broken tackles per carry. +.19 with points per opportunity and +.27 with rushing points over expected this season; repeats at r .21" },
+    ybca: { h: "YBC/att", d: 2, hib: 1, t: "PFR: rushing yards before contact per carry — the line and the scheme as much as the back. +.41 with points per opportunity; repeats at r .25" },
+    yaca: { h: "YAC/att", d: 2, hib: 1, t: "PFR: rushing yards after contact per carry. +.26 with points per opportunity; repeats at r .34" },
+    eff: { h: "Efficiency", d: 2, hib: 0, t: "Next Gen Stats: yards run per yard gained, as the tracking sees it — lower is a straighter runner. −.28 with points per opportunity (straighter is better); repeats at r .25" },
+    tlos: { h: "Time to LOS", d: 2, hib: 0, t: "Next Gen Stats: seconds from the handoff to the line of scrimmage — lower is more decisive. Repeats at r .52; a weak tie to points (+.07 for the slower, patient backs)" },
+    box8: { h: "8+ box%", d: 1, p: 1, hib: 1, t: "Next Gen Stats: share of his carries against eight or more defenders in the box — what the defense thinks of him, not his skill. Repeats at r .39" },
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
-    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Skills", ["brka", "ybca", "yaca", "eff", "tlos", "box8", "brkr"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
   COLS.TE = COLS.WR;
@@ -217,15 +238,23 @@
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Profile", ["adot", "wopr", "snp"]]]],
-    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]], ["Receiving", ["tprr", "croe", "yacoe"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]]]],
+    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]], ["Skills", ["brka", "ybca", "yaca", "eff", "tlos"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
   const LABEL = { rte: "Route %", tgtsh: "Target share", tprr: "Targets / route", aysh: "Air-yard share", rzt: "Red-zone targets", xfpg: "xFP / game", fpg: "FP / game", fpoeg: "Points over exp. / G",
                   tdoe: "TD over expected", yprr: "Yards / route", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", snp: "Snap %",
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
-                  epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD" };
+                  epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
+                  sep: "Separation", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line" };
+  // what the skill stats are worth, under the bars (the study of 16 Oct 2026: every qualified season 2018-25 against this season's points
+  // per target / opportunity, points over expected and next season's; year-to-year r in brackets)
+  const SKILL_NOTE = {
+    WR: "Skills: what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route.",
+    RB: "Skills: what he does with a carry, where the Opportunity bars are how many he gets. Yards before contact (+.41 with points per opportunity, repeats at r .25) is the line and the scheme as much as the back; broken tackles (+.19, repeats .21), yards after contact (.34) and efficiency (.25) are his, and none of them holds year to year the way his workload does — next season's points follow this season's opportunities, not these.",
+  };
+  SKILL_NOTE.TE = SKILL_NOTE.WR;
 
   async function player(main, id) {
     const e = IDX[id]; if (!e) { main.textContent = ""; main.append(el("p", "load", "No player with that id.")); return; }
@@ -274,6 +303,7 @@
       cols.append(c);
     });
     main.append(cols);
+    if (SKILL_NOTE[pos]) main.append(el("p", "note", SKILL_NOTE[pos] + (m.sep == null && (pos === "WR" || pos === "TE") ? " Next Gen Stats carries no season row for him (under its target minimum)." : "")));
     // tabs
     const tabs = el("div", "tabs"), body = el("div");
     const TABS = [["build", "xFP build-up"], ["log", "Game log"]]; if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);

@@ -136,6 +136,38 @@ projected rest-of-season share 10+ points over the drafts' for a back, 4+ for a 
   Watson 2022 flagged after week 11 (his breakout was week 10). **Gibbs 2024 is not a share story** — his share held at 47-55% all
   season; his year was efficiency and touchdowns, which a usage board can't see.
 
+## Skills (Sean, 16 Oct 2026: "wide receiver separation metrics, ones that correlate with fantasy points, and ... the degree that they do
+... and also same thing for like rb broken tackles and skill stuff", then "could you still add those metrics to the site")
+
+**What's on the site**: a **Skills** group on Leaders (WR / TE: Sep · Cushion · YAC+ (NGS) · BrkT/Rec · Drop%; RB: BrkT/Att · YBC/att · YAC/att ·
+Efficiency · Time to LOS · 8+ box% · BrkT/Rec) and a **Skills** section of percentile bars on the player page (`BARS`), with a note under the
+bars (`SKILL_NOTE`) and tooltips (`METRIC[k].t`) saying what each is worth. **Data**: Next Gen Stats' season rows (`nextgen_stats/ngs_receiving.parquet`
+/ `ngs_rushing.parquet`, every season in one file — the per-season `ngs_2024_receiving.csv.gz` on nflverse is a 9-row stub, so the combined files
+are what the build reads): `sep` (yards of separation at the throw), `cush` (cushion at the snap), `nyoe` (YAC over expected per catch), `ngstgt`;
+a back's `eff` (yards run per yard gained, lower = straighter), `tlos` (seconds to the line), `box8` (8+ defenders %). PFR's charted season stats
+(`pfr_advstats/advstats_season_rec.csv` / `_rush.csv`, pfr id → gsis through `players.parquet`; a traded player's "2TM" row): `btkr` / `drops` /
+`pfrrec` / `pfrtgt` (broken tackles on catches, drops, PFR's receptions and targets) and `btka` / `ybc` / `ryac` / `pfratt` (broken tackles on
+carries, yards before and after contact, PFR's carries). `skills()` in `tools/build_fb.py` puts them on every player-season (`build_season`
+merges them); `--patch-skills` writes them onto the built `data/fb-<y>.js` without a rebuild (how 2016-2026 got them on 16 Oct 2026). The
+app's rates are in `M()` (`brkr` / `dropp` per PFR reception / target, `brka` / `ybca` / `yaca` per PFR carry). A player under NGS's target /
+carry minimum has no NGS row (null, no bar); PFR's 2026 lags a week or two behind nflverse's play-by-play.
+
+**What they're worth** (scratch `nfl/sep.py` / `sep2.py` in the baseball session's scratchpad: every qualified WR / TE / RB season 2018-25 against the
+site's own FP / G, FP per target or opportunity and FPOE, same season, next season and first half → second half from the weekly NGS rows):
+* **Separation is a stable trait (year to year r .58) that barely touches points**: +.14 with points per target (+.26 with depth of target held, the
+  same in every aDOT third), +.22 with FPOE this season, and nothing forward — next season's FP / G −.01, next season's targets per route .00 with this
+  season's held, second-half points per target .00. Cushion the same (repeats .46, −.14 with FP / G).
+* **The catch-and-run side carries**: catch rate over expected (+.70 with points per target, +.71 with FPOE; next season's FP / G +.31), catch% (+.49 /
+  +.62), YAC over expected (+.46 / +.45; second-half FP per target +.18, next season's FP / G +.13). Broken tackles per catch +.12 (repeats .31);
+  drops −.15 and repeat at .12 (noise). A five-stat fit explains this season's WR FPOE at r .71 — but adds nothing to next season's FPOE beyond this
+  season's FPOE (r .29 either way); targets per route (.56) and air-yard share (.46) are what forecast next season's points.
+* **Backs**: RYOE / att explains two thirds of this season's rushing FPOE (r .67) and repeats at only .20; yards before contact +.41 with points per
+  opportunity (repeats .25), yards after contact +.26 (.34), broken tackles per carry +.19 / +.27 with rushing FPOE (.21), NGS efficiency −.28 (.25).
+  Forward: RYOE adds +.16 to next season's opportunities per game with this season's held (the efficient back gets fed) but +.05 to next season's
+  FP / G; half to half RYOE → second-half FP per opportunity +.16 against its own .17. A four-stat fit explains RB FPOE at r .65 and next season's
+  FPOE no better than this season's FPOE alone (.25 → .26).
+* **So they stay out of xFP** (which prices the opportunity) and are shown as skills with their reliability, not folded into the expected points.
+
 ## Teams (Sean, 13 Oct 2026: "an xfp/g and points/g by team by position")
 
 The **Teams** page (`#teams`, `teamsPage()` in `fb.js`, second in the nav) lists every offense with xFP/G, FP/G and +/− (FP − xFP) for its

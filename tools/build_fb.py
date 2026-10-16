@@ -16,7 +16,7 @@ boosted model on the play's depth, field position, down and distance, side of th
 position - fitted on the other seasons (leave one season out, so a season's own results never price it) and
 anchored so each season's league total of expected points equals its actual total.
 """
-import argparse, json, os, sys, time, urllib.request
+import argparse, re, json, os, sys, time, urllib.request
 from collections import defaultdict
 import numpy as np
 import pandas as pd
@@ -62,6 +62,13 @@ def load(cache, seasons, current):
             out["snaps"][y] = pd.read_csv(s)
     out["players"] = pd.read_parquet(fetch(f"{R}/players/players.parquet", f"{cache}/players.parquet", True))
     out["ngs_rush"] = pd.read_parquet(fetch(f"{R}/nextgen_stats/ngs_rushing.parquet", f"{cache}/ngs_rushing.parquet", True))
+    # the skill stats (16 Oct 2026): Next Gen receiving (separation, cushion, YAC over expected) and PFR's charted broken tackles,
+    # drops and yards before / after contact — the one-file-every-season releases, refetched each run
+    out["ngs_rec"] = pd.read_parquet(fetch(f"{R}/nextgen_stats/ngs_receiving.parquet", f"{cache}/ngs_receiving.parquet", True))
+    pr = fetch(f"{R}/pfr_advstats/advstats_season_rec.csv", f"{cache}/pfr_rec.csv", True)
+    pu = fetch(f"{R}/pfr_advstats/advstats_season_rush.csv", f"{cache}/pfr_rush.csv", True)
+    out["pfr_rec"] = pd.read_csv(pr) if pr else None
+    out["pfr_rush"] = pd.read_csv(pu) if pu else None
     out["games"] = pd.read_csv(fetch(GAMES, f"{cache}/games.csv", True), low_memory=False)
     return out
 
@@ -136,7 +143,54 @@ def r1(v):
     return None if v is None or (isinstance(v, float) and not np.isfinite(v)) else round(float(v), 1)
 
 
+# the skill stats per player-season (16 Oct 2026; Sean: "wide receiver separation metrics ... rb broken tackles and skill stuff"):
+# Next Gen's season rows (week 0, regular season) by gsis id — a receiver's separation and cushion at the throw, YAC over expected,
+# and his NGS target count; a back's efficiency (yards run per yard gained, lower is straighter), time to the line and 8+-man boxes —
+# and PFR's charted counts by pfr id mapped through players.parquet: broken tackles on catches and on carries, drops, yards before
+# and after contact, with PFR's own receptions / targets / attempts as the denominators (a traded player's "2TM" total row, else the
+# one row he has). Rates are the app's (fb.js M()).
+PFR_TOT = re.compile(r"^\dTM$")
+
+
+def pfr_rows(df, y):
+    if df is None:
+        return {}
+    d = df[df.season == y]
+    out = {}
+    for pid, g in d.groupby("pfr_id"):
+        tot = g[g.tm.astype(str).str.match(PFR_TOT)]
+        out[pid] = (tot if len(tot) else g).iloc[0]
+    return out
+
+
+def iv(x):
+    return None if x is None or x != x else int(x)
+
+
+def skills(y, d, P):
+    pfr2g = dict(zip(P.pfr_id, P.gsis_id))
+    sk = defaultdict(dict)
+    nr = d.get("ngs_rec")
+    if nr is not None:
+        for r in nr[(nr.season == y) & (nr.week == 0) & (nr.season_type == "REG")].itertuples():
+            sk[r.player_gsis_id].update(sep=r1(r.avg_separation), cush=r1(r.avg_cushion), nyoe=r1(r.avg_yac_above_expectation), ngstgt=int(r.targets))
+    ng = d.get("ngs_rush")
+    if ng is not None:
+        for r in ng[(ng.season == y) & (ng.week == 0) & (ng.season_type == "REG")].itertuples():
+            sk[r.player_gsis_id].update(eff=r1(r.efficiency), tlos=round(float(r.avg_time_to_los), 2), box8=r1(r.percent_attempts_gte_eight_defenders))
+    for pid, r in pfr_rows(d.get("pfr_rec"), y).items():
+        g = pfr2g.get(pid)
+        if g:
+            sk[g].update(btkr=iv(r["brk_tkl"]), drops=iv(r["drop"]), pfrrec=iv(r["rec"]), pfrtgt=iv(r["tgt"]))
+    for pid, r in pfr_rows(d.get("pfr_rush"), y).items():
+        g = pfr2g.get(pid)
+        if g:
+            sk[g].update(btka=iv(r["brk_tkl"]), ybc=iv(r["ybc"]), ryac=iv(r["yac"]), pfratt=iv(r["att"]))
+    return sk
+
+
 def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
+    sk = skills(y, d, P)
     pbp = d["pbp"][y]
     p = reg(pbp)
     p = p[p.week <= 18]
@@ -287,6 +341,7 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
             ryoe=r1(ng.rush_yards_over_expected) if ng is not None else None, ngsatt=int(ng.rush_attempts) if ng is not None else None,
             w=wrows,
         )
+        rec.update(sk.get(i, {}))
         if len(qi) or ps == "QB":
             rec.update(db=len(qi), att=int(qi.pass_attempt.sum()), cmp=int(qi.complete_pass.sum()), pyd=int(qi.passing_yards.fillna(0).sum()),
                        ptd=int(qi.pass_touchdown.sum()), int_=int(qi.interception.sum()), sk=int(qi.sack.sum()),
@@ -387,9 +442,27 @@ def main():
     ap.add_argument("--seasons", default="2016-2026")
     ap.add_argument("--current", type=int, default=2026)
     ap.add_argument("--write", default=None, help="only write these seasons (comma list); the model still trains on all")
+    ap.add_argument("--patch-skills", action="store_true", help="only put the skill stats on the built data/fb-<y>.js files (no play-by-play)")
     a = ap.parse_args()
     lo, hi = map(int, a.seasons.split("-"))
     seasons = list(range(lo, hi + 1))
+    if a.patch_skills:
+        os.makedirs(a.cache, exist_ok=True)
+        d = load(a.cache, [], a.current)
+        for y in seasons:
+            path = os.path.join(a.out, f"fb-{y}.js")
+            if not os.path.exists(path):
+                continue
+            s = open(path).read(); body = json.loads(s[s.index("={") + 1:].rstrip().rstrip(";"))
+            sk = skills(y, d, d["players"]); n = 0
+            for pl in body["players"]:
+                f = sk.get(pl["id"])
+                if f:
+                    pl.update(f); n += 1
+            with open(path, "w") as f:
+                f.write(f"window.FB=window.FB||{{}};window.FB[{y}]={jsdump(clean(body))};\n")
+            print(f"  fb-{y}.js: skills on {n} of {len(body['players'])} players", flush=True)
+        return
     d = load(a.cache, seasons, a.current)
     P = d["players"]
     pos = dict(zip(P.gsis_id, P.position))
