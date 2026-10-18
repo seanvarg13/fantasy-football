@@ -24,6 +24,10 @@ import pandas as pd
 R = "https://github.com/nflverse/nflverse-data/releases/download"
 GAMES = "https://raw.githubusercontent.com/nfldata/nfldata/master/data/games.csv".replace("nfldata/nfldata", "nflverse/nfldata")
 SKILL = {"WR", "TE", "RB", "FB", "QB"}
+# the games list and the snap counts keep the old codes; the play-by-play uses today's for every season. Snap teams were left as they
+# came until 18 Oct 2026, so the 2016-19 Raiders and 2016 Chargers matched no team-week totals (no target, carry or air-yard share,
+# no route %), linked to no team page or coaches, and Role Watch found none of them in the ADP files (which it maps the same way)
+OLD_CODES = {"OAK": "LV", "SD": "LAC", "STL": "LA"}
 
 
 def fetch(url, path, fresh=False):
@@ -214,7 +218,7 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
         sn["pid"] = sn.pfr_player_id.map(pfr2g)
         sn = sn[sn.pid.notna() & (sn.offense_snaps > 0)]
         for r in sn.itertuples():
-            snaps[(r.pid, r.week)] = (r.offense_snaps, r.offense_pct, r.team, r.opponent)
+            snaps[(r.pid, r.week)] = (r.offense_snaps, r.offense_pct, OLD_CODES.get(r.team, r.team), OLD_CODES.get(r.opponent, r.opponent))
     sweeks = defaultdict(set)
     for (j, w) in snaps:
         sweeks[j].add(w)
@@ -332,6 +336,10 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
             xc=r1(ti.cp.sum()), xcn=int(ti.cp.notna().sum()), cc=int(ti[ti.cp.notna()].complete_pass.sum()),
             yac=int(comp.yards_after_catch.fillna(0).sum()), xyac=r1(xy.xyac_mean_yardage.sum()), yacn=len(xy), yacs=int(xy.yards_after_catch.fillna(0).sum()),
             car=len(ci), ruyd=int(ci.rushing_yards.fillna(0).sum()), rutd=int(((ci.rush_touchdown == 1) & (ci.td_player_id == i)).sum()),
+            # run sizes (18 Oct 2026; Sean: "for RBs like the broken tackle elusive metrics etc"): carries of 10+ yards, the yards gained
+            # on runs of 15+ (breakaway yards) and carries stopped at or behind the line — the app's Expl% / Breakaway% / Stuff%
+            x10=int((ci.rushing_yards.fillna(0) >= 10).sum()), y15=int(ci.rushing_yards.fillna(0).where(ci.rushing_yards.fillna(0) >= 15, 0).sum()),
+            stf=int((ci.rushing_yards.fillna(0) <= 0).sum()),
             glc=int((ci.yardline_100 <= 5).sum()), rzc=int((ci.yardline_100 <= 20).sum()),
             tmt=round(sh(tw_tgt)), tmay=round(sh(tw_ay)), tmc=round(sh(tw_car)), tmdb=round(sh(tw_db)),
             fp=round(sum(fp.get((i, w), 0) for w in weeks), 1),
@@ -368,7 +376,7 @@ def play_caller(y, tm, head, staff, current):
 def team_seasons(y, games, players, t, c, snaps, pos, staff, current=False):
     g = games[(games.season == y) & (games.game_type == "REG")]
     hc = defaultdict(list)
-    ab = {"OAK": "LV", "SD": "LAC", "STL": "LA"}   # the games list keeps the old codes; play-by-play uses today's
+    ab = OLD_CODES
     for r in g.itertuples():
         hc[ab.get(r.home_team, r.home_team)].append(r.home_coach); hc[ab.get(r.away_team, r.away_team)].append(r.away_coach)
     byid = {p["id"]: p for p in players}
@@ -519,7 +527,9 @@ def main():
             e.update(ht=b.height if b.height == b.height else None, wt=b.weight if b.weight == b.weight else None,
                      col=b.college_name if isinstance(b.college_name, str) else None,
                      dr=[int(b.draft_year), int(b.draft_round), int(b.draft_pick)] if b.draft_year == b.draft_year and b.draft_round == b.draft_round else None,
-                     img=b.headshot if isinstance(b.headshot, str) else None, bd=b.birth_date if isinstance(b.birth_date, str) else None)
+                     img=b.headshot if isinstance(b.headshot, str) else None, bd=b.birth_date if isinstance(b.birth_date, str) else None,
+                     # his first NFL season: the draft year, else nflverse's rookie season (the undrafted) — the Dynasty page's career year
+                     rk=int(b.draft_year) if b.draft_year == b.draft_year else (int(b.rookie_season) if b.rookie_season == b.rookie_season else None))
     with open(idx_path, "w") as f:
         f.write("window.FB_INDEX=" + jsdump(clean(index)) + ";\n")
     with open(os.path.join(a.out, "career.js"), "w") as f:

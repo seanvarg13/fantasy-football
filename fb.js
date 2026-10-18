@@ -80,6 +80,12 @@
       // (null under 10 catches / 15 targets / 20 carries — PFR's season in progress lags the play-by-play by a week or two)
       brkr: p.pfrrec >= 10 ? 100 * p.btkr / p.pfrrec : null, dropp: p.pfrtgt >= 15 ? 100 * p.drops / p.pfrtgt : null,
       brka: p.pfratt >= 20 ? 100 * p.btka / p.pfratt : null, ybca: p.pfratt >= 20 ? p.ybc / p.pfratt : null, yaca: p.pfratt >= 20 ? p.ryac / p.pfratt : null,
+      // elusiveness (18 Oct 2026; Sean: "for RBs like the broken tackle elusive metrics etc"): PFF's elusive-rating formula on PFR's
+      // charting — broken tackles per touch × yards after contact per carry × 100 — and the run sizes from the play-by-play
+      elus: p.pfratt >= 20 ? ((p.btka || 0) + (p.btkr || 0)) / (p.pfratt + (p.pfrrec || 0)) * (p.ryac / p.pfratt) * 100 : null,
+      expl: p.x10 != null && p.car >= 20 ? 100 * p.x10 / p.car : null,
+      bkwy: p.y15 != null && p.car >= 20 && p.ruyd > 0 ? 100 * p.y15 / p.ruyd : null,
+      stuff: p.stf != null && p.car >= 20 ? 100 * p.stf / p.car : null,
     };
     memo.set(p, m); return m;
   }
@@ -93,7 +99,7 @@
     return false;
   }
   const METRIC = {
-    g: { h: "G", d: 0, hib: 1 }, tgt: { h: "Tgt", d: 0, hib: 1 }, rec: { h: "Rec", d: 0, hib: 1 }, ryd: { h: "Yds", d: 0, hib: 1 }, rtd: { h: "TD", d: 0, hib: 1 },
+    g: { h: "G", d: 0, hib: 1 }, rts: { h: "Rts", d: 0, hib: 1, t: "Routes run: dropbacks he was out on" }, tgt: { h: "Tgt", d: 0, hib: 1 }, rec: { h: "Rec", d: 0, hib: 1 }, ryd: { h: "Yds", d: 0, hib: 1 }, rtd: { h: "TD", d: 0, hib: 1 },
     car: { h: "Car", d: 0, hib: 1 }, ruyd: { h: "Yds", d: 0, hib: 1 }, rutd: { h: "TD", d: 0, hib: 1 },
     att: { h: "Att", d: 0, hib: 1 }, cmpp: { h: "Cmp%", d: 1, p: 1, hib: 1 }, pyd: { h: "Yds", d: 0, hib: 1 }, ptd: { h: "TD", d: 0, hib: 1 }, int: { h: "INT", d: 0, hib: 0 },
     rte: { h: "Route%", d: 0, p: 1, hib: 1, t: "Routes run on his team's dropbacks in his games" },
@@ -133,11 +139,17 @@
     eff: { h: "Efficiency", d: 2, hib: 0, t: "Next Gen Stats: yards run per yard gained, as the tracking sees it — lower is a straighter runner. −.28 with points per opportunity (straighter is better); repeats at r .25" },
     tlos: { h: "Time to LOS", d: 2, hib: 0, t: "Next Gen Stats: seconds from the handoff to the line of scrimmage — lower is more decisive. Repeats at r .52; a weak tie to points (+.07 for the slower, patient backs)" },
     box8: { h: "8+ box%", d: 1, p: 1, hib: 1, t: "Next Gen Stats: share of his carries against eight or more defenders in the box — what the defense thinks of him, not his skill. Repeats at r .39" },
+    // elusiveness (18 Oct 2026): every back's 100+ carry season, 2016-25 (PFR's charting from 2018), against this season's points per
+    // opportunity and rushing points over expected per carry; year to year on 271 back-to-back pairs
+    elus: { h: "Elusive", d: 1, hib: 1, t: "Elusive rating, PFF's formula on PFR's charting: broken tackles per touch (carries + catches) × yards after contact per carry × 100. PFR charts fewer broken tackles than PFF does missed tackles, so the scale runs lower than PFF's (a typical back ~15, the best ~30). +.32 with points per opportunity and +.37 with rushing points over expected this season; repeats at r .29" },
+    expl: { h: "Expl%", d: 1, p: 1, hib: 1, t: "Explosive runs: carries of 10+ yards per carry. +.47 with points per opportunity and +.62 with rushing points over expected this season; repeats at r .27 — and with yards per carry the best of these at next season's rushing points over expected (+.24)" },
+    bkwy: { h: "Breakaway%", d: 1, p: 1, hib: 1, t: "Breakaway %: share of his rushing yards gained on runs of 15+ yards — the big-play back as against the grinder. +.37 with points per opportunity and +.58 with rushing points over expected; repeats at r .30" },
+    stuff: { h: "Stuff%", d: 1, p: 1, hib: 0, t: "Carries stopped at or behind the line — the line and the box as much as the back. −.23 with points per opportunity; repeats at r .27" },
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
     WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
-    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Skills", ["brka", "ybca", "yaca", "eff", "tlos", "box8", "brkr"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
   COLS.TE = COLS.WR;
@@ -178,7 +190,7 @@
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
     nav.setAttribute("aria-label", "Pages");
-    for (const [h, lab] of [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"]]) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); nav.append(a); }
+    for (const [h, lab] of [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"]]) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); nav.append(a); }
     const sr = el("div", "srch"), inp = el("input"); inp.type = "search"; inp.placeholder = "Search players"; inp.setAttribute("aria-label", "Search players");
     const hits = el("div", "hits"); hits.hidden = true; sr.append(inp, hits);
     const ALL = Object.entries(IDX).map(([id, e]) => ({ id, e, k: e.n.toLowerCase(), last: Math.max(...e.s) }));
@@ -195,7 +207,7 @@
       if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); cur = (cur + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length; bs.forEach((b, i) => b.classList.toggle("cur", i === cur)); }
       if (e.key === "Enter") (bs[cur] || bs[0]).click(); if (e.key === "Escape") { hits.hidden = true; } });
     document.addEventListener("click", (e) => { if (!sr.contains(e.target)) hits.hidden = true; });
-    inn.append(nav, sr); top.append(inn); return top;
+    nav.append(sr); inn.append(nav); top.append(inn); return top;   // the search rides in the pages' row, so a phone's wraps two lines, not three
   }
 
   // ---------- Leaders ----------
@@ -239,7 +251,7 @@
   // ---------- Player page ----------
   const BARS = {
     WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]]]],
-    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]], ["Skills", ["brka", "ybca", "yaca", "eff", "tlos"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
+    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]]], [["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
@@ -247,12 +259,13 @@
                   tdoe: "TD over expected", yprr: "Yards / route", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", snp: "Snap %",
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
-                  sep: "Separation", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line" };
+                  sep: "Separation", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
+                  elus: "Elusive rating", expl: "Explosive run %", bkwy: "Breakaway %", stuff: "Stuffed %" };
   // what the skill stats are worth, under the bars (the study of 16 Oct 2026: every qualified season 2018-25 against this season's points
   // per target / opportunity, points over expected and next season's; year-to-year r in brackets)
   const SKILL_NOTE = {
     WR: "Skills: what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route.",
-    RB: "Skills: what he does with a carry, where the Opportunity bars are how many he gets. Yards before contact (+.41 with points per opportunity, repeats at r .25) is the line and the scheme as much as the back; broken tackles (+.19, repeats .21), yards after contact (.34) and efficiency (.25) are his, and none of them holds year to year the way his workload does — next season's points follow this season's opportunities, not these.",
+    RB: "Elusiveness and Skills: what he does with a carry, where the Opportunity bars are how many he gets. The elusive rating (broken tackles per touch × yards after contact; +.32 with points per opportunity, repeats at r .29), explosive runs (10+ yards; +.47, repeats .27) and breakaway % (the share of his yards on 15+ yard runs; +.37, repeats .30) are the big-play side; yards before contact (+.41, repeats .25) and stuffed runs are the line and the scheme as much as the back. None of them holds year to year the way his workload does — next season's points follow this season's opportunities, not these.",
   };
   SKILL_NOTE.TE = SKILL_NOTE.WR;
 
@@ -617,6 +630,113 @@
     main.append(el("p", "note", `${rows.length} players with 2+ games. ${bt} Most backfield turns are an injury or a benching ahead of him, so check back each week. ${mkt ? "" : "This season has no saved preseason ADP (the snapshot service only keeps the last week), so the comparison is with the model's own preseason line; from 2027 the August ADP is saved before Week 1."}`));
   }
 
+  // ---------- Dynasty: every season by his year in the league ----------
+  // (18 Oct 2026; Sean: "for WRs I want like target share tprr yprr and I also want a dynasty view of that so I can look at rookies
+  // across years second year guys across years etc"). A career year is the season less his first NFL season (the draft year, else
+  // nflverse's rookie season: index.js rk) plus one. Every season's file loads, the rows are the position's player-seasons in that
+  // year at the minimum, and the sorted column is coloured against that same year in every class — the season and draft filters
+  // only narrow what's listed, so a 2026 rookie is still placed among every rookie since 2016.
+  const DY_YRS = [[1, "Rookies"], [2, "Year 2"], [3, "Year 3"], [4, "Year 4"], [5, "Year 5+"], [0, "All"]];
+  const DY_RDS = [["", "All picks"], ["1", "Round 1"], ["2", "Round 2"], ["3", "Round 3"], ["4", "Rounds 4-7"], ["0", "Undrafted"]];
+  const DY_MIN = { WR: ["rts", 100, "routes"], TE: ["rts", 100, "routes"], RB: ["opp", 50, "carries + targets"], QB: ["db", 150, "dropbacks"] };
+  const DY_COLS = {
+    WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr"]], ["Efficiency", ["yprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg"]], ["Rushing", ["ypc", "ryoe"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Receiving", ["tprr", "yprr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    QB: [["Passing", ["g", "att", "cmpp", "epadb", "cpoe", "sackp"]], ["Rushing", ["carg", "ruxg"]], ["Fantasy", ["xfpg", "fpg"]]],
+  };
+  DY_COLS.TE = DY_COLS.WR;
+  const DY_NEXT = { WR: ["g", "tprr", "fpg"], TE: ["g", "tprr", "fpg"], RB: ["g", "oppg", "fpg"], QB: ["g", "epadb", "fpg"] };
+  const DY_SORT = { WR: "tprr", TE: "tprr", RB: "elus", QB: "epadb" };
+  // what a season says about the next one, by career year (scratch study of 18 Oct 2026: every WR / TE season with 100+ routes and RB
+  // season with 50+ carries + targets 2016-25 whose next season had 4+ games; partial r = what the stat adds once his own FP / G is known)
+  const DY_FIND = {
+    WR: [["His own FP / G", "is the best guide to next season at every stage: r .69 from a rookie year to year 2 (179 rookies), .72 from year 2, .75-.76 later. Target share (.62 for rookies), WOPR (.60) and yards per route (.58) come next; TPRR .52."],
+         ["On top of his FP / G", "draft capital adds the most for a rookie (partial r −.25: earlier picks beat their rookie line the next year), then youth (−.14) and yards per route (+.12); TPRR (+.05) and target share (+.01) add almost nothing once his points are known."]],
+    TE: [["His own FP / G", "r .63 from a rookie year to year 2 (70 rookie tight ends), .75 from year 2. Target share (.59) and WOPR (.59) next; TPRR .47."],
+         ["On top of his FP / G", "draft round adds the most for a rookie (partial r −.34); the usage rates add little."]],
+    RB: [["His own FP / G", "r .65 from a rookie year to year 2 (112 rookie backs), .75 from year 2. xFP / G (.57), target share (.54) and opportunities a game (.52) next; of the skills RYOE (.34) and breakaway % (.32), then explosive runs (.26), the elusive rating (.21) and broken tackles (.12)."],
+         ["On top of his FP / G", "draft round adds the most for a rookie (partial r −.26), then RYOE (+.13); the elusive rating (.00), broken tackles and yards after contact add nothing. In year 2, youth (−.29) and draft round (−.33) still add, RYOE (+.17) and explosive runs (+.15) a little."]],
+  };
+  const rookieYr = (e) => (e ? e.rk || (e.dr && e.dr[0]) || null : null);
+  async function dynasty(main) {
+    main.textContent = ""; main.append(el("p", "load", "Loading every season…"));
+    await Promise.all(SEASONS.map(ensure));
+    const pos = ["WR", "TE", "RB", "QB"].includes(S.dyPos) ? S.dyPos : "WR", cy = DY_YRS.some((x) => x[0] === S.dyYr) ? S.dyYr : 1;
+    const rd = DY_RDS.some((x) => x[0] === S.dyRd) ? S.dyRd : "", sy = SEASONS.includes(+S.dySeason) ? +S.dySeason : 0;
+    const [mk, mdef, munit] = DY_MIN[pos], mn = S.dyMin && S.dyMin[pos] != null ? S.dyMin[pos] : mdef;
+    const keys = DY_COLS[pos].flatMap((g) => g[1]), nk = DY_NEXT[pos];
+    const sorts = S.dySort || {}, k = sorts[pos] && (keys.includes(sorts[pos]) || /^(y|age|pick|cy|n:\w+)$/.test(sorts[pos])) ? sorts[pos] : DY_SORT[pos];
+    const dir = (S.dyDir || {})[pos] || (METRIC[k] && METRIC[k].hib === 0 ? 1 : -1);
+    // every player-season at the position and minimum, with his career year and next season
+    const byId = {}; for (const y of SEASONS) byId[y] = new Map(window.FB[y].players.map((p) => [p.id, p]));
+    const all = [];
+    for (const y of SEASONS) {
+      const D = window.FB[y], need = mn * frac(D.meta);
+      for (const p of D.players) {
+        if (posGroup(p.pos) !== pos) continue;
+        const e = IDX[p.id], r0 = rookieYr(e); if (!r0 || r0 > y) continue;
+        const v = mk === "opp" ? (p.car || 0) + (p.tgt || 0) : p[mk] || 0; if (v < need) continue;
+        const nx = byId[y + 1] ? byId[y + 1].get(p.id) : null;
+        all.push({ p, y, e, cy: y - r0 + 1, m: M(p), nx, nm: nx ? M(nx) : null, pick: e.dr ? e.dr[2] : 999, rnd: e.dr ? e.dr[1] : 0 });
+      }
+    }
+    const inYr = (r) => !cy || (cy === 5 ? r.cy >= 5 : r.cy === cy);
+    const cohort = all.filter(inYr);
+    const rows = cohort.filter((r) => (!sy || r.y === sy) && (rd === "" || (rd === "4" ? r.rnd >= 4 : +rd === r.rnd)));
+    const val = (r, kk) => kk === "y" ? r.y : kk === "age" ? r.p.age : kk === "pick" ? r.pick : kk === "cy" ? r.cy : kk.startsWith("n:") ? (r.nm ? r.nm[kk.slice(2)] : null) : r.m[kk];
+    rows.sort((a, b) => { const va = val(a, k), vb = val(b, k); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb) || b.y - a.y; });
+    // the sorted column's colour: his place among the same career year in every class
+    const mkey = k.startsWith("n:") ? k.slice(2) : k, hib = METRIC[mkey] ? METRIC[mkey].hib !== 0 : null;
+    const ref = hib == null ? null : cohort.map((r) => val(r, k)).filter((x) => x != null && isFinite(x)).sort((a, b) => a - b);
+    const pctIn = (v) => { if (v == null || !isFinite(v) || !ref || ref.length < 8) return null; let lo = 0, eq = 0; for (const x of ref) { if (x < v) lo++; else if (x === v) eq++; } const q = 100 * (lo + eq / 2) / ref.length; return hib ? q : 100 - q; };
+    main.textContent = "";
+    const yrLab = (DY_YRS.find((x) => x[0] === cy) || [0, "All"])[1];
+    main.append(el("h1", "ttl", "Dynasty"), el("p", "sub", "Every season by the player's year in the league, " + SEASONS[0] + "–" + CUR + ": this year's rookies against every rookie class, second-year players against every second year. The sorted column is coloured against the same year in every class; Next season is what he did the year after."));
+    const tools = el("div", "tools"), seg = el("div", "seg");
+    for (const x of ["WR", "TE", "RB", "QB"]) { const b = el("button", null, x); b.type = "button"; b.setAttribute("aria-pressed", x === pos); b.addEventListener("click", () => { S.dyPos = x; save(); route(); }); seg.append(b); }
+    const ys = el("div", "seg dyseg");
+    for (const [v, lab] of DY_YRS) { const b = el("button", null, lab); b.type = "button"; b.setAttribute("aria-pressed", v === cy); b.addEventListener("click", () => { S.dyYr = v; save(); route(); }); ys.append(b); }
+    const rs = el("select", "sel"); rs.setAttribute("aria-label", "Draft round");
+    for (const [v, lab] of DY_RDS) { const o = el("option", null, lab); o.value = v; if (v === rd) o.selected = true; rs.append(o); }
+    rs.addEventListener("change", () => { S.dyRd = rs.value; save(); route(); });
+    const ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
+    for (const v of [0, ...[...SEASONS].reverse()]) { const o = el("option", null, v ? String(v) : "All seasons"); o.value = v; if (v === sy) o.selected = true; ss.append(o); }
+    ss.addEventListener("change", () => { S.dySeason = +ss.value; save(); route(); });
+    const mb = el("label", "minbox"), mi = el("input"); mi.type = "number"; mi.min = 0; mi.step = 10; mi.value = mn; mi.inputMode = "numeric"; mi.setAttribute("aria-label", "Minimum " + munit);
+    mi.addEventListener("change", () => { const v = Math.max(0, Math.round(+mi.value || 0)); S.dyMin = Object.assign({}, S.dyMin, { [pos]: v }); save(); route(); });
+    mb.append("Min", mi, munit);
+    const curM = window.FB[CUR].meta, partial = curM.through < 18;
+    tools.append(seg, ys, rs, ss, mb, el("span", "count", `${rows.length} ${pos}s · ${yrLab.toLowerCase()}${sy ? " · " + sy : " · every class"} · ${mn}+ ${munit}${partial ? ` (pro-rated for ${CUR} through week ${curM.through})` : ""}`));
+    main.append(tools);
+    const sortBy = (kk) => () => { const sd = Object.assign({}, S.dySort), dd = Object.assign({}, S.dyDir); if (k === kk) dd[pos] = -dir; else { sd[pos] = kk; const mm = kk.startsWith("n:") ? kk.slice(2) : kk; dd[pos] = kk === "pick" || kk === "age" ? 1 : kk === "y" || kk === "cy" ? -1 : METRIC[mm] && METRIC[mm].hib === 0 ? 1 : -1; } S.dySort = sd; S.dyDir = dd; save(); route(); };
+    const c0 = (h, kk, t, cls) => ({ h, t, cls, onSort: kk ? sortBy(kk) : null, lit: kk === k });
+    const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, c0("Season", "y")].concat(cy ? [] : [c0("Yr", "cy", "His year in the league that season")]).concat([{ h: "Tm" }, c0("Age", "age", "Age on 1 September of that season"), c0("Draft", "pick", "Round · overall pick; UDFA = undrafted")]), end: 1 }];
+    for (const [name, ks] of DY_COLS[pos]) groups.push({ name, end: 1, cols: ks.map((kk) => c0(METRIC[kk].h, kk, METRIC[kk].t)) });
+    groups.push({ name: "Next season", end: 1, cls: "nxt", cols: nk.map((kk) => c0(METRIC[kk].h, "n:" + kk, "The season after: " + (METRIC[kk].t || METRIC[kk].h))) });
+    const t = table(groups, { tall: true });
+    rows.forEach((r, i) => {
+      const nm = td(null, "l fz2"), a = link(r.p.n, "#player/" + r.p.id); a.addEventListener("click", () => { S.pseason = Object.assign({}, S.pseason, { [r.p.id]: r.y }); save(); }); nm.append(a);
+      const cells = [td(String(i + 1), "fz"), nm, td(String(r.y))]; if (!cy) cells.push(td(String(r.cy)));
+      cells.push(td(r.p.tms && r.p.tms.length > 1 ? r.p.tms.join("/") : r.p.tm), td(r.p.age != null ? String(Math.floor(r.p.age)) : "–"), td(r.e.dr ? `R${r.e.dr[1]} · ${r.e.dr[2]}` : "UDFA"));
+      for (const kk of keys) { const c = td(fmtM(kk, r.m[kk])); if (kk === k) paint(c, pctIn(r.m[kk])); cells.push(c); }
+      for (const kk of nk) { const v = r.nm ? r.nm[kk] : null, c = td(r.nx ? fmtM(kk, v) : r.y === CUR ? "" : "–", "nx"); if ("n:" + kk === k) paint(c, pctIn(v)); cells.push(c); }
+      t.addRow(cells);
+    });
+    if (rows.length) {
+      const avg = (f) => { const v = rows.map(f).filter((x) => x != null && isFinite(x)); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+      const ac = [td(""), td(`Average (${rows.length})`, "l fz2"), td("")]; if (!cy) ac.push(td("")); ac.push(td(""), td(num(avg((r) => r.p.age), 1)), td(""));
+      for (const kk of keys) ac.push(td(fmtM(kk, avg((r) => r.m[kk]))));
+      for (const kk of nk) ac.push(td(fmtM(kk, avg((r) => (r.nm ? r.nm[kk] : null)))));
+      t.addRow(ac, "tot first");
+    } else t.addRow([td("No players at that minimum.", "l")]);
+    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
+    main.append(t.box);
+    const lastFull = partial ? CUR - 1 : null;
+    main.append(el("p", "note", `Tap a column name to sort, a name for his page on that season. Age is on 1 September; Draft is the round and overall pick. ${lastFull ? `Next season for a ${lastFull} row is ${CUR} so far (through week ${curM.through}). ` : ""}${pos === "RB" ? "PFR's charting (the elusive rating, broken tackles, yards after contact) starts in 2018. " : ""}Routes are dropbacks he was on the field for${curM.estRoutes ? `; ${CUR}'s are snap share × team dropbacks until nflverse publishes participation` : ""}.`));
+    const F = DY_FIND[pos];
+    if (F) { const box = el("div", "findings"); box.append(el("h3", null, "What carries into next season")); const ul = el("ul"); for (const [b, x] of F) { const li = el("li"); li.append(el("b", null, b + ": "), x); ul.append(li); } box.append(ul); main.append(box); }
+  }
+
   // ---------- Coaches ----------
   // a coach's history is every team-season he was on the offensive staff, in any role (Sean, 13 Oct 2026: "do it based on who is on
   // the offense ... include every team he coached on"): teams.js carries each team-season's offensive staff as [role, name] (`st`,
@@ -747,7 +867,7 @@
     const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => x.classList.toggle("on", x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches")));
     const main = $("main"); main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "player" ? player(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : leaders(main);
+    const go = page === "player" ? player(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
