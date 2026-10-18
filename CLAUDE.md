@@ -17,7 +17,8 @@ PPR scoring throughout, and its own home-screen app (`manifest.json`, the footba
 **Files**: `index.html` (stamped by `tools/publish.py`: `?v=` = sha1 of every loaded file and `data/*.js`),
 `fb.js` (one IIFE, no build step, no framework), `fb.css`, and generated `data/`:
 `fb-<season>.js` (`window.FB[y] = {meta, players}`, a player's weekly rows named by `meta.wfields` — append only),
-`index.js` (`FB_INDEX`: name, position, seasons, bio, headshot, draft), `teams.js` (`FB_TEAMS`: every team-season's coaches and RB
+`index.js` (`FB_INDEX`: name, position, seasons, bio, headshot, draft, `rk` = his first NFL season — the draft year, else nflverse's
+`rookie_season` for the undrafted; the Dynasty page's career year), `teams.js` (`FB_TEAMS`: every team-season's coaches and RB
 usage), `career.js` (`FB_CAREER`: season lines + position ranks, loaded with a player page), `staff.json` (coordinators).
 
 **Data** (`tools/build_fb.py --cache .cache/fb --out data --seasons 2016-2026 --current 2026`, ~7 min, everything anonymous
@@ -179,3 +180,65 @@ the week rows carry no passing line, so each week's passing points are his point
 weeks add up to his season's `passFP` — a single-team QB's season matches Leaders exactly. Fumbles lost and two-point plays are in FP
 but not xFP, so the QB +/− is rushing over expected less fumbles. The phone nav fits five pages on one line (the 640px / 380px rules
 in `fb.css`).
+
+## Elusiveness for backs (Sean, 18 Oct 2026: "for RBs like the broken tackle elusive metrics etc")
+
+Leaders' RB table has an **Elusiveness** group (Elusive · BrkT/Att · BrkT/Rec · YAC/att · Expl% · Breakaway%) ahead of **Skills** (YBC/att ·
+Efficiency · Time to LOS · 8+ box% · Stuff%), and the RB player page an **Elusiveness** section of bars (elusive rating, broken tackles / carry,
+yards after contact, explosive run %, breakaway %) beside Skills (yards before contact, NGS efficiency, time to the line, stuffed %). In `M()`:
+* `elus` — **PFF's elusive-rating formula on PFR's charting**: (broken tackles on carries + on catches) / (PFR carries + catches) × PFR yards after
+  contact per carry × 100. PFR charts fewer broken tackles than PFF does missed tackles, so the scale runs lower than PFF's (a typical back ~15,
+  the best ~30). PFR's charting starts in 2018.
+* `expl` — carries of 10+ yards per carry; `bkwy` — share of his rushing yards gained on runs of 15+ yards; `stuff` — carries for zero or less
+  (lower is better). All need 20+ carries.
+* **Data**: `build_season` writes `x10` (10+ yard carries), `y15` (yards on 15+ yard carries) and `stf` (carries of ≤ 0) per player-season, the
+  build's own carries (regular season, weeks 1-18, no two-point tries or kneels). The data files of 18 Oct 2026 were patched from nflverse's
+  play-by-play with the same definitions (every one of the 6,544 player-seasons' carries and yards matched the build's exactly, 2026 cut at the
+  build's last game) and `index.js` got `rk`; the next build writes all of it itself.
+* **What they're worth** (every back's 100+ carry season 2016-25, 271 back-to-back pairs; scratch `fbdyn/rbstudy.py` in the baseball session's
+  scratchpad): the elusive rating +.32 with points per opportunity and +.37 with rushing points over expected this season, repeats at r .29;
+  explosive runs +.47 / +.62, repeats .27 (with yards per carry the best of these at next season's rushing points over expected, +.24);
+  breakaway % +.37 / +.58, repeats .30; stuffed % −.23 / −.27, repeats .27; broken tackles per carry +.23 / +.30, repeats .20. Beyond this
+  season's FP / G none of them adds to next season's (partial r ≤ .07). The tooltips and the note under the bars say so.
+
+## Dynasty (Sean, 18 Oct 2026: "for WRs I want like target share tprr yprr and I also want a dynasty view of that so I can look at rookies across years second year guys across years etc")
+
+Target share, TPRR and YPRR were already Leaders columns and player-page bars; the **Dynasty** page (`#dynasty`, `dynasty()` in `fb.js`, last in
+the nav) lays every season out by the player's year in the league. **Career year** = the season − `rk` + 1 (`rookieYr`). Controls: WR / TE / RB / QB,
+**Rookies · Year 2 · Year 3 · Year 4 · Year 5+ · All** (All adds a Yr column), draft round (all, 1, 2, 3, 4-7, undrafted), a season (all, or one
+class), and a minimum (100 routes for WR / TE, 50 carries + targets for RB, 150 dropbacks for QB; pro-rated for the season in progress). Columns:
+Season, Tm, Age (1 September), Draft (round · overall pick, UDFA), then WR / TE: G, Rts, Route%, Tgt%, TPRR, AY%, aDOT, WOPR | YPRR, Y/R | xFP/G,
+FP/G; RB: G, Snap%, Car%, Tgt%, Opp/G | YPC, RYOE/att | Elusive, BrkT/Att, YAC/att, Expl%, Breakaway% | TPRR, YPRR | xFP/G, FP/G; QB: G, Att,
+Cmp%, EPA/db, CPOE, Sack% | Car/G, Rush xFP/G | xFP/G, FP/G — and **Next season** (G, TPRR / Opp/G / EPA/db, FP/G: what he did the year after;
+a row of the last finished season shows the season in progress so far). Every column sorts (per position, `S.dySort` / `S.dyDir`); the sorted
+column is coloured against **the same career year in every class** at the minimum (the season and round filters only narrow what's listed),
+so a 2026 rookie is placed among every rookie since 2016. An Average row; a name opens his page on that season (`S.pseason`). It loads every
+season's file (`ensure` for each, ~6.6 MB before compression). Defaults: WR / TE by TPRR, RB by the elusive rating, QB by EPA / dropback.
+**What carries into next season** (the box under the table, `DY_FIND`; scratch `fbdyn/dyn.py` / `dyn2.py`: every WR / TE season with 100+ routes
+and RB season with 50+ carries + targets 2016-25 whose next season had 4+ games): his own FP / G is the best guide at every stage — r .69 from a
+rookie WR's year to year 2 (179 rookies), .63 for tight ends, .65 for backs, ~.75 from year 2 on. Next for rookie receivers: target share .62,
+WOPR .60, YPRR .58, TPRR .52. On top of his FP / G, draft capital adds the most for a rookie (partial r −.25 WR, −.34 TE, −.26 RB: earlier picks
+beat their rookie line the next year), then youth and YPRR for receivers and RYOE for backs; TPRR, target share and the backs' elusive rating /
+broken tackles add little or nothing.
+
+**The phone header** carries six pages now: the search box sits in the pages' row (`header()` puts it in the nav, pushed right on a desktop),
+so on a phone the pages and the search wrap into two lines — Leaders · Teams · Role Watch · Backfields · Coaches over Dynasty + the search —
+the same height as before. `.split > div` has `min-width: 0`, so the build-up tables scroll in their own boxes on a 320px phone instead of
+pushing the page sideways (an old bug).
+
+**No white in a table's bounce** (Sean, 18 Oct 2026: "For the football site and basketball site can you get rid of the like white stuff that
+comes when you scroll and it gets bouncy on a table"): an iPhone rubber-bands a scrolled table box past its edge and showed the box's white
+there. Every `.tbox` is `overscroll-behavior-x: none` (no sideways bounce; the page never scrolls sideways, so nothing is lost). A tall box
+(`.tbox.tall`, 72vh) keeps handing a vertical swipe to the page at its ends — on a phone its bottom rows sit below the first screen, so
+`overscroll-behavior-y: none` would strand them — and its own ground is painted to match the gap a bounce opens: the band's blue on the top
+half, the blue of a totals row on the bottom half when the table ends in one (`:has(tbody > tr.tot:last-child)`), else the rows' white;
+clipped to the padding box over the old surface, so every table draws exactly as before at rest (checked pixel for pixel, light and dark).
+The basketball site has the same rules.
+
+**Old team codes** (found 18 Oct 2026 building the Dynasty page): the snap counts keep OAK (through 2019) and SD (2016) where the play-by-play
+uses LV and LAC for every season, and the build took a player's team from the snap counts — so the 2016-19 Raiders and 2016 Chargers matched
+no team-week totals (no target, carry or air-yard share, no route %), their pages linked to no team page or coaches, and Role Watch, which maps
+the ADP files' OAK / SD the same way, found none of them in the drafts. `OLD_CODES` maps the snap counts' team and opponent (and the games
+list's, as `team_seasons` already did); the next build files them as LV / LAC with their shares. Checked on a 2018-20 build: only those teams'
+team fields and the opponent codes in other teams' week rows change.
+
