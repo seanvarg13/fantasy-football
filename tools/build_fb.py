@@ -209,6 +209,13 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
     tw_car = c.groupby(["posteam", "week"]).size()
     rz = t.yardline_100 <= 20
     ez = (t.air_yards.fillna(-99) >= t.yardline_100)
+    # weighted opportunity (20 Oct 2026; Sean: "fantasy football opportunity measures ... That like weight their opportunity"): his
+    # team's red-zone targets and carries, carries inside the 5 and end-zone targets in his games, for the app's red-zone, goal-line and
+    # end-zone shares (the weighted opportunity share itself is carries + 2.5 x targets over the team's, from tmc / tmt)
+    tw_rzt = t[rz].groupby(["posteam", "week"]).size()
+    tw_rzc = c[c.yardline_100 <= 20].groupby(["posteam", "week"]).size()
+    tw_glc = c[c.yardline_100 <= 5].groupby(["posteam", "week"]).size()
+    tw_ezt = t[ez].groupby(["posteam", "week"]).size()
     # snaps: pfr id -> gsis
     pfr2g = dict(zip(P.pfr_id, P.gsis_id))
     sn = d["snaps"].get(y)
@@ -340,8 +347,9 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
             # on runs of 15+ (breakaway yards) and carries stopped at or behind the line — the app's Expl% / Breakaway% / Stuff%
             x10=int((ci.rushing_yards.fillna(0) >= 10).sum()), y15=int(ci.rushing_yards.fillna(0).where(ci.rushing_yards.fillna(0) >= 15, 0).sum()),
             stf=int((ci.rushing_yards.fillna(0) <= 0).sum()),
-            glc=int((ci.yardline_100 <= 5).sum()), rzc=int((ci.yardline_100 <= 20).sum()),
+            glc=int((ci.yardline_100 <= 5).sum()), rzc=int((ci.yardline_100 <= 20).sum()), c10=int((ci.yardline_100 <= 10).sum()),
             tmt=round(sh(tw_tgt)), tmay=round(sh(tw_ay)), tmc=round(sh(tw_car)), tmdb=round(sh(tw_db)),
+            tmrzt=round(sh(tw_rzt)), tmrzc=round(sh(tw_rzc)), tmglc=round(sh(tw_glc)), tmezt=round(sh(tw_ezt)),
             fp=round(sum(fp.get((i, w), 0) for w in weeks), 1),
             xr=round(float(ti.x.sum()), 1), xu=round(float(ci.x.sum()), 1),
             frt=round(float(ti.y.sum()), 1), fru=round(float(ci.y.sum()), 1),
