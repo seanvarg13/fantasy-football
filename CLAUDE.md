@@ -201,6 +201,32 @@ yards after contact, explosive run %, breakaway %) beside Skills (yards before c
   breakaway % +.37 / +.58, repeats .30; stuffed % −.23 / −.27, repeats .27; broken tackles per carry +.23 / +.30, repeats .20. Beyond this
   season's FP / G none of them adds to next season's (partial r ≤ .07). The tooltips and the note under the bars say so.
 
+## Weighted opportunity (Sean, 20 Oct 2026: "add in fantasy football opportunity measures too for both WRs and RBs and TEs That like weight their opportunity")
+
+Leaders has a **Weighted opportunity** group right after Usage — RB: WO/G · WO% · HVT/G · HVT% · RZ Opp% · GL%; WR / TE: WO% · RZ Opp% · EZ Tgt% —
+and the player page a **Weighted opportunity** section of bars (a back's under Opportunity, his Efficiency moving to the right column; a
+receiver's at the top of the right column). The season table has **WO%** before xFP/G (not for QBs) and Dynasty carries WO% (WR / TE) and WO/G ·
+WO% (RB). In `M()`:
+* `wog` — weighted opportunities per game: carries + `WO_K` × targets, `WO_K` = 2.5. An RB's target is worth 2.49 of his carries by xFP
+  (1.52 PPR against 0.61, 2016-25), and 2.5 is also the weight that best predicts a back's next-season FP / G of every one tried from 1 to 5.
+* `wos` — weighted opportunity share: his carries + 2.5 × targets over his team's in his games (`tmc` / `tmt`), so it needs no new data.
+  Sharing out the team's xFP instead was tried — identical at next season's points — and this is the simpler one.
+* `hvtg` / `hvtp` — high-value touches (catches + carries inside the 10, Ben Gretch's) per game and as a share of his touches.
+* `rzs` — his share of his team's targets + carries inside the 20; `gls` — of its carries inside the 5; `ezs` — of its end-zone targets (air
+  yards reaching the goal line).
+* **Data**: `build_season` writes `c10` (his carries inside the 10) and, from team-week totals over the weeks he played (as `tmt` / `tmc`),
+  `tmrzt` / `tmrzc` (the team's red-zone targets / carries), `tmglc` (carries inside the 5) and `tmezt` (end-zone targets). The 2016-25 files
+  of 20 Oct 2026 were patched from a local run of the build itself on those seasons (every player matched and agreed on every field the two
+  share); 2026 gets them from the next update run. A file without them shows "–" for HVT, RZ Opp%, GL% and EZ Tgt%.
+* **What they're worth** (every qualified 2016-25 season — 1,141 receiver, 501 tight-end and 608 back seasons — against that season's FP / G,
+  the same stat the next season and next season's FP / G with 6+ games; scratch `fbopp/py/study.py` in the baseball session's scratchpad):
+  WO/G is the best volume measure of a back's next season, r .63 against .62 for xFP/G and .59 for carries + targets (repeats .65). WO%
+  reads .68 / .71 / .62 (WR / TE / RB) at next season's FP / G, level with xFP/G, and repeats at .72 / .73 / .65. For wide receivers weighting
+  targets by depth doesn't help: targets per game .68 at next season against .65 with air yards weighted in (tight ends gain .005 at best). HVT/G .84 with this season's
+  points, .55 with next, repeats .62; HVT% repeats .73 (the steadiest of these) but says nothing about points on its own (.10). RZ Opp% .52 /
+  .59 / .53 at next season, repeats .52 / .53 / .59; GL% .37, repeats .47; EZ Tgt% .41 / .53, repeats .50 / .44. Next season's FP / G follows
+  this season's FP / G best of all (r .72 / .74 / .67), and xFP/G adds nothing to it. The tooltips and the note under the bars say so.
+
 ## Dynasty (Sean, 18 Oct 2026: "for WRs I want like target share tprr yprr and I also want a dynasty view of that so I can look at rookies across years second year guys across years etc")
 
 Target share, TPRR and YPRR were already Leaders columns and player-page bars; the **Dynasty** page (`#dynasty`, `dynasty()` in `fb.js`, last in

@@ -46,6 +46,9 @@
   // ---------- derived metrics ----------
   const passFP = (p) => (p.pyd || 0) / 25 + 4 * (p.ptd || 0) - 2 * (p.int_ || 0);
   const memo = new WeakMap();
+  // a target is worth 2.5 carries: an RB's target by xFP over his carry, 2016-25 (1.52 PPR against 0.61), and the weight that best
+  // predicts a back's next-season points per game of every one from 1 to 5 tried
+  const WO_K = 2.5;
   function M(p) {
     if (memo.has(p)) return memo.get(p);
     const g = Math.max(p.g || 0, 1), opp = (p.car || 0) + (p.tgt || 0), touch = (p.car || 0) + (p.rec || 0);
@@ -86,6 +89,16 @@
       expl: p.x10 != null && p.car >= 20 ? 100 * p.x10 / p.car : null,
       bkwy: p.y15 != null && p.car >= 20 && p.ruyd > 0 ? 100 * p.y15 / p.ruyd : null,
       stuff: p.stf != null && p.car >= 20 ? 100 * p.stf / p.car : null,
+      // weighted opportunity (20 Oct 2026; Sean: "fantasy football opportunity measures ... That like weight their opportunity"): a
+      // target counts as WO_K carries — per game and as his share of his team's in his games; high-value touches (catches + carries
+      // inside the 10) and his shares of his team's red-zone opportunities, carries inside the 5 and end-zone targets
+      wog: ((p.car || 0) + WO_K * (p.tgt || 0)) / g,
+      wos: p.tmc || p.tmt ? 100 * ((p.car || 0) + WO_K * (p.tgt || 0)) / ((p.tmc || 0) + WO_K * (p.tmt || 0)) : null,
+      hvtg: p.c10 != null ? ((p.rec || 0) + p.c10) / g : null,
+      hvtp: p.c10 != null && touch ? 100 * ((p.rec || 0) + p.c10) / touch : null,
+      rzs: p.tmrzt != null && p.tmrzt + p.tmrzc ? 100 * ((p.rzt || 0) + (p.rzc || 0)) / (p.tmrzt + p.tmrzc) : null,
+      gls: p.tmglc ? 100 * (p.glc || 0) / p.tmglc : null,
+      ezs: p.tmezt ? 100 * (p.ezt || 0) / p.tmezt : null,
     };
     memo.set(p, m); return m;
   }
@@ -144,12 +157,21 @@
     elus: { h: "Elusive", d: 1, hib: 1, t: "Elusive rating, PFF's formula on PFR's charting: broken tackles per touch (carries + catches) × yards after contact per carry × 100. PFR charts fewer broken tackles than PFF does missed tackles, so the scale runs lower than PFF's (a typical back ~15, the best ~30). +.32 with points per opportunity and +.37 with rushing points over expected this season; repeats at r .29" },
     expl: { h: "Expl%", d: 1, p: 1, hib: 1, t: "Explosive runs: carries of 10+ yards per carry. +.47 with points per opportunity and +.62 with rushing points over expected this season; repeats at r .27 — and with yards per carry the best of these at next season's rushing points over expected (+.24)" },
     bkwy: { h: "Breakaway%", d: 1, p: 1, hib: 1, t: "Breakaway %: share of his rushing yards gained on runs of 15+ yards — the big-play back as against the grinder. +.37 with points per opportunity and +.58 with rushing points over expected; repeats at r .30" },
+    // weighted opportunity (20 Oct 2026): every qualified 2016-25 season against that season's FP / G, the same stat the next season and
+    // next season's FP / G (6+ games) — 1,141 receiver, 501 tight-end and 608 back seasons
+    wog: { h: "WO/G", d: 1, hib: 1, t: "Weighted opportunities per game: carries + 2.5 × targets — a back's target is worth 2.5 carries by xFP (1.52 PPR against 0.61). For backs the best volume measure of next season: r .63 with next season's FP/G, against .62 for xFP/G and .59 for plain carries + targets; repeats at r .65" },
+    wos: { h: "WO%", d: 1, p: 1, hib: 1, t: "Weighted opportunity share: his carries + 2.5 × targets over his team's, in his games — his share of the offense, a target counted as 2.5 carries. r .68 (WR), .71 (TE), .62 (RB) with next season's FP/G, as good as xFP/G; repeats at r .72 / .73 / .65" },
+    hvtg: { h: "HVT/G", d: 1, hib: 1, t: "High-value touches per game: catches + carries inside the 10, the touches that score (Ben Gretch's). r .84 with this season's FP/G and .55 with next season's; repeats at r .62" },
+    hvtp: { h: "HVT%", d: 1, p: 1, hib: 1, t: "Share of his touches that are high-value (catches + carries inside the 10): what kind of back he is, not how much he plays — it repeats at r .73, the steadiest of these, but means nothing for points on its own (r .10)" },
+    rzs: { h: "RZ Opp%", d: 1, p: 1, hib: 1, t: "His share of his team's targets and carries inside the 20, in his games. r .52 (WR), .59 (TE), .53 (RB) with next season's FP/G; repeats at r .52 / .53 / .59 — the scoring role moves more than overall volume" },
+    gls: { h: "GL%", d: 1, p: 1, hib: 1, t: "His share of his team's carries inside the 5, in his games. Repeats at r .47; r .37 with next season's FP/G" },
+    ezs: { h: "EZ Tgt%", d: 1, p: 1, hib: 1, t: "His share of his team's end-zone targets (thrown to the goal line or past it), in his games. Repeats at r .50 (WR) / .44 (TE); r .41 / .53 with next season's FP/G" },
     stuff: { h: "Stuff%", d: 1, p: 1, hib: 0, t: "Carries stopped at or behind the line — the line and the box as much as the back. −.23 with points per opportunity; repeats at r .27" },
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
-    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
   COLS.TE = COLS.WR;
@@ -282,8 +304,8 @@
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]]]],
-    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]]], [["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]]]],
+    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
@@ -292,13 +314,17 @@
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
                   sep: "Separation", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
-                  elus: "Elusive rating", expl: "Explosive run %", bkwy: "Breakaway %", stuff: "Stuffed %" };
+                  elus: "Elusive rating", expl: "Explosive run %", bkwy: "Breakaway %", stuff: "Stuffed %",
+                  wog: "Weighted opp. / G", wos: "Weighted opp. share", hvtg: "High-value touches / G", hvtp: "High-value touch %", rzs: "Red-zone opp. share", gls: "Goal-line carry share", ezs: "End-zone target share" };
   // what the skill stats are worth, under the bars (the study of 16 Oct 2026: every qualified season 2018-25 against this season's points
   // per target / opportunity, points over expected and next season's; year-to-year r in brackets)
   const SKILL_NOTE = {
     WR: "Skills: what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route.",
     RB: "Elusiveness and Skills: what he does with a carry, where the Opportunity bars are how many he gets. The elusive rating (broken tackles per touch × yards after contact; +.32 with points per opportunity, repeats at r .29), explosive runs (10+ yards; +.47, repeats .27) and breakaway % (the share of his yards on 15+ yard runs; +.37, repeats .30) are the big-play side; yards before contact (+.41, repeats .25) and stuffed runs are the line and the scheme as much as the back. None of them holds year to year the way his workload does — next season's points follow this season's opportunities, not these.",
   };
+  // weighted opportunity (20 Oct 2026): what the bars of that name are, and which of them carry into next season
+  SKILL_NOTE.RB += " Weighted opportunity counts a target as 2.5 carries — what a back's target is worth over his carry by expected points — and per game it is the best volume measure of next season's points (r .63 with next season's FP/G, xFP/G .62, plain carries + targets .59). High-value touches are catches plus carries inside the 10; the high-value share says what kind of back he is (it repeats at r .73) more than how much he scores. The red-zone and goal-line shares are his slice of his team's chances there and move more from year to year (r .59 / .47).";
+  SKILL_NOTE.WR += " Weighted opportunity share is his carries + 2.5 × targets over his team's, in his games: his slice of the offense, as good as xFP/G at next season's points (r .68 for receivers, .71 for tight ends) and a touch steadier year to year than his targets per game. For receivers, weighting targets by depth doesn't beat plain targets — a target is a target. The red-zone and end-zone shares are his part of his team's scoring chances; they move more from year to year (r .52 / .50 for receivers, .53 / .44 for tight ends).";
   SKILL_NOTE.TE = SKILL_NOTE.WR;
 
   async function player(main, id) {
@@ -443,24 +469,25 @@
     if (pos === "QB") groups.push({ name: "Passing", end: 1, cols: [{ h: "Cmp" }, { h: "Att" }, { h: "Yds" }, { h: "TD" }, { h: "INT" }, { h: "EPA/db" }] });
     groups.push({ name: "Receiving", end: 1, cols: [{ h: "Tgt" }, { h: "Rec" }, { h: "Yds" }, { h: "TD" }, { h: "Tgt%" }] });
     groups.push({ name: "Rushing", end: 1, cols: [{ h: "Car" }, { h: "Yds" }, { h: "TD" }, { h: "Car%" }] });
-    groups.push({ name: "Fantasy", end: 1, cols: [{ h: "xFP/G" }, { h: "FP/G" }, { h: "FPOE/G" }, { h: "Rank" }] });
-    const t = table(groups);
-    let G = 0, fpS = 0, xS = 0; const tot = { tgt: 0, rec: 0, ryd: 0, rtd: 0, car: 0, ruyd: 0, rutd: 0, cmp: 0, att: 0, pyd: 0, ptd: 0, int_: 0 };
+    groups.push({ name: "Fantasy", end: 1, cols: [...(recv ? [{ h: "WO%", t: METRIC.wos.t }] : []), { h: "xFP/G" }, { h: "FP/G" }, { h: "FPOE/G" }, { h: "Rank" }] });
+    const t = table(groups), wo = (r) => (r.car || 0) + WO_K * (r.tgt || 0), tmwo = (r) => (r.tmc || 0) + WO_K * (r.tmt || 0);   // weighted opportunity share, as the Leaders' WO%
+    let G = 0, fpS = 0, xS = 0, woS = 0, tmwoS = 0; const tot = { tgt: 0, rec: 0, ryd: 0, rtd: 0, car: 0, ruyd: 0, rutd: 0, cmp: 0, att: 0, pyd: 0, ptd: 0, int_: 0 };
     for (const y of ys) {
       const r = C[y], g = Math.max(r.g || 0, 1), xfp = (r.xr || 0) + (r.xu || 0) + (pos === "QB" ? passFP(r) : 0), st = staffOf(y, r.tm);
-      G += r.g || 0; fpS += r.fp || 0; xS += xfp; for (const k in tot) tot[k] += r[k] || 0;
+      G += r.g || 0; fpS += r.fp || 0; xS += xfp; woS += wo(r); tmwoS += tmwo(r); for (const k in tot) tot[k] += r[k] || 0;
       const coachCell = (n) => { const c = td(null, "l"); if (n) for (const [i, nm] of n.split(" / ").entries()) { if (i) c.append(" / "); c.append(link(nm, "#coach/" + encodeURIComponent(nm))); } else c.textContent = "–"; return c; };
       const cells = [td(String(y), "fz"), td(r.age != null ? String(Math.floor(r.age)) : ""), td(r.tms && r.tms.length > 1 ? r.tms.join("/") : r.tm), coachCell(st.hc), coachCell(st.oc || (st.pc ? st.pc + " (HC)" : null)), td(String(r.g))];
       if (pos === "QB") cells.push(td(String(r.cmp || 0)), td(String(r.att || 0)), td(String(r.pyd || 0)), td(String(r.ptd || 0)), td(String(r.int_ || 0)), td(r.db ? sgn(r.epa / r.db, 2) : "–"));
       cells.push(td(String(r.tgt || 0)), td(String(r.rec || 0)), td(String(r.ryd || 0)), td(String(r.rtd || 0)), td(r.tmt ? pc(100 * r.tgt / r.tmt) : "–"));
       cells.push(td(String(r.car || 0)), td(String(r.ruyd || 0)), td(String(r.rutd || 0)), td(r.tmc ? pc(100 * r.car / r.tmc) : "–"));
       const xc = td(num(xfp / g)); paint(xc, Math.min(99, Math.max(1, 100 - 100 * ((r.xrk || 60) - 1) / 60)));
+      if (recv) cells.push(td(tmwo(r) ? pc(100 * wo(r) / tmwo(r)) : "–"));
       cells.push(xc, td(num((r.fp || 0) / g)), td(sgn(((r.fp || 0) - xfp) / g)), td(r.rk ? pos + r.rk : "–"));
       const tr = t.addRow(cells, y === cy ? "cur" : ""); tr.querySelector("td").title = y === cy ? "The season shown above" : "";
     }
     const g = Math.max(G, 1), cells = [td(`${ys.length} Yrs`, "fz"), td(""), td(""), td(""), td(""), td(String(G))];
     if (pos === "QB") cells.push(td(String(tot.cmp)), td(String(tot.att)), td(String(tot.pyd)), td(String(tot.ptd)), td(String(tot.int_)), td(""));
-    cells.push(td(String(tot.tgt)), td(String(tot.rec)), td(String(tot.ryd)), td(String(tot.rtd)), td(""), td(String(tot.car)), td(String(tot.ruyd)), td(String(tot.rutd)), td(""), td(num(xS / g)), td(num(fpS / g)), td(sgn((fpS - xS) / g)), td(""));
+    cells.push(td(String(tot.tgt)), td(String(tot.rec)), td(String(tot.ryd)), td(String(tot.rtd)), td(""), td(String(tot.car)), td(String(tot.ruyd)), td(String(tot.rutd)), td(""), ...(recv ? [td(tmwoS ? pc(100 * woS / tmwoS) : "")] : []), td(num(xS / g)), td(num(fpS / g)), td(sgn((fpS - xS) / g)), td(""));
     t.addRow(cells, "tot first"); host.append(t.box);
     host.append(el("p", "note", "Coaches are the team's head coach and offensive coordinator that season (a traded player shows his main team's). xFP/G is coloured by his rank at the position that season by expected points."));
   }
@@ -672,8 +699,8 @@
   const DY_RDS = [["", "All picks"], ["1", "Round 1"], ["2", "Round 2"], ["3", "Round 3"], ["4", "Rounds 4-7"], ["0", "Undrafted"]];
   const DY_MIN = { WR: ["rts", 100, "routes"], TE: ["rts", 100, "routes"], RB: ["opp", 50, "carries + targets"], QB: ["db", 150, "dropbacks"] };
   const DY_COLS = {
-    WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr"]], ["Efficiency", ["yprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
-    RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg"]], ["Rushing", ["ypc", "ryoe"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Receiving", ["tprr", "yprr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr", "wos"]], ["Efficiency", ["yprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos"]], ["Rushing", ["ypc", "ryoe"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Receiving", ["tprr", "yprr"]], ["Fantasy", ["xfpg", "fpg"]]],
     QB: [["Passing", ["g", "att", "cmpp", "epadb", "cpoe", "sackp"]], ["Rushing", ["carg", "ruxg"]], ["Fantasy", ["xfpg", "fpg"]]],
   };
   DY_COLS.TE = DY_COLS.WR;
