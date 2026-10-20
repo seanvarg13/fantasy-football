@@ -235,6 +235,19 @@ half, the blue of a totals row on the bottom half when the table ends in one (`:
 clipped to the padding box over the old surface, so every table draws exactly as before at rest (checked pixel for pixel, light and dark).
 The basketball site has the same rules.
 
+**No table bounce on a phone at all** (Sean, 20 Oct 2026: "On the football site can you get rid of the table bouncy effect on mobile"):
+the colouring above still let a tall box rubber-band. On a touch screen or a window 640px or narrower (`@media (pointer: coarse),
+(max-width: 640px)` in `fb.css`) a tall table is now its full height (`max-height: none`), so its rows scroll with the page and the box only
+slides sideways, which doesn't bounce. The column names stay in view through a copy: `table()` wraps a tall box in `.twrap` with
+`floatHead()` before it — a `.fhead` holding a clone of the `<thead>` in a sideways scroller (`.fhclip`), sticky to the page at
+`--toph` (the site header's height, kept by a ResizeObserver on `.top`). It's the header's height tall and the box is pulled up under it
+(`margin-top`), so at rest the copy covers the real names exactly and at the table's foot it leaves with the table — a negative margin on
+the sticky copy itself let it hang past the foot. A ResizeObserver on the table and box sizes the copy (a `colgroup` of the real names'
+widths, `--fzw` for the frozen Player column) and the two scrollers keep each other's `scrollLeft`. A tap on the copy clicks the real
+name; when the copy was pinned (the page down in the rows), the re-sorted table's top is brought back under the header (`floatSorted`).
+A desktop draws no copy and keeps the 72vh box scrolling inside, pixel for pixel as before (checked at rest and scrolled). The page itself
+still has an iPhone's usual bounce at its very top and bottom.
+
 **Old team codes** (found 18 Oct 2026 building the Dynasty page): the snap counts keep OAK (through 2019) and SD (2016) where the play-by-play
 uses LV and LAC for every season, and the build took a player's team from the snap counts — so the 2016-19 Raiders and 2016 Chargers matched
 no team-week totals (no target, carry or air-yard share, no route %), their pages linked to no team page or coaches, and Role Watch, which maps

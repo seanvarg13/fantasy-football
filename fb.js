@@ -180,7 +180,39 @@
     th.append(h); t.append(th, tb);
     const ends = []; let i = 0; for (const g of groups) { i += g.cols.length; if (g.end) ends.push(i - 1); }
     t.addRow = (cells, cls) => { const tr = el("tr", cls || ""); cells.forEach((c, j) => { const td = c instanceof Node ? c : el("td", null, c == null ? "" : String(c)); if (ends.includes(j)) td.classList.add("ge"); tr.append(td); }); tb.append(tr); return tr; };
-    const box = el("div", "tbox" + (opts.tall ? " tall" : "")); box.append(t); t.box = box; return t;
+    const box = el("div", "tbox" + (opts.tall ? " tall" : "")); box.append(t);
+    if (opts.tall) { const w = el("div", "twrap"); w.append(floatHead(t, box, w), box); t.box = w; } else t.box = box;
+    return t;
+  }
+  // a phone scrolls a tall table's rows with the page (Sean, 20 Oct 2026: "get rid of the table bouncy effect on mobile"): a box that
+  // scrolls inside the page rubber-bands at its ends on an iPhone, so there the box is the table's full height and only slides sideways
+  // (which doesn't bounce), and this copy of the column names is pinned under the site header by the page, slid sideways with the table,
+  // its taps passed to the real names. A desktop doesn't draw it (fb.css); its box keeps scrolling inside.
+  let floatSorted = false;   // a sort tapped on the pinned copy brings the re-sorted table's top back under the header
+  function floatHead(t, box, w) {
+    const fh = el("div", "fhead"), clip = el("div", "fhclip"), t2 = el("table", "br fhtable");
+    t2.append(t.tHead.cloneNode(true)); clip.append(t2); fh.append(clip); fh.setAttribute("aria-hidden", "true");
+    const size = () => {
+      if (!fh.isConnected || !fh.offsetParent) return;
+      const names = t.tHead.rows[t.tHead.rows.length - 1].cells;
+      let cg = t2.querySelector("colgroup"); if (!cg) { cg = el("colgroup"); t2.prepend(cg); }
+      cg.textContent = ""; for (const c of names) { const col = el("col"); col.style.width = c.getBoundingClientRect().width + "px"; cg.append(col); }
+      t2.style.width = t.getBoundingClientRect().width + "px"; clip.style.width = box.clientWidth + "px";
+      w.style.setProperty("--fhh", t.tHead.getBoundingClientRect().height + "px");
+      const fz = names[0] && names[0].classList.contains("fz") ? names[0].getBoundingClientRect().width : 0; if (fz) t2.style.setProperty("--fzw", fz + "px");
+      clip.scrollLeft = box.scrollLeft;
+      if (floatSorted) { floatSorted = false; const y = w.getBoundingClientRect().top - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--toph")) || 0); if (y < 0) window.scrollBy(0, y); }
+    };
+    const ro = new ResizeObserver(() => size()); ro.observe(t); ro.observe(box);
+    box.addEventListener("scroll", () => { if (clip.scrollLeft !== box.scrollLeft) clip.scrollLeft = box.scrollLeft; }, { passive: true });
+    clip.addEventListener("scroll", () => { if (box.scrollLeft !== clip.scrollLeft) box.scrollLeft = clip.scrollLeft; }, { passive: true });
+    t2.addEventListener("click", (e) => {
+      const c = e.target.closest("th"); if (!c) return;
+      const real = t.tHead.querySelectorAll("th")[[...t2.tHead.querySelectorAll("th")].indexOf(c)]; if (!real) return;
+      if (fh.getBoundingClientRect().top > box.getBoundingClientRect().top + 1) floatSorted = true;   // pinned, so the page is down in the rows
+      real.click();
+    });
+    return fh;
   }
   const td = (txt, cls) => el("td", cls || null, txt);
   const link = (txt, href) => { const a = el("a", "lnk", txt); a.href = href; return a; };
@@ -872,6 +904,7 @@
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
   document.body.prepend(header());
+  { const top = $(".top"), set = () => document.documentElement.style.setProperty("--toph", top.offsetHeight + "px"); new ResizeObserver(set).observe(top); set(); }   // where a table's pinned column names sit
   window.addEventListener("hashchange", route);
   route();
 })();
