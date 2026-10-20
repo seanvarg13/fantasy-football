@@ -81,6 +81,18 @@ h1.ttl { font: 700 28px/1.1 var(--display); margin: 16px 0 2px; text-wrap: balan
 .tbox { overscroll-behavior-x: none; }
 .tbox.tall { background: linear-gradient(var(--band) 0 50%, var(--tail, var(--surface)) 50% 100%) padding-box, var(--surface); }
 .tbox.tall:has(tbody > tr.tot:last-child) { --tail: var(--band); }
+/* no bounce on a phone at all (Sean, 20 Oct 2026: "get rid of the table bouncy effect on mobile"): on a touch screen a tall table is its
+   full height and scrolls with the page (a sideways slide doesn't bounce), and a copy of its column names (floatHead in fb.js) is pinned
+   under the site header in its place — sticky to the page, height-for-height with the real ones so it leaves with the table's foot */
+.twrap > .fhead { display: none; }
+@media (pointer: coarse), (max-width: 640px) {
+  .tbox.tall { max-height: none; }
+  .twrap > .fhead { display: block; position: sticky; top: calc(var(--toph, 0px) - 1px); z-index: 4; height: calc(var(--fhh, 0px) + 1px); padding: 1px 0 0 1px; box-sizing: border-box; pointer-events: none; }
+  .twrap > .fhead + .tbox { margin-top: calc(-1px - var(--fhh, 0px)); }   /* the box slides up under the copy, not the copy down over the box: a sticky box's own margin would let it hang past the table's foot */
+  .fhead > .fhclip { pointer-events: auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: none; }
+  .fhclip::-webkit-scrollbar { display: none; }
+  table.br.fhtable { table-layout: fixed; min-width: 0; }
+}
 table.br { border-collapse: separate; border-spacing: 0; font: 11px/1.25 var(--table); font-variant-numeric: tabular-nums; width: max-content; min-width: 100%; }
 .br th, .br td { padding: 4px 6px; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); text-align: center; white-space: nowrap; background: var(--surface); }
 .br thead th { background: var(--band); color: #fff; font-weight: 700; position: sticky; top: 0; z-index: 2; }
