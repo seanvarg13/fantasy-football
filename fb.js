@@ -80,6 +80,10 @@
       // the skill stats (16 Oct 2026): Next Gen's season row (sep / cush / nyoe, eff / tlos / box8) and PFR's charted counts over PFR's
       // own receptions, targets and carries
       sep: p.sep, cush: p.cush, nyoe: p.nyoe, eff: p.eff, tlos: p.tlos, box8: p.box8,
+      // separation (21 Oct 2026; Sean: "I'd like to include those on the site", the free separation sources): NGS separation over what his
+      // depth of target and cushion imply (the build's fit, sepoe), and FTN's contested targets — the share with a defender on him at the
+      // catch, and that share over his position's rate at his target depths (null under 20 charted targets; FTN starts in 2022)
+      sepoe: p.sepoe, cont: p.ftgt >= 20 ? 100 * p.cnt / p.ftgt : null, contoe: p.ftgt >= 20 ? 100 * (p.cnt - p.xcnt) / p.ftgt : null,
       // (null under 10 catches / 15 targets / 20 carries — PFR's season in progress lags the play-by-play by a week or two)
       brkr: p.pfrrec >= 10 ? 100 * p.btkr / p.pfrrec : null, dropp: p.pfrtgt >= 15 ? 100 * p.drops / p.pfrtgt : null,
       brka: p.pfratt >= 20 ? 100 * p.btka / p.pfratt : null, ybca: p.pfratt >= 20 ? p.ybc / p.pfratt : null, yaca: p.pfratt >= 20 ? p.ryac / p.pfratt : null,
@@ -143,6 +147,11 @@
     // that barely touches points; the catch-and-run stats explain this season's FPOE and carry a little forward; broken tackles are noise
     sep: { h: "Sep", d: 1, hib: 1, t: "Next Gen Stats: yards of separation from the nearest defender at the throw, on his targets. Repeats year to year at r .58 — but only +.14 with points per target and nothing with next season's points: a trait, not a points driver" },
     cush: { h: "Cushion", d: 1, hib: 1, t: "Next Gen Stats: yards the nearest defender gave him at the snap, on his targets. Repeats at r .46; a weak tie to points either way (−.14 with FP / G)" },
+    // separation (21 Oct 2026): the same tests on every 40+ target season, separation over expected 2016-25 and FTN's contested targets
+    // 2022-25 (985 / 389 receiver seasons; 632 / 224 back-to-back pairs): neither says more about points than separation does
+    sepoe: { h: "SepOE", d: 2, s: 1, hib: 1, t: "Separation over expected: his Next Gen separation less what a receiver of his position gets at his depth of target and cushion (a fit over each season's WR / TE rows) — the depth taken out, as ESPN's Open Score does, but on his targets only. Repeats at r .45 (TE .27); +.24 with points per target and +.26 with points over expected this season, and nothing with next season's points (−.01; TE −.10)" },
+    cont: { h: "Cont%", d: 1, p: 1, hib: 0, t: "Contested %: share of his targets with a defender on him at the catch point — lower is more open. FTN Data's charting via nflverse, 2022 on. Mostly noise year to year (r .29); −.10 with points per target and −.20 with points over expected this season, nothing with next season's points — and no warning sign: the most-covered receivers include stars their quarterbacks throw to anyway" },
+    contoe: { h: "ContOE", d: 1, s: 1, hib: 0, t: "Contested over expected: his contested % less his position's rate at his target depths (each air-yard band, screens their own) — lower is more open than his routes' depth implies. FTN Data's charting via nflverse, 2022 on. Repeats at r .24 (TE .30); −.15 with points per target, nothing with next season's points" },
     nyoe: { h: "YAC+ (NGS)", d: 1, s: 1, hib: 1, t: "Next Gen Stats: yards after the catch over what the catch point, defenders and blockers expected, per catch. +.36 with points per target and +.35 with points over expected this season; repeats at r .35" },
     brkr: { h: "BrkT/Rec", d: 1, p: 1, hib: 1, t: "PFR's charted broken tackles per catch. +.12 with points per target; repeats at r .31" },
     dropp: { h: "Drop%", d: 1, p: 1, hib: 0, t: "PFR's charted drops per target. −.15 with points per target; repeats at only r .12 — nearly noise" },
@@ -170,7 +179,7 @@
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
@@ -299,12 +308,12 @@
     for (const [, keys] of COLS[pos]) for (const kk of keys) ac.push(td(fmtM(kk, avg(kk))));
     t.addRow(ac, "tot first");
     requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
-    main.append(el("p", "note", "Tap a column name to sort, tap a name for his page. xFP prices each target and carry by what a play like it scores on average in PPR, fitted on the other seasons. " + (meta.estRoutes ? "Routes this season are estimated from snap share × team dropbacks until nflverse publishes participation." : "Routes are dropbacks he was on the field for.")));
+    main.append(el("p", "note", "Tap a column name to sort, tap a name for his page. xFP prices each target and carry by what a play like it scores on average in PPR, fitted on the other seasons. " + (meta.estRoutes ? "Routes this season are estimated from snap share × team dropbacks until nflverse publishes participation." : "Routes are dropbacks he was on the field for.") + (pos === "WR" || pos === "TE" ? " Cont% and ContOE are FTN Data's charting via nflverse (CC BY-SA 4.0), from 2022." : "")));
   }
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Skills", ["sep", "cush", "nyoe", "brkr", "dropp"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]]]],
     RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
@@ -313,13 +322,13 @@
                   tdoe: "TD over expected", yprr: "Yards / route", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", snp: "Snap %",
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
-                  sep: "Separation", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
+                  sep: "Separation", sepoe: "Separation over exp.", cont: "Contested target %", contoe: "Contested over exp.", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
                   elus: "Elusive rating", expl: "Explosive run %", bkwy: "Breakaway %", stuff: "Stuffed %",
                   wog: "Weighted opp. / G", wos: "Weighted opp. share", hvtg: "High-value touches / G", hvtp: "High-value touch %", rzs: "Red-zone opp. share", gls: "Goal-line carry share", ezs: "End-zone target share" };
   // what the skill stats are worth, under the bars (the study of 16 Oct 2026: every qualified season 2018-25 against this season's points
   // per target / opportunity, points over expected and next season's; year-to-year r in brackets)
   const SKILL_NOTE = {
-    WR: "Skills: what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route.",
+    WR: "Separation and Skills: how open he gets and what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. Separation over expected takes his depth of target and cushion out of it (repeats at r .45): +.24 with points per target, still nothing with next season's points. Contested % is the share of his targets with a defender on him at the catch (FTN Data's charting via nflverse, from 2022), and contested over expected the same against his position's rate at his target depths: both are mostly noise year to year (r .29 / .24) and no warning sign — the most-covered receivers include stars their quarterbacks throw to anyway. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route.",
     RB: "Elusiveness and Skills: what he does with a carry, where the Opportunity bars are how many he gets. The elusive rating (broken tackles per touch × yards after contact; +.32 with points per opportunity, repeats at r .29), explosive runs (10+ yards; +.47, repeats .27) and breakaway % (the share of his yards on 15+ yard runs; +.37, repeats .30) are the big-play side; yards before contact (+.41, repeats .25) and stuffed runs are the line and the scheme as much as the back. None of them holds year to year the way his workload does — next season's points follow this season's opportunities, not these.",
   };
   // weighted opportunity (20 Oct 2026): what the bars of that name are, and which of them carry into next season
@@ -374,7 +383,7 @@
       cols.append(c);
     });
     main.append(cols);
-    if (SKILL_NOTE[pos]) main.append(el("p", "note", SKILL_NOTE[pos] + (m.sep == null && (pos === "WR" || pos === "TE") ? " Next Gen Stats carries no season row for him (under its target minimum)." : "")));
+    if (SKILL_NOTE[pos]) main.append(el("p", "note", SKILL_NOTE[pos] + (m.sep == null && (pos === "WR" || pos === "TE") ? " Next Gen Stats carries no season row for him (under its target minimum)." : "") + (y < 2022 && (pos === "WR" || pos === "TE") ? " FTN's contested-target charting starts in 2022." : "")));
     // tabs
     const tabs = el("div", "tabs"), body = el("div");
     const TABS = [["build", "xFP build-up"], ["log", "Game log"]]; if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);

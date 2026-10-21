@@ -4,8 +4,8 @@
     python3 tools/build_fb.py [--cache DIR] [--out data] [--seasons 2016-2026] [--current 2026]
 
 Everything comes from nflverse's public releases (no keys): play-by-play, on-field participation (routes),
-snap counts, player bios, Next Gen rushing, and nfldata's games list (head coaches). Downloads are cached in
---cache; a past season is fetched once, the current season every run.
+snap counts, player bios, Next Gen rushing, FTN Data's play charting (2022 on, CC BY-SA 4.0) and nfldata's games
+list (head coaches). Downloads are cached in --cache; a past season is fetched once, the current season every run.
 
 Writes, per season, data/fb-<season>.js (every WR / TE / RB / QB who touched the ball or ran a
 route: season line, shares, PPR points, expected points, weekly rows), data/teams.js (every
@@ -52,7 +52,7 @@ def fetch(url, path, fresh=False):
 
 def load(cache, seasons, current):
     os.makedirs(cache, exist_ok=True)
-    out = {"pbp": {}, "part": {}, "snaps": {}}
+    out = {"pbp": {}, "part": {}, "snaps": {}, "ftn": {}}
     for y in seasons:
         fresh = y == current
         p = fetch(f"{R}/pbp/play_by_play_{y}.parquet", f"{cache}/pbp_{y}.parquet", fresh)
@@ -64,6 +64,9 @@ def load(cache, seasons, current):
         s = fetch(f"{R}/snap_counts/snap_counts_{y}.csv", f"{cache}/snaps_{y}.csv", fresh)
         if s:
             out["snaps"][y] = pd.read_csv(s)
+        f = load_ftn(cache, y, fresh)
+        if f is not None:
+            out["ftn"][y] = f
     out["players"] = pd.read_parquet(fetch(f"{R}/players/players.parquet", f"{cache}/players.parquet", True))
     out["ngs_rush"] = pd.read_parquet(fetch(f"{R}/nextgen_stats/ngs_rushing.parquet", f"{cache}/ngs_rushing.parquet", True))
     # the skill stats (16 Oct 2026): Next Gen receiving (separation, cushion, YAC over expected) and PFR's charted broken tackles,
@@ -75,6 +78,19 @@ def load(cache, seasons, current):
     out["pfr_rush"] = pd.read_csv(pu) if pu else None
     out["games"] = pd.read_csv(fetch(GAMES, f"{cache}/games.csv", True), low_memory=False)
     return out
+
+
+# FTN Data's play charting (21 Oct 2026; Sean, of the separation sources: "I'd like to include those on the site"): free through nflverse
+# from 2022 under CC BY-SA 4.0 (the site credits "FTN Data via nflverse" wherever it shows them) — whether each target was contested,
+# a defender on him at the catch point, and whether it was a screen
+FTN_FROM = 2022
+
+
+def load_ftn(cache, y, fresh):
+    if y < FTN_FROM:
+        return None
+    f = fetch(f"{R}/ftn_charting/ftn_charting_{y}.parquet", f"{cache}/ftn_{y}.parquet", fresh)
+    return pd.read_parquet(f, columns=["nflverse_game_id", "nflverse_play_id", "is_contested_ball", "is_screen_pass"]) if f else None
 
 
 # ---------- play tables ----------
@@ -171,13 +187,56 @@ def iv(x):
     return None if x is None or x != x else int(x)
 
 
+def sep_oe(rows):
+    """Separation over expected (21 Oct 2026): a receiver's NGS separation less what a receiver of his position gets at his intended air
+    yards and cushion — a fit over the season's WR / TE rows, weighted by the root of their targets (separation shrinks a tenth of a yard
+    for every yard deeper and grows a fifth for every yard of cushion; tight ends get ~0.15 more at the same depth). It takes the depth
+    out of separation the way ESPN's Open Score does, on his targets only."""
+    w = rows[rows.player_position.isin(["WR", "TE"]) & rows.avg_separation.notna() & rows.avg_intended_air_yards.notna() & rows.avg_cushion.notna()]
+    if len(w) < 20:
+        return {}
+    X = np.column_stack([np.ones(len(w)), w.avg_intended_air_yards, w.avg_cushion, (w.player_position == "TE").astype(float)])
+    k = np.sqrt(w.targets.clip(lower=1).to_numpy(float))
+    b = np.linalg.lstsq(X * k[:, None], w.avg_separation.to_numpy(float) * k, rcond=None)[0]
+    return {i: round(float(v), 2) for i, v in zip(w.player_gsis_id, w.avg_separation.to_numpy(float) - X @ b)}
+
+
+CONT_BANDS = [-1000, -1, 4, 9, 14, 19, 29, 1000]   # air yards: behind the line, 0-4, 5-9, 10-14, 15-19, 20-29, 30+
+
+
+def contested(t, ftn):
+    """FTN's contested targets per receiver (21 Oct 2026): his charted targets, the contested ones, and how many his target depths would
+    draw at the season's rate for each air-yard band (screens and a missing depth their own bands) among his position's targets — wide
+    receivers, tight ends or backs, a thin band shrunk to every position's with 30 targets — the app's Cont% and ContOE."""
+    if ftn is None or not len(t):
+        return {}
+    f = ftn.rename(columns={"nflverse_game_id": "game_id", "nflverse_play_id": "play_id"}).drop_duplicates(["game_id", "play_id"])
+    f = f.assign(play_id=f.play_id.astype("int64"))
+    m = t[["game_id", "play_id", "pid", "air_yards", "pos"]].assign(play_id=t.play_id.astype("int64")).merge(f, on=["game_id", "play_id"], how="inner")
+    if not len(m):
+        return {}
+    b = pd.cut(m.air_yards, CONT_BANDS, labels=False)
+    m = m.assign(con=m.is_contested_ball.fillna(False).astype(int), grp=m.pos.map({"TE": "TE", "RB": "RB", "FB": "RB"}).fillna("WR"),
+                 band=np.where(m.is_screen_pass.fillna(False).astype(bool), 98, np.where(b.isna(), 99, b)))
+    al = m.groupby("band").con.mean()
+    gb = m.groupby(["grp", "band"]).con.agg(["sum", "size"]).reset_index()
+    gb["rate"] = (gb["sum"] + 30 * gb.band.map(al)) / (gb["size"] + 30)
+    m = m.merge(gb[["grp", "band", "rate"]], on=["grp", "band"], how="left").rename(columns={"rate": "xcon"})
+    g = m.groupby("pid").agg(ftgt=("con", "size"), cnt=("con", "sum"), xcnt=("xcon", "sum"))
+    return {pid: dict(ftgt=int(r.ftgt), cnt=int(r.cnt), xcnt=round(float(r.xcnt), 1)) for pid, r in g.iterrows()}
+
+
 def skills(y, d, P):
     pfr2g = dict(zip(P.pfr_id, P.gsis_id))
     sk = defaultdict(dict)
     nr = d.get("ngs_rec")
     if nr is not None:
-        for r in nr[(nr.season == y) & (nr.week == 0) & (nr.season_type == "REG")].itertuples():
+        rows = nr[(nr.season == y) & (nr.week == 0) & (nr.season_type == "REG")]
+        sx = sep_oe(rows)
+        for r in rows.itertuples():
             sk[r.player_gsis_id].update(sep=r1(r.avg_separation), cush=r1(r.avg_cushion), nyoe=r1(r.avg_yac_above_expectation), ngstgt=int(r.targets))
+            if r.player_gsis_id in sx:
+                sk[r.player_gsis_id]["sepoe"] = sx[r.player_gsis_id]
     ng = d.get("ngs_rush")
     if ng is not None:
         for r in ng[(ng.season == y) & (ng.week == 0) & (ng.season_type == "REG")].itertuples():
@@ -200,6 +259,7 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
     p = p[p.week <= 18]
     t = targets(p, pos); t["x"] = xt; t["xtd"] = tt if tt is not None else 0.0
     c = carries(p, pos); c["x"] = xc; c["xtd"] = tc if tc is not None else 0.0
+    ct = contested(t, d.get("ftn", {}).get(y))
     # dropbacks and plays by team-week (for shares and the route estimate)
     plays = p[(p.play_type.isin(["pass", "run"])) & (p.two_point_attempt != 1)]
     db = plays[plays.qb_dropback == 1]
@@ -358,6 +418,7 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
             w=wrows,
         )
         rec.update(sk.get(i, {}))
+        rec.update(ct.get(i, {}))
         if len(qi) or ps == "QB":
             rec.update(db=len(qi), att=int(qi.pass_attempt.sum()), cmp=int(qi.complete_pass.sum()), pyd=int(qi.passing_yards.fillna(0).sum()),
                        ptd=int(qi.pass_touchdown.sum()), int_=int(qi.interception.sum()), sk=int(qi.sack.sum()),
@@ -465,16 +526,27 @@ def main():
     if a.patch_skills:
         os.makedirs(a.cache, exist_ok=True)
         d = load(a.cache, [], a.current)
+        pos = dict(zip(d["players"].gsis_id, d["players"].position))
         for y in seasons:
             path = os.path.join(a.out, f"fb-{y}.js")
             if not os.path.exists(path):
                 continue
             s = open(path).read(); body = json.loads(s[s.index("={") + 1:].rstrip().rstrip(";"))
             sk = skills(y, d, d["players"]); n = 0
+            ct, fq = {}, load_ftn(a.cache, y, y == a.current)
+            if fq is not None:
+                pb = fetch(f"{R}/pbp/play_by_play_{y}.parquet", f"{a.cache}/pbp_{y}.parquet", y == a.current)
+                if pb:
+                    p = reg(pd.read_parquet(pb)); p = p[p.week <= min(18, body["meta"].get("through") or 18)]
+                    ct = contested(targets(p, pos), fq)
             for pl in body["players"]:
-                f = sk.get(pl["id"])
+                f, f2 = sk.get(pl["id"]), ct.get(pl["id"])
                 if f:
-                    pl.update(f); n += 1
+                    pl.update(f)
+                if f2:
+                    pl.update(f2)
+                if f or f2:
+                    n += 1
             with open(path, "w") as f:
                 f.write(f"window.FB=window.FB||{{}};window.FB[{y}]={jsdump(clean(body))};\n")
             print(f"  fb-{y}.js: skills on {n} of {len(body['players'])} players", flush=True)

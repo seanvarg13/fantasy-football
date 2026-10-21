@@ -140,7 +140,7 @@ projected rest-of-season share 10+ points over the drafts' for a back, 4+ for a 
 ## Skills (Sean, 16 Oct 2026: "wide receiver separation metrics, ones that correlate with fantasy points, and ... the degree that they do
 ... and also same thing for like rb broken tackles and skill stuff", then "could you still add those metrics to the site")
 
-**What's on the site**: a **Skills** group on Leaders (WR / TE: Sep · Cushion · YAC+ (NGS) · BrkT/Rec · Drop%; RB: BrkT/Att · YBC/att · YAC/att ·
+**What's on the site**: a **Skills** group on Leaders (WR / TE: Sep · Cushion · YAC+ (NGS) · BrkT/Rec · Drop% — since 21 Oct 2026 Sep and Cushion sit in the **Separation** group, below; RB: BrkT/Att · YBC/att · YAC/att ·
 Efficiency · Time to LOS · 8+ box% · BrkT/Rec) and a **Skills** section of percentile bars on the player page (`BARS`), with a note under the
 bars (`SKILL_NOTE`) and tooltips (`METRIC[k].t`) saying what each is worth. **Data**: Next Gen Stats' season rows (`nextgen_stats/ngs_receiving.parquet`
 / `ngs_rushing.parquet`, every season in one file — the per-season `ngs_2024_receiving.csv.gz` on nflverse is a 9-row stub, so the combined files
@@ -168,6 +168,37 @@ site's own FP / G, FP per target or opportunity and FPOE, same season, next seas
   FP / G; half to half RYOE → second-half FP per opportunity +.16 against its own .17. A four-stat fit explains RB FPOE at r .65 and next season's
   FPOE no better than this season's FPOE alone (.25 → .26).
 * **So they stay out of xFP** (which prices the opportunity) and are shown as skills with their reliability, not folded into the expected points.
+
+## Separation (Sean, 21 Oct 2026: "Would we be able to add reception perception separation data to the site?", then "Is there any other publicly
+available separation data? I'm not sure if next gen stats or average separation score are good too", then "I'd like to include those on the site")
+
+Leaders' WR / TE table has a **Separation** group (Sep · SepOE · Cushion · Cont% · ContOE) ahead of **Skills** (now YAC+ (NGS) · BrkT/Rec · Drop%),
+and a receiver's player page a **Separation** section of bars (separation, separation over expected, cushion, contested target %, contested over
+expected) above Skills, with the bars' note and the tooltips saying what each is worth.
+* `sepoe` — **separation over expected**: his NGS separation less what a receiver of his position gets at his NGS intended air yards and cushion —
+  `sep_oe()` in `tools/build_fb.py`, a least-squares fit over each season's WR / TE NGS rows weighted by √targets, with a tight-end term (separation
+  falls ~0.1 yard per yard of depth and rises ~0.2 per yard of cushion; tight ends get ~0.15 more at the same depth). The depth adjustment ESPN's
+  Open Score makes, but on his targets only.
+* `cont` / `contoe` — **FTN Data's charting** (`ftn_charting/ftn_charting_<y>.parquet` on nflverse, 2022 on, **CC BY-SA 4.0**: credited "FTN Data via
+  nflverse" in the tooltips, the bars' note and the Leaders note — keep the credit wherever they show; the ShareAlike terms cover the derived counts
+  in `data/`). `contested()` joins each of the build's regular-season targets to FTN's `is_contested_ball` (a defender on him at the catch point)
+  and writes `ftgt` (charted targets), `cnt` (contested) and `xcnt` (what his targets would draw at his position's season rate in each air-yard band
+  — behind the line, 0-4, 5-9, 10-14, 15-19, 20-29, 30+, screens and a missing depth their own — a thin band shrunk to every position's with 30
+  targets). In `M()`: `cont` = 100 cnt / ftgt and `contoe` = 100 (cnt − xcnt) / ftgt, both null under 20 charted targets; lower = more open (`hib: 0`).
+* **Data**: `load()` fetches FTN with each season's play-by-play (`load_ftn`), `build_season` merges `contested()`, and `--patch-skills` puts `sepoe`
+  and the FTN counts on the built files too (reading that season's play-by-play for FTN's receivers, cut at the file's last week). The files of
+  21 Oct 2026 were patched that way — every charted receiver's FTN targets (2,343 player-seasons 2022-26) matched the build's target count
+  exactly — and a full build of 2024-26 wrote the same numbers.
+* **What they're worth** (every 40+ target season — 985 WR / 353 TE seasons 2016-25 for SepOE, 389 / 147 in 2022-25 for FTN — against that season's
+  points per target, points over expected per target and FP / G, and next season's FP / G with 6+ games; scratch `sepstudy/final.py` in the
+  baseball session's scratchpad): SepOE repeats at r .45 (TE .27), +.24 with points per target and +.26 with points over expected, nothing with next
+  season's points (−.01; TE −.10). Cont% repeats at .29 (TE .28), −.10 / −.20 this season and nothing next season (+.05; +.11 beyond this season's
+  FP / G — a covered receiver his quarterback throws to anyway reads as trust, not a flaw). ContOE repeats at .24 (TE .30), −.15 / −.18. For
+  comparison TPRR repeats at .68 and tracks next season's FP / G at .63, YPRR .60 / .65.
+* **Not on the site**: ESPN's **Open Score** (every route, against what's normal for the route, coverage and depth; 4for4 found it repeats at .59 and
+  tracks next season's FP / G at .44 — ESPN publishes leaders in articles, no full table), **Fantasy Points'** Average Separation Score and Route Win
+  Rate, **Reception Perception**'s success rates vs man / zone / press and **PFF** — all paid. Publishing a paid table on this public site would give
+  it away; if Sean subscribes, the plan is a private paste-in kept on his own devices.
 
 ## Teams (Sean, 13 Oct 2026: "an xfp/g and points/g by team by position")
 
