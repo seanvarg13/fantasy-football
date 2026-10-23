@@ -609,3 +609,16 @@ Every list page's name column is the baseball Leaderboard's (the "name column" r
 * **Desktop**: at least 130px, else the widest name.
 * **Teams** keeps its own width (`.nonm`), since its second frozen column is the club's code.
 * The tables already stand in fixed windows that scroll inside themselves (the list-pages pass).
+
+## Leaders opens on the fantasy core (Sean, 23 Oct 2026: "limit the like leaderboard stats to really just the stats that matter most for fantasy scoring")
+
+`CORE` in `fb.js` (beside `lbAllKeys`) is the column list Leaders opens on when he hasn't picked his own. It sits after the xFP/G headline, or a QB's FP/G.
+* **WR / TE**: FP/G · G · Route% · TPRR · Tgt% · WOPR · RZ Tgt · WO% · YPRR · sYPRR.
+* **RB**: FP/G · G · Snap% · Car% · Tgt% · Opp/G · WO/G · WO% · HVT/G · GL% · RZ Opp%.
+* **QB**: G · Att · Yds · TD · INT · EPA/db · Car · Rush xFP/G · xFP/G.
+
+These are the ones that repeat and follow next season's FP / G (§ Weighted opportunity, Stable YPRR, Dynasty).
+
+Every other column stays in Filters ▸ Stats. "Fantasy core" is the first column-set button, then All and each group. Reset to defaults returns to the core. `S.coreCols` moved every saved list to the core once.
+
+WOPR (Josh Hermsmeyer's weighted opportunity rating) = 1.5 × target share + 0.7 × air-yard share. It is a receiver's share of his team's targets, weighted toward volume, plus how much of its downfield passing he's the target of.

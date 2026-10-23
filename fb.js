@@ -526,8 +526,21 @@
   const lbSize = () => ([25, 50, 100, 0].includes(S.lbSize) ? S.lbSize : isMobile() ? 25 : 50);   // 0 = everyone on one page
   const headKey = (pos) => (pos === "QB" ? "fpg" : "xfpg");
   const lbAllKeys = (pos) => COLS[pos].flatMap((g) => g[1]).filter((k) => k !== headKey(pos));
+  // the columns Leaders opens on: the ones that carry fantasy points (Sean, 23 Oct 2026: "limit the leaderboard stats to really just the stats
+  // that matter most for fantasy scoring"). For receivers: playing time (Route%), how often he's thrown to (TPRR, target share, WOPR, red-zone
+  // targets) and what he does per route (YPRR, stable YPRR) — the stats that repeat and track next season's FP / G (TPRR .68 / .63, YPRR .60 / .65,
+  // WO% .72 / .68). Backs: snaps, carry and target share, weighted opportunities (WO/G is the best volume read of a back's next season, .63),
+  // high-value touches and goal-line work. Quarterbacks: passing volume and touchdowns, efficiency, and rushing (Rush xFP/G). Every other
+  // column is still in Filters ▸ Stats (the All set, or each group).
+  const CORE = {
+    WR: ["fpg", "g", "rte", "tprr", "tgtsh", "wopr", "rzt", "wos", "yprr", "syprr"],
+    RB: ["fpg", "g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos", "hvtg", "gls", "rzs"],
+    QB: ["g", "att", "pyd", "ptd", "int", "epadb", "car", "ruxg", "xfpg"],
+  };
+  CORE.TE = CORE.WR;
+  if (!S.coreCols) { S.lbCols = {}; S.coreCols = 1; }   // once: a list saved before the core set moves to it
   const groupOf = (pos, k) => (COLS[pos].find((g) => g[1].includes(k)) || [""])[0];
-  const lbKeys = (pos) => { const all = lbAllKeys(pos), own = S.lbCols && S.lbCols[pos]; return Array.isArray(own) ? own.filter((k) => all.includes(k)) : all; };   // the columns showing, in order
+  const lbKeys = (pos) => { const all = lbAllKeys(pos), own = S.lbCols && S.lbCols[pos]; return Array.isArray(own) ? own.filter((k) => all.includes(k)) : CORE[pos].filter((k) => all.includes(k)); };   // the columns showing, in order (the core set unless he's picked his own)
   const setLbKeys = (pos, keys) => { S.lbCols = Object.assign({}, S.lbCols, { [pos]: keys }); S.lbPage = 1; save(); };
   const lbBrk = (pos) => (S.lbBrk && S.lbBrk[pos]) || [];
   // the groups the table draws from the ordered keys: a run of one group's columns keeps its name; a user's dividing line or a change of group ends a run
@@ -549,7 +562,7 @@
     main.textContent = "";
     POP.spec = { page: "leaders", ownTable: true, tabs: LB_TABS, keys: ["pos", "season", "qualOnly", "lbCols", "lbBrk", "lbQ", "tbl", "sort", "dir"], draw: (tab, h) => lbDraw(tab, h, y, pos, meta) };
     // the control row: the Filters button, labelled by who's listed and how many filters beyond the defaults are on, and the count
-    const extra = (y !== CUR) + (S.qualOnly === false) + (keys.length !== lbAllKeys(pos).length) + (q ? 1 : 0), range = `${n ? from + 1 : 0}–${to} of ${n}`;
+    const extra = (y !== CUR) + (S.qualOnly === false) + (keys.join() !== CORE[pos].filter((x) => lbAllKeys(pos).includes(x)).join()) + (q ? 1 : 0), range = `${n ? from + 1 : 0}–${to} of ${n}`;
     const board = listFrame(main, { page: "leaders", title: `${POS_WORD[pos]} Leaderboard`, sub: `by ${METRIC[k].h}`,
       ctl: [filtersBtn(`${POS_WORD[pos]} filters`, extra), count(`${range} ${pos}s · ${y}${meta.through < 18 ? " · through week " + meta.through : ""} · PPR${S.qualOnly === false ? "" : " · " + minText(pos, meta)}${q ? ` · "${S.lbQ.trim()}"` : ""}`, range)] });
     // the columns, each with its cell for a player's row and for the Qualified avg foot: Rk · Player · Tm · the headline · the groups
@@ -616,7 +629,7 @@
     } else if (tab === "stats") {
       const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
       const s = h.sec("Column sets"), sb = el("div", "lbpills lbsetbtns"), sg = el("div", "seg"); sg.setAttribute("role", "group"); sg.setAttribute("aria-label", "Column sets");
-      const sets = [["All", all], ...COLS[pos].map(([name, ks]) => [name, ks.filter((x) => x !== head)])], curName = (sets.find(([, ks]) => same(ks, cur)) || ["Custom"])[0];
+      const sets = [["Fantasy core", CORE[pos].filter((x) => all.includes(x))], ["All", all], ...COLS[pos].map(([name, ks]) => [name, ks.filter((x) => x !== head)])], curName = (sets.find(([, ks]) => same(ks, cur)) || ["Custom"])[0];
       for (const [name, ks] of sets) { const b = el("button", "segbtn", name); b.type = "button"; b.setAttribute("aria-pressed", String(name === curName)); b.addEventListener("click", () => { setLbKeys(pos, ks.slice()); route(); }); sg.append(b); }
       if (curName === "Custom") { const b = el("button", "segbtn", "Custom"); b.type = "button"; b.disabled = true; b.setAttribute("aria-pressed", "true"); b.title = "Your own ticks below"; sg.append(b); }
       sb.append(sg); s.append(sb);
