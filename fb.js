@@ -494,6 +494,7 @@
   function fitNames(t) {
     if (document.documentElement.dataset.view !== "mobile") return;
     const box = t.closest(".lbbox"); if (!box) return;
+    if (document.documentElement.classList.contains("tsans")) { for (const a of t.querySelectorAll("tbody .lnk[style]")) { a.style.fontSize = ""; a.style.letterSpacing = ""; } return; }   // the Classic tables keep the name at full size and cut it off, as the baseball's do (its .name font size is fixed there)
     const names = [...t.querySelectorAll(box.classList.contains("namefz") ? "tbody td.fz .lnk" : "tbody td.fz2 .lnk")]; if (!names.length) return;
     for (const a of names) { a.style.fontSize = ""; a.style.letterSpacing = ""; }
     const cs = getComputedStyle(names[0]), base = parseFloat(cs.fontSize) || 12, fam = cs.fontFamily, wt = cs.fontWeight;
@@ -1717,7 +1718,7 @@
     const T = window.FB_THEMES;
     if (!T) { box.append(el("p", "note", "themes.js didn't load, so there is nothing to pick here.")); return; }
     const cur = T.current();
-    const head = el("div", "ahd"); head.append(el("h2", "ahead", "Appearance"), el("p", "hublead", "Colours, type and layout. Each device follows the site default until you pick something on it; the phone app and Safari count as separate devices."));
+    const head = el("div", "ahd"); head.append(el("h2", "ahead", "Appearance"), el("p", "hublead", "Colours, type and layout. Each device follows the baseball site's choices on it (or the site default) until you pick something here; the phone app and Safari count as separate devices."));
     box.append(head);
     const row = (title, note, ...ctl) => { const r = el("section", "aset"), l = el("div", "alab"), c = el("div", "actl"); l.append(el("h3", null, title)); if (note) l.append(el("p", null, note)); c.append(...ctl); r.append(l, c); box.append(r); return c; };
     const segOf = (label, opts, on, pick) => {

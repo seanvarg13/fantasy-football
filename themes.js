@@ -9,7 +9,10 @@ window.FB_DEFAULTS = Object.assign({ scheme: "titans", font: "studio", theme: "s
 window.FB_TABLES = (function () {
   const KEY = "fb.tables";   // a raw string, "bref" | "classic" (the baseball site stores this one unencoded; the four below are JSON)
   const own = () => { try { return localStorage.getItem(KEY); } catch (e) { return null; } };
-  const get = () => own() || (TABLE_SANS ? "classic" : "bref");
+  // a device that hasn't picked here follows the baseball site's pick on it (Sean, 23 Oct 2026: the tables "identical to how it is on the
+  // baseball site" — his phone had Classic there and the default here); both sites share one localStorage origin, so it's readable
+  const bb = () => { try { const v = localStorage.getItem("draft2027.tables"); return v === "classic" || v === "bref" ? v : null; } catch (e) { return null; } };
+  const get = () => own() || bb() || (TABLE_SANS ? "classic" : "bref");
   const apply = () => document.documentElement.classList.toggle("tsans", get() === "classic");
   const set = (v) => { try { localStorage.setItem(KEY, v); } catch (e) { /* the switch still applies for this visit */ } document.documentElement.classList.toggle("tsans", v === "classic"); };
   const clear = () => { try { localStorage.removeItem(KEY); } catch (e) { /* */ } apply(); };
@@ -150,7 +153,10 @@ window.FB_THEMES = (function () {
   const DEFAULTS = window.FB_DEFAULTS;
   if (!S[DEFAULTS.scheme]) DEFAULTS.scheme = "titans";
   if (!F[DEFAULTS.font]) DEFAULTS.font = "studio";
-  const get = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } };
+  // this site's own pick, else the baseball site's on this device (the same keys under "draft2027."; both sites share one origin), so
+  // the two look alike until he picks something different here
+  const own = (k) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch { return null; } };
+  const get = (k) => { const v = own(k); if (v != null) return v; try { const b = localStorage.getItem("draft2027." + k.slice(3)); return b ? JSON.parse(b) : null; } catch { return null; } };
   const put = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } };
   const root = document.documentElement;
   const current = () => ({
@@ -202,7 +208,7 @@ window.FB_THEMES = (function () {
   }
   // Mobile / desktop layout: "auto" follows the screen; "desktop" on a phone widens the viewport so the full layout shows zoomed out
   const viewPref = () => (["mobile", "desktop"].includes(get(LS.view)) ? get(LS.view) : (["mobile", "desktop"].includes(DEFAULTS.view) ? DEFAULTS.view : "auto"));
-  const hasOwn = () => [LS.scheme, LS.font, LS.theme, LS.view].some((k) => get(k) != null) || !!window.FB_TABLES.own();
+  const hasOwn = () => [LS.scheme, LS.font, LS.theme, LS.view].some((k) => own(k) != null) || !!window.FB_TABLES.own();
   const useDefaults = () => { for (const k of [LS.scheme, LS.font, LS.theme, LS.view]) { try { localStorage.removeItem(k); } catch { /* */ } } delete root.dataset.theme; apply(); applyView(); window.FB_TABLES.clear(); };
   const smallScreen = () => matchMedia("(max-width: 700px)").matches || (navigator.maxTouchPoints > 1 && Math.min(screen.width, screen.height) <= 700);
   function applyView() {
