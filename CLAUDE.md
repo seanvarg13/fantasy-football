@@ -676,3 +676,17 @@ Every Leaders column was screened with the site's own `M()`. The run loaded `fb.
 **What stays in place**: `METRIC` still defines the removed keys and the build still writes their data, so bringing one back is a one-line `COLS` / `BARS` change. The glossary foot keeps the FTN credit, because the derived counts are still in `data/`. Don't bring the removed stats back unasked.
 
 This supersedes the column lists in the Skills, Separation and Elusiveness entries above.
+
+## The tables follow the baseball site's Appearance (Sean, 23 Oct 2026, from a phone screenshot of the baseball Leaderboard: "make the tables like spacing and everything be identical to how it is on the baseball site like this")
+
+**The cause.** His screenshot was the baseball site's **Classic** tables (Appearance ▸ Tables): 30px rows, 13px type. The football site had its own `fb.tables` setting on his phone, still the default Baseball-Reference look (23px rows, 12px). Measured side by side on a phone, the two Classic tables already matched: row height, type, name column, title, Filters button and page bar.
+
+**The fix.** Both sites share one localStorage origin, so `themes.js` now reads the baseball site's pick on the device whenever the football site has none of its own:
+* `FB_TABLES.get()` reads `fb.tables`, else `draft2027.tables`, else the default.
+* `FB_THEMES`' `get(k)` reads `fb.<k>`, else `draft2027.<k>`, for scheme, font, theme and view. Same names, same JSON encoding.
+* `hasOwn` still counts only the football keys, so "Follow the site default" shows only when something was picked here.
+* A pick on the football site's Appearance overrides it for this site only.
+
+**What also changed to match the baseball Leaderboard exactly:**
+* A phone's rank column is 22px (`.lbbox:not(.namefz) .br .fz`).
+* `fitNames` doesn't shrink names under Classic (`html.tsans`). The baseball's `.name` size is fixed there, so long names ellipsise at full size. The step-down to 13 / 11.5px stays for the Baseball-Reference look, as the baseball site has it.

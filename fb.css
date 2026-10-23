@@ -265,6 +265,7 @@ body.lst main { display: flex; flex-direction: column; max-width: 1240px; margin
    site"): 116px on a phone on every list — Role Watch's More work badge and Coaches' names too — a long name stepping down to 13 / 11.5px
    (fitNames) before it ellipsises; at least 130px on a desktop, else the widest name */
 :root[data-view="mobile"] .lbbox:not(.nonm) .br :is(td, th).fz2, :root[data-view="mobile"] .lbbox.namefz .br :is(td, th).fz { width: 116px; min-width: 116px; max-width: 116px; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:root[data-view="mobile"] .lbbox:not(.namefz) .br :is(td, th).fz { width: 22px; min-width: 22px; max-width: 22px; box-sizing: border-box; padding-left: 0; padding-right: 0; text-align: center; }   /* the rank column the baseball's 22px */
 :root:not([data-view="mobile"]) .lbbox:not(.nonm) .br th.fz2, :root:not([data-view="mobile"]) .lbbox.namefz .br th.fz { min-width: 130px; box-sizing: border-box; }
 .lbbox .br td, .lbbox .br td .lnk { font-weight: 400; }          /* the Leaderboard's quieter rows: only the sorted cell, the totals and the column names are bold */
 .lbbox .br td.heat, .lbbox .br tr.tot td { font-weight: 700; }
