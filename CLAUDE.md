@@ -622,3 +622,29 @@ These are the ones that repeat and follow next season's FP / G (§ Weighted oppo
 Every other column stays in Filters ▸ Stats. "Fantasy core" is the first column-set button, then All and each group. Reset to defaults returns to the core. `S.coreCols` moved every saved list to the core once.
 
 WOPR (Josh Hermsmeyer's weighted opportunity rating) = 1.5 × target share + 0.7 × air-yard share. It is a receiver's share of his team's targets, weighted toward volume, plus how much of its downfield passing he's the target of.
+
+## Adjusted WOPR (Sean, 23 Oct 2026: "are you able to come up with an improved version of wopr and include it?")
+
+**aWOPR** (`adjWopr` / `AW` / `lgTv` in `fb.js`, `awopr` in `M()`) is defined as:
+
+aWOPR = (a × target share + b × air-yard share) × √(his team's targets per game in his games / the league's)
+
+* **Weights**: WR a 2.11 / b 0.09, TE a 1.58 / b 0.62. They sum to 2.2, as WOPR's do, so it reads on WOPR's scale.
+* **The league's targets per game** is the season's position players with 40+ targets (pro-rated as `lgYpt` is), 31-36 a game across seasons.
+* **Where it shows**: Leaders' Usage group after WOPR and in the WR / TE fantasy core, a player-page bar "Adjusted WOPR" after WOPR, and Dynasty's WR / TE list.
+
+**The study** (scratch `wopr/` in the baseball session's scratchpad: every 40+ target WR / TE season 2016-25, next season with 6+ games; weights fitted on next season's FP / G, held out by season):
+* **WOPR's weights are wrong for receivers.** Plain target share forecasts next season's FP / G better than WOPR (.65 vs .64), and a held-out fit puts air-yard share at 0.04 of target share's weight. For tight ends it's about 0.4, near WOPR's own split.
+* **Team pass volume matters at its square root**: share × √volume beat share alone and share × volume.
+* **What added nothing**: red-zone and end-zone target share, route share, TPRR on top of share, receiving-xFP share, and shrinking the share by games played.
+
+**How it compares with WOPR**:
+
+| | This season's FP / G | Next season's FP / G | Year to year | Half to half (share only) |
+|---|---|---|---|---|
+| WR, aWOPR | .90 | .66 | .73 | .58 |
+| WR, WOPR | .84 | .64 | .72 | .57 |
+| TE, aWOPR | .89 | .64 | .71 | |
+| TE, WOPR | .86 | .63 | .71 | |
+
+A receiver's aWOPR forecasts next season as well as xFP/G (.66). His own FP / G is still the best single forecast (.70).

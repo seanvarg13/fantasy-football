@@ -97,6 +97,25 @@
     const lg = lgYpt(y, posGroup(p.pos)); if (lg == null) return null;
     return (p.tgt / p.rts) * (lg + (p.ryd / p.tgt - lg) * p.tgt / (p.tgt + SY_K));
   }
+  // adjusted WOPR (Sean, 23 Oct 2026: "are you able to come up with an improved version of wopr and include it?"). WOPR is 1.5 × target share +
+  // 0.7 × air-yard share for everyone; fitted on every 40+ target season 2016-25 against next season's FP / G (held out by season), a receiver's
+  // air-yard share adds almost nothing once his target share is known (weight 0.04 of target share's) and a tight end's about 0.4, and how
+  // much his team throws matters at its square root. So aWOPR = (a × target share + b × air-yard share) × √(his team's targets per game in his
+  // games / the league's), a + b = 2.2 as WOPR's: WR 2.11 / 0.09, TE 1.58 / 0.62. WR: this season's FP / G r .90 (WOPR .84), next season's .66
+  // (.64; xFP/G .66), year to year .73 (.72); TE .89 / .64 / .71 against .86 / .63 / .71. The league's targets per game is the season's
+  // position players' with 40+ targets (pro-rated, as lgYpt) — 31-36 a game across seasons.
+  const AW = { WR: [2.11, 0.09], TE: [1.58, 0.62] }, lgTvMemo = {};
+  function lgTv(y, pos) {
+    const key = y + ":" + pos; if (key in lgTvMemo) return lgTvMemo[key];
+    const D = window.FB[y]; let s = 0, n = 0;
+    if (D) for (const q of D.players) if (posGroup(q.pos) === pos && (q.tgt || 0) >= 40 * frac(D.meta) && q.g > 0 && q.tmt) { s += q.tmt / q.g; n++; }
+    return (lgTvMemo[key] = n ? s / n : null);
+  }
+  function adjWopr(p) {
+    const y = SEASON_OF.get(p), w = AW[posGroup(p.pos)]; if (!y || !w || !p.tmt || !(p.tmay > 0) || !(p.g > 0)) return null;
+    const lg = lgTv(y, posGroup(p.pos)); if (!lg) return null;
+    return (w[0] * p.tgt / p.tmt + w[1] * p.ay / p.tmay) * Math.sqrt((p.tmt / p.g) / lg);
+  }
   function M(p) {
     if (memo.has(p)) return memo.get(p);
     const g = Math.max(p.g || 0, 1), opp = (p.car || 0) + (p.tgt || 0), touch = (p.car || 0) + (p.rec || 0);
@@ -111,6 +130,7 @@
       aysh: p.tmay > 0 ? 100 * p.ay / p.tmay : null,
       adot: p.tgt ? p.ay / p.tgt : null,
       wopr: p.tmt && p.tmay > 0 ? 1.5 * p.tgt / p.tmt + 0.7 * p.ay / p.tmay : null,
+      awopr: adjWopr(p),
       rzt: p.rzt, glc: p.glc, rzc: p.rzc,
       yprr: p.rts >= 1 ? p.ryd / p.rts : null,
       syprr: stableYprr(p),
@@ -174,6 +194,7 @@
     aysh: { h: "AY%", d: 1, p: 1, hib: 1, t: "Share of his team's air yards in his games" },
     adot: { h: "aDOT", d: 1, hib: 1, t: "Average depth of target" },
     wopr: { h: "WOPR", d: 2, hib: 1, t: "1.5 × target share + 0.7 × air-yard share" },
+    awopr: { h: "aWOPR", d: 2, hib: 1, t: "Adjusted WOPR: target share and air-yard share weighted for his position (WR 2.11 / 0.09, TE 1.58 / 0.62 — a receiver's air yards add almost nothing once his targets are known), times the square root of his team's targets per game against the league's. Tracks this season's FP / G at r .90 for WRs (WOPR .84) and next season's at .66 (WOPR .64, the same as xFP/G); repeats year to year at .73" },
     rzt: { h: "RZ Tgt", d: 0, hib: 1, t: "Targets inside the 20" },
     glc: { h: "GL Car", d: 0, hib: 1, t: "Carries inside the 5" }, rzc: { h: "RZ Car", d: 0, hib: 1 },
     yprr: { h: "YPRR", d: 2, hib: 1, t: "Receiving yards per route run" }, ypr: { h: "Y/R", d: 1, hib: 1 },
@@ -229,7 +250,7 @@
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
@@ -533,7 +554,7 @@
   // high-value touches and goal-line work. Quarterbacks: passing volume and touchdowns, efficiency, and rushing (Rush xFP/G). Every other
   // column is still in Filters ▸ Stats (the All set, or each group).
   const CORE = {
-    WR: ["fpg", "g", "rte", "tprr", "tgtsh", "wopr", "rzt", "wos", "yprr", "syprr"],
+    WR: ["fpg", "g", "rte", "tprr", "tgtsh", "wopr", "awopr", "rzt", "wos", "yprr", "syprr"],
     RB: ["fpg", "g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos", "hvtg", "gls", "rzs"],
     QB: ["g", "att", "pyd", "ptd", "int", "epadb", "car", "ruxg", "xfpg"],
   };
@@ -678,13 +699,13 @@
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "ypr"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "ypr"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]]]],
     RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr", "syprr"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
   const LABEL = { rte: "Route %", tgtsh: "Target share", tprr: "Targets / route", aysh: "Air-yard share", rzt: "Red-zone targets", xfpg: "xFP / game", fpg: "FP / game", fpoeg: "Points over exp. / G",
-                  tdoe: "TD over expected", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", snp: "Snap %",
+                  tdoe: "TD over expected", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", awopr: "Adjusted WOPR", snp: "Snap %",
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
                   sep: "Separation", sepoe: "Separation over exp.", cont: "Contested target %", contoe: "Contested over exp.", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
@@ -1412,7 +1433,7 @@
   const DY_RDS = [["", "All picks"], ["1", "Round 1"], ["2", "Round 2"], ["3", "Round 3"], ["4", "Rounds 4-7"], ["0", "Undrafted"]];
   const DY_MIN = { WR: ["rts", 100, "routes"], TE: ["rts", 100, "routes"], RB: ["opp", 50, "carries + targets"], QB: ["db", 150, "dropbacks"] };
   const DY_COLS = {
-    WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr", "wos"]], ["Efficiency", ["yprr", "syprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr", "awopr", "wos"]], ["Efficiency", ["yprr", "syprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
     RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos"]], ["Rushing", ["ypc", "ryoe"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Receiving", ["tprr", "yprr", "syprr"]], ["Fantasy", ["xfpg", "fpg"]]],
     QB: [["Passing", ["g", "att", "cmpp", "epadb", "cpoe", "sackp"]], ["Rushing", ["carg", "ruxg"]], ["Fantasy", ["xfpg", "fpg"]]],
   };
