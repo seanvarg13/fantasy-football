@@ -250,8 +250,8 @@
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
-    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe", "nyoe"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo", "expl", "ybca"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
   COLS.TE = COLS.WR;
@@ -618,7 +618,7 @@
     sel.addEventListener("change", () => { S.lbSize = +sel.value; S.lbPage = 1; save(); route(); });
     ps.append(el("span", null, "Per page"), sel); bar.append(ps); box.append(bar);
     board.append(box);
-    main.append(el("p", "note lbnote", `Everyone over the minimum, a page at a time (the page numbers and Per page are under the table). ${METRIC[head].h} leads the columns and the sorted column is coloured by its percentile among the season's qualified ${pos}s (${minText(pos, meta)}); tap a column name to sort, a name for his page. xFP prices each target and carry by what a play like it scores on average in PPR, fitted on the other seasons. ` + (meta.estRoutes ? "Routes this season are estimated from snap share × team dropbacks until nflverse publishes participation." : "Routes are dropbacks he was on the field for.") + (pos === "WR" || pos === "TE" ? " Cont% and ContOE are FTN Data's charting via nflverse (CC BY-SA 4.0), from 2022." : "")));
+    main.append(el("p", "note lbnote", `Everyone over the minimum, a page at a time (the page numbers and Per page are under the table). ${METRIC[head].h} leads the columns and the sorted column is coloured by its percentile among the season's qualified ${pos}s (${minText(pos, meta)}); tap a column name to sort, a name for his page. xFP prices each target and carry by what a play like it scores on average in PPR, fitted on the other seasons. ` + (meta.estRoutes ? "Routes this season are estimated from snap share × team dropbacks until nflverse publishes participation." : "Routes are dropbacks he was on the field for.")));
     keepBox(box); freeze(t);
     if (POP.open) { popBody(); placePop(); }
   }
@@ -699,8 +699,8 @@
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "ypr"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]]]],
-    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr", "syprr"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "nyoe", "ypr"]]]],
+    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "expl", "ybca", "fppo"]], ["Receiving", ["tprr", "yprr", "syprr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
@@ -714,8 +714,8 @@
   // what the skill stats are worth, under the bars (the study of 16 Oct 2026: every qualified season 2018-25 against this season's points
   // per target / opportunity, points over expected and next season's; year-to-year r in brackets)
   const SKILL_NOTE = {
-    WR: "Separation and Skills: how open he gets and what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. Separation over expected takes his depth of target and cushion out of it (repeats at r .45): +.24 with points per target, still nothing with next season's points. Contested % is the share of his targets with a defender on him at the catch (FTN Data's charting via nflverse, from 2022), and contested over expected the same against his position's rate at his target depths: both are mostly noise year to year (r .29 / .24) and no warning sign — the most-covered receivers include stars their quarterbacks throw to anyway. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route. Stable YPRR is his targets per route × his yards per target pulled toward his position's league by targets / (targets + 180) — the YPRR that travels: it repeats across a change of club at r .51 against raw YPRR's .42 (an offense or QB adjustment doesn't; the shrinkage does).",
-    RB: "Elusiveness and Skills: what he does with a carry, where the Opportunity bars are how many he gets. The elusive rating (broken tackles per touch × yards after contact; +.32 with points per opportunity, repeats at r .29), explosive runs (10+ yards; +.47, repeats .27) and breakaway % (the share of his yards on 15+ yard runs; +.37, repeats .30) are the big-play side; yards before contact (+.41, repeats .25) and stuffed runs are the line and the scheme as much as the back. None of them holds year to year the way his workload does — next season's points follow this season's opportunities, not these.",
+    WR: "Efficiency is what he does with the targets the Opportunity bars say he gets. Catch rate over expected and YAC over expected explain this season's points per target (r .73 / .40) but move from year to year (r .23 / .32); yards per route repeats (.57) and follows next season's points (.60). Stable YPRR is his targets per route × his yards per target pulled toward his position's league by targets / (targets + 180) — the YPRR that travels: it repeats across a change of club at r .51 against raw YPRR's .42 (an offense or QB adjustment doesn't; the shrinkage does). Separation, cushion, contested targets, broken tackles and drops came off the site on 23 Oct 2026: they either don't repeat or don't touch fantasy points.",
+    RB: "Efficiency is what he does with the work the Opportunity bars say he gets. Yards per carry, rush yards over expected, explosive runs (10+ yards) and yards before contact explain this season's points per opportunity (r .45 / .31 / .38 / .38) but barely repeat (r .20-.28) — next season's points follow this season's opportunities, not these. The elusive rating, broken tackles, yards after contact, breakaway %, NGS efficiency, time to the line, 8+ box % and stuffed runs came off the site on 23 Oct 2026: they either don't repeat or don't touch fantasy points.",
   };
   // weighted opportunity (20 Oct 2026): what the bars of that name are, and which of them carry into next season
   SKILL_NOTE.RB += " Weighted opportunity counts a target as 2.5 carries — what a back's target is worth over his carry by expected points — and per game it is the best volume measure of next season's points (r .63 with next season's FP/G, xFP/G .62, plain carries + targets .59). High-value touches are catches plus carries inside the 10; the high-value share says what kind of back he is (it repeats at r .73) more than how much he scores. The red-zone and goal-line shares are his slice of his team's chances there and move more from year to year (r .59 / .47).";
@@ -806,7 +806,7 @@
       if (groups.length) cols.append(pctChart(groups, ci));
     });
     pg.append(cols); main.append(pg);
-    if (SKILL_NOTE[pos]) main.append(el("p", "note", SKILL_NOTE[pos] + (m.sep == null && (pos === "WR" || pos === "TE") ? " Next Gen Stats carries no season row for him (under its target minimum)." : "") + (y < 2022 && (pos === "WR" || pos === "TE") ? " FTN's contested-target charting starts in 2022." : "")));
+    if (SKILL_NOTE[pos]) main.append(el("p", "note", SKILL_NOTE[pos] + (m.nyoe == null && (pos === "WR" || pos === "TE") ? " Next Gen Stats carries no season row for him (under its target minimum)." : "")));
     main.append(renderBelow(p, y, pos, meta));
     main.style.minHeight = "";   // route() held the page's height through the redraw
     requestAnimationFrame(() => { bleedBar(); stickSync(); footSync(); });
@@ -1434,12 +1434,12 @@
   const DY_MIN = { WR: ["rts", 100, "routes"], TE: ["rts", 100, "routes"], RB: ["opp", 50, "carries + targets"], QB: ["db", 150, "dropbacks"] };
   const DY_COLS = {
     WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr", "awopr", "wos"]], ["Efficiency", ["yprr", "syprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
-    RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos"]], ["Rushing", ["ypc", "ryoe"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Receiving", ["tprr", "yprr", "syprr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos"]], ["Rushing", ["ypc", "ryoe", "expl"]], ["Receiving", ["tprr", "yprr", "syprr"]], ["Fantasy", ["xfpg", "fpg"]]],
     QB: [["Passing", ["g", "att", "cmpp", "epadb", "cpoe", "sackp"]], ["Rushing", ["carg", "ruxg"]], ["Fantasy", ["xfpg", "fpg"]]],
   };
   DY_COLS.TE = DY_COLS.WR;
   const DY_NEXT = { WR: ["g", "tprr", "fpg"], TE: ["g", "tprr", "fpg"], RB: ["g", "oppg", "fpg"], QB: ["g", "epadb", "fpg"] };
-  const DY_SORT = { WR: "tprr", TE: "tprr", RB: "elus", QB: "epadb" };
+  const DY_SORT = { WR: "tprr", TE: "tprr", RB: "wog", QB: "epadb" };
   // what a season says about the next one, by career year (scratch study of 18 Oct 2026: every WR / TE season with 100+ routes and RB
   // season with 50+ carries + targets 2016-25 whose next season had 4+ games; partial r = what the stat adds once his own FP / G is known)
   const DY_FIND = {
