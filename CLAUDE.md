@@ -648,3 +648,31 @@ aWOPR = (a × target share + b × air-yard share) × √(his team's targets per 
 | TE, WOPR | .86 | .63 | .71 | |
 
 A receiver's aWOPR forecasts next season as well as xFP/G (.66). His own FP / G is still the best single forecast (.70).
+
+## The noise stats off the site (Sean, 23 Oct 2026: "get rid of the unnecessary noise stats")
+
+Every Leaders column was screened with the site's own `M()`. The run loaded `fb.js` headless with its internals exposed (scratch `wopr/noise.cjs` / `noise.py` in the baseball session's scratchpad), over every qualified season 2016-25. Four numbers per stat:
+* year-to-year r;
+* r with this season's FP / G;
+* r with next season's FP / G;
+* r with this season's FP per opportunity.
+
+**Out**:
+* **WR / TE**:
+  * Sep, SepOE and Cushion. They are steady, but their r with any of the three points measures is at most .19.
+  * Cont% and ContOE. They repeat at .20-.26 and track nothing.
+  * BrkT/Rec (.29-.31, at most .15) and Drop% (.12-.23, at most .20).
+  * The Separation and Skills groups went with them; YAC+ (NGS) moved into Efficiency.
+* **RB**:
+  * Elusive, BrkT/Att, BrkT/Rec, YAC/att and Breakaway%. They repeat at .05-.33 and none tracks points above .27.
+  * NGS Efficiency, Time to LOS, 8+ box% and Stuff%: no tie to points (at most .29, mostly under .2).
+  * Explosive% and YBC/att stay (.38 with points per opportunity) and moved into Efficiency.
+  * The RB bars' Receiving section is TPRR · YPRR · sYPRR, since CROE / YACOE / BrkT for backs repeat at .07-.12.
+* **Kept, though they don't repeat**: CROE, YACOE, YPC, RYOE, FPOE / TDOE. They explain this season's points per opportunity at .31-.82 and are the luck read.
+* **QB**: nothing went; INT is a count that costs points.
+
+**The cut runs through**: `COLS`, `BARS`, Dynasty's `DY_COLS` (RB's Elusiveness group is gone; Expl% is under Rushing), `DY_SORT` (RB by WO/G) and `SKILL_NOTE`. The glossary follows `COLS`.
+
+**What stays in place**: `METRIC` still defines the removed keys and the build still writes their data, so bringing one back is a one-line `COLS` / `BARS` change. The glossary foot keeps the FTN credit, because the derived counts are still in `data/`. Don't bring the removed stats back unasked.
+
+This supersedes the column lists in the Skills, Separation and Elusiveness entries above.
