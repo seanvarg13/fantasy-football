@@ -21,10 +21,13 @@
     return scripts[src];
   }
   const loading = {};
+  // a player object knows its season (SEASON_OF): M(p) is handed the player alone, and stable YPRR needs that season's league
+  const SEASON_OF = new WeakMap();
+  const stamp = (y) => { const D = window.FB[y]; if (D && !SEASON_OF.has(D.players)) { SEASON_OF.set(D.players, y); for (const p of D.players) SEASON_OF.set(p, y); } return D; };
   function ensure(y) {
-    if (window.FB && window.FB[y]) return Promise.resolve(window.FB[y]);
+    if (window.FB && window.FB[y]) return Promise.resolve(stamp(y));
     if (!loading[y]) loading[y] = new Promise((res, rej) => { const s = document.createElement("script"); s.src = `data/fb-${y}.js?v=${window.FB_BUILD || ""}`;
-      s.onload = () => res(window.FB[y]); s.onerror = () => { delete loading[y]; rej(new Error("load")); }; document.head.append(s); });
+      s.onload = () => res(stamp(y)); s.onerror = () => { delete loading[y]; rej(new Error("load")); }; document.head.append(s); });
     return loading[y];
   }
 
@@ -49,6 +52,22 @@
   // a target is worth 2.5 carries: an RB's target by xFP over his carry, 2016-25 (1.52 PPR against 0.61), and the weight that best
   // predicts a back's next-season points per game of every one from 1 to 5 tried
   const WO_K = 2.5;
+  // stable YPRR (23 Oct 2026; Sean: "add stable YPRR ... the single-season version"): his targets per route × his yards per target
+  // pulled toward his position's league by targets / (targets + SY_K). The league is the season's players of his group (FB with RB) with
+  // 40+ targets (pro-rated in a season in progress, as qualifies() does), pooled yards over pooled targets. No QB or offense term: six
+  // offense adjustments were tried that day and none transferred to a new club — the shrinkage is what carried (CLAUDE.md, Stable YPRR)
+  const SY_K = 180, lgYptMemo = {};
+  function lgYpt(y, pos) {
+    const key = y + ":" + pos; if (key in lgYptMemo) return lgYptMemo[key];
+    const D = window.FB[y]; let yd = 0, tg = 0;
+    if (D) for (const q of D.players) if (posGroup(q.pos) === pos && (q.tgt || 0) >= 40 * frac(D.meta)) { yd += q.ryd || 0; tg += q.tgt || 0; }
+    return (lgYptMemo[key] = tg ? yd / tg : null);
+  }
+  function stableYprr(p) {
+    const y = SEASON_OF.get(p); if (!y || !(p.rts >= 1) || !(p.tgt >= 1)) return null;
+    const lg = lgYpt(y, posGroup(p.pos)); if (lg == null) return null;
+    return (p.tgt / p.rts) * (lg + (p.ryd / p.tgt - lg) * p.tgt / (p.tgt + SY_K));
+  }
   function M(p) {
     if (memo.has(p)) return memo.get(p);
     const g = Math.max(p.g || 0, 1), opp = (p.car || 0) + (p.tgt || 0), touch = (p.car || 0) + (p.rec || 0);
@@ -65,6 +84,7 @@
       wopr: p.tmt && p.tmay > 0 ? 1.5 * p.tgt / p.tmt + 0.7 * p.ay / p.tmay : null,
       rzt: p.rzt, glc: p.glc, rzc: p.rzc,
       yprr: p.rts >= 1 ? p.ryd / p.rts : null,
+      syprr: stableYprr(p),
       ypr: p.rec ? p.ryd / p.rec : null,
       croe: p.xcn ? 100 * (p.cc - p.xc) / p.xcn : null,
       yacoe: p.yacn ? (p.yacs - p.xyac) / p.yacn : null,
@@ -128,6 +148,7 @@
     rzt: { h: "RZ Tgt", d: 0, hib: 1, t: "Targets inside the 20" },
     glc: { h: "GL Car", d: 0, hib: 1, t: "Carries inside the 5" }, rzc: { h: "RZ Car", d: 0, hib: 1 },
     yprr: { h: "YPRR", d: 2, hib: 1, t: "Receiving yards per route run" }, ypr: { h: "Y/R", d: 1, hib: 1 },
+    syprr: { h: "sYPRR", d: 2, hib: 1, t: "Stable YPRR: his targets per route × his yards per target pulled toward his position's league average by targets / (targets + 180) — no QB or offense term (tested 23 Oct 2026: offense adjustments didn't transfer; this does). Repeats across a change of club at r .51 (raw YPRR .42), predicts a mover's next-season raw YPRR at .47 (.43) and next season's points per game at .62 (.61); describes this season's points the same (.82)" },
     croe: { h: "CROE", d: 1, s: 1, hib: 1, t: "Catch rate over expected (completion probability of each target)" },
     yacoe: { h: "YACOE", d: 1, s: 1, hib: 1, t: "Yards after catch over expected, per catch" },
     carsh: { h: "Car%", d: 1, p: 1, hib: 1, t: "Share of his team's carries in his games" },
@@ -179,8 +200,8 @@
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "ypr", "croe", "yacoe"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
-    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo"]], ["Elusiveness", ["elus", "brka", "brkr", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "box8", "stuff"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
   COLS.TE = COLS.WR;
@@ -313,13 +334,13 @@
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "croe", "yacoe", "ypr"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]]]],
-    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "ypr"]], ["Separation", ["sep", "sepoe", "cush", "cont", "contoe"]], ["Skills", ["nyoe", "brkr", "dropp"]]]],
+    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "fppo", "yprr", "syprr"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Skills", ["ybca", "eff", "tlos", "stuff"]], ["Receiving", ["tprr", "croe", "yacoe", "brkr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
   const LABEL = { rte: "Route %", tgtsh: "Target share", tprr: "Targets / route", aysh: "Air-yard share", rzt: "Red-zone targets", xfpg: "xFP / game", fpg: "FP / game", fpoeg: "Points over exp. / G",
-                  tdoe: "TD over expected", yprr: "Yards / route", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", snp: "Snap %",
+                  tdoe: "TD over expected", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", snp: "Snap %",
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
                   sep: "Separation", sepoe: "Separation over exp.", cont: "Contested target %", contoe: "Contested over exp.", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
@@ -328,7 +349,7 @@
   // what the skill stats are worth, under the bars (the study of 16 Oct 2026: every qualified season 2018-25 against this season's points
   // per target / opportunity, points over expected and next season's; year-to-year r in brackets)
   const SKILL_NOTE = {
-    WR: "Separation and Skills: how open he gets and what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. Separation over expected takes his depth of target and cushion out of it (repeats at r .45): +.24 with points per target, still nothing with next season's points. Contested % is the share of his targets with a defender on him at the catch (FTN Data's charting via nflverse, from 2022), and contested over expected the same against his position's rate at his target depths: both are mostly noise year to year (r .29 / .24) and no warning sign — the most-covered receivers include stars their quarterbacks throw to anyway. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route.",
+    WR: "Separation and Skills: how open he gets and what he does with the ball, where the Opportunity bars are what he's given. Separation (repeats at r .58) and cushion (.46) are steady traits that barely touch points — separation reads +.14 with points per target this season and nothing with next season's. Separation over expected takes his depth of target and cushion out of it (repeats at r .45): +.24 with points per target, still nothing with next season's points. Contested % is the share of his targets with a defender on him at the catch (FTN Data's charting via nflverse, from 2022), and contested over expected the same against his position's rate at his target depths: both are mostly noise year to year (r .29 / .24) and no warning sign — the most-covered receivers include stars their quarterbacks throw to anyway. YAC over expected (.35), broken tackles (.31) and drops (.12) explain this season's points over expected and carry a little forward. None of them forecasts next season's points beyond this season's targets per route. Stable YPRR is his targets per route × his yards per target pulled toward his position's league by targets / (targets + 180) — the YPRR that travels: it repeats across a change of club at r .51 against raw YPRR's .42 (an offense or QB adjustment doesn't; the shrinkage does).",
     RB: "Elusiveness and Skills: what he does with a carry, where the Opportunity bars are how many he gets. The elusive rating (broken tackles per touch × yards after contact; +.32 with points per opportunity, repeats at r .29), explosive runs (10+ yards; +.47, repeats .27) and breakaway % (the share of his yards on 15+ yard runs; +.37, repeats .30) are the big-play side; yards before contact (+.41, repeats .25) and stuffed runs are the line and the scheme as much as the back. None of them holds year to year the way his workload does — next season's points follow this season's opportunities, not these.",
   };
   // weighted opportunity (20 Oct 2026): what the bars of that name are, and which of them carry into next season
@@ -708,8 +729,8 @@
   const DY_RDS = [["", "All picks"], ["1", "Round 1"], ["2", "Round 2"], ["3", "Round 3"], ["4", "Rounds 4-7"], ["0", "Undrafted"]];
   const DY_MIN = { WR: ["rts", 100, "routes"], TE: ["rts", 100, "routes"], RB: ["opp", 50, "carries + targets"], QB: ["db", 150, "dropbacks"] };
   const DY_COLS = {
-    WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr", "wos"]], ["Efficiency", ["yprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
-    RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos"]], ["Rushing", ["ypc", "ryoe"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Receiving", ["tprr", "yprr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    WR: [["Usage", ["g", "rts", "rte", "tgtsh", "tprr", "aysh", "adot", "wopr", "wos"]], ["Efficiency", ["yprr", "syprr", "ypr"]], ["Fantasy", ["xfpg", "fpg"]]],
+    RB: [["Usage", ["g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos"]], ["Rushing", ["ypc", "ryoe"]], ["Elusiveness", ["elus", "brka", "yaca", "expl", "bkwy"]], ["Receiving", ["tprr", "yprr", "syprr"]], ["Fantasy", ["xfpg", "fpg"]]],
     QB: [["Passing", ["g", "att", "cmpp", "epadb", "cpoe", "sackp"]], ["Rushing", ["carg", "ruxg"]], ["Fantasy", ["xfpg", "fpg"]]],
   };
   DY_COLS.TE = DY_COLS.WR;

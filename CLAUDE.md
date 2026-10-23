@@ -200,6 +200,39 @@ expected) above Skills, with the bars' note and the tooltips saying what each is
   Rate, **Reception Perception**'s success rates vs man / zone / press and **PFF** — all paid. Publishing a paid table on this public site would give
   it away; if Sean subscribes, the plan is a private paste-in kept on his own devices.
 
+## Stable YPRR (Sean, 23 Oct 2026: "adjust [YPRR] for the offense the player is in ... an elite QB vs a poor QB", then "add stable YPRR to Leaders and
+the player page beside raw YPRR, the single-season version")
+
+**Stable YPRR** (`syprr` in `M()`, `stableYprr` / `lgYpt` / `SY_K` in `fb.js`; column **sYPRR** right after YPRR in Leaders' Efficiency group
+for WR / TE and RB and in Dynasty's WR / TE and RB lists, a bar "Stable YPRR" after Yards / route on the player page, a sentence in the
+WR note under the bars) = his targets per route × (the league's yards per target + (his yards per target − the league's) × targets /
+(targets + 180)). The league is that season's players of his position group (WR, TE and RB each their own; FB with RB) with 40+ targets —
+pro-rated by weeks played in a season in progress, as `qualifies()` does — pooled yards over pooled targets, memoised per season and
+position. Null under a route or a target. `M(p)` is handed the player alone, so `ensure()` stamps every player with his season in a WeakMap
+(`SEASON_OF`) when a season file lands; a player object from anywhere else reads "–". Drake London 2026: YPRR 3.24, stable 2.42 (46 targets,
+12.0 yards a target against the league's 8.2); a 10-target player sits near the league's yards per target × his targets per route; the
+qualified average barely moves (1.73 → 1.72).
+
+**Why shrinkage and nothing else** (the study of 23 Oct 2026, scratch `yprr/` in the baseball session's scratchpad: every WR and TE season
+with 40+ targets 2016-25, 985 / 353, scored on what repeats across a change of club, what forecasts a mover's next-season raw YPRR and next
+season's FP / G, and what describes this season's points; every candidate fitted on seasons ≤ y only). Raw YPRR repeats across a move at
+r .42 (stayers .57), forecasts a mover's next YPRR at .43, next season's FP / G at .61 and this season's at .82. Six offense adjustments
+were built and none transferred: **a QB-swap counterfactual** (every target priced with the passer who threw it and again with a league-
+average passer, passer quality from his throws to other receivers; movers .39-.42), **QB-neutral components** (each target worth
+nflverse's completion probability × expected yards, his own catch-rate and YAC edges shrunk back on; .46), **a free-form rebuild** (the same
+with his depth of target credited only in part and his edges pooled over his seasons; .54 on movers but worse at next season's FP / G for
+tight ends and no better than shrinkage alone for receivers), **a regression residual** on his offense's context fitted within players
+(.43), **teammate-relative** (his YPRR against what his teammates did with the same passer; .42) and **two-way fixed effects** (player +
+team-season or passer-season, ridge; .49). What the regression found is why: within a player, a better QB raises his yards per target and
+lowers his targets per route by about the same (a weak offense makes him the target hog), so the two cancel and a WR's YPRR is already
+offense-neutral — the cross-sectional tie between a receiver's YPRR and his QB's quality (r ~.10) is good receivers sitting with good QBs,
+and regressing it out subtracts skill. A tight end's YPRR does follow his QB (change r +.2 / +.3), but no adjustment beat shrinkage there
+either. The gains every candidate showed came from the shrinkage inside it, so the shrinkage ships alone: raw yards per target pulled to
+the league by targets / (targets + 180) repeats across a move at **.51** (k 400 the same, k 60 .50), forecasts a mover's next raw YPRR at
+**.47**, next season's FP / G at **.62** and this season's at **.82** — ahead of raw YPRR on every cut for receivers; for tight ends it
+repeats across a move at .48 against .33 and is a touch under raw at next season's points (.55 / .59). It is mostly targets per route
+(r .97 on the log scale against raw YPRR's .80), which is the point: the yards-per-target noise is what doesn't travel.
+
 ## Teams (Sean, 13 Oct 2026: "an xfp/g and points/g by team by position")
 
 The **Teams** page (`#teams`, `teamsPage()` in `fb.js`, second in the nav) lists every offense with xFP/G, FP/G and +/− (FP − xFP) for its
