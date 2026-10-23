@@ -545,3 +545,57 @@ of `fb.css`, written from the baseball page's computed values — player.md), fr
   dark, plus the bar stuck, the season list, a year pick (scroll kept), the Game log tab (the strip held still), the phone's view
   dropdown, the Age fade, a tapped bar, Jets and Classic (scratch `player/shots` in the dress scratch folder). Not built, by design: the
   baseball's Filters window and filter chips (nothing to filter here), the IL badge, Back, the Similar row, the popup off the Leaders list.
+
+## The dress, fix round one (23 Oct 2026): what the verifiers found against the baseball site, and what moved
+
+The baseball site was compared page for page with the dress above and every difference listed; this round closes the highs and mediums.
+Where things live now, and what is still deliberately different from the baseball site:
+* **A name opens his page as a popup over the list** (the baseball's `#xboard.xpop`): on Leaders, Role Watch, Dynasty and Backfields
+  (`XPOP_PAGES`) a name — or the whole row on Leaders / Role Watch / Dynasty (`rowPop`, `tr.clk`) — draws `player()` into a fixed
+  `section#xboard.xpop` over a `.xpopbg` backdrop (`openPlayer` / `drawPop` / `closeXPop`, `XP = { id }` while it's up); the sticky bar gets
+  class `xbar` with a `button.xpopx` × in a strip over the name; ×, the backdrop, Escape or any hash change close it, and the list is exactly
+  where it was because nothing redraws it. A season or a tab picked inside redraws the popup in place (`repaint()`; `renderBelow` scrolls
+  whichever scroller the strip is in). `bleedBar` runs the bar to the popup's own edges (the popup's 20px / 12px padding is the bar's inset
+  there, no extra 13px on a phone); the window scroll listener is `capture`, so the popup's own scroll drives `stickSync`. Every other page
+  (a team, a coach, the search) goes to his page as before; a modifier-key click opens the full page in a tab. `route()` now keeps each list
+  box's scroll under its key (`LB.keep[key]`), so a list redraws where it was left after a trip to a page and back.
+* **The Leaders table** (`leaders()`): a **headline column** — xFP/G, a quarterback's FP/G, the default sort (`headKey`) — sits right after
+  Tm, right after the name on a phone (where Tm goes last), as the baseball's xwOBA does; the other columns are whatever Filters ▸ Stats ticks
+  (`S.lbCols[pos]`, an ordered list of keys; nothing = every group in its own order; `lbKeys` / `setLbKeys` / `lbGroups`, a run of one group's
+  columns keeps its over-header name) with dividing lines where Table format puts them (`S.lbBrk[pos]`). Each column is a spec with its own
+  `cell` and `foot`, so the rows, the gap strip and the Qualified avg row are built from one list in the header's order. Stat columns are at
+  least 72px (50 on a phone; `th.stat` width) with the names wrapping in a 31px row (`.lbfit`); the Player name is left over the names; a
+  desktop's frozen name ends in a hairline, a phone's keeps the red edge; no red rule over the Qualified avg row; row type 400 (names 600
+  under Classic), only the sorted cell, the totals and the column names bold.
+* **On a phone the sorted column moves up beside the name** on every list page: `table(groups, opts)` finds the `lit` column and, when it
+  isn't already right after the frozen columns, lifts it into a group of its own after them (carrying its group's over-header name) and
+  re-sorts every row's cells to match (`addRow` takes them in the groups' own order). `opts.front = false` leaves a table alone (the season
+  table, the card tabs). The Leaders headline is already there, so a sort by another column fronts that one and the headline follows it.
+* **The Filters dropdown on Leaders**: Position = a name search that narrows the list in place (`S.lbQ`; `POP.focus` keeps the cursor
+  through the redraw its typing causes) and the four positions as `.poschk` tick labels with each one's qualifier count (one at a time
+  here, where the baseball ticks several); Stats = the column sets as buttons (All and each group; a pressed, disabled Custom when the
+  ticks match none), a Sort by pill, a tick per column (ticked back on, a column returns to its own place), and a foot of Done · Cancel ·
+  Reset to defaults; Table format = the column order (`.olist`: ↑ ↓, Gap after, ×; no drag), then Look — Heat map (every column coloured
+  by its percentile), Highlight the sorted stat, Numbers values / percentiles (`S.tbl` via `tblPref()`) — and the Baseball-Reference /
+  Classic switch. The other list pages' tab is named **Tables** and holds only that switch (`TABLE_TAB`; Leaders' spec sets `ownTable`).
+  The foot is a block with Clear at the left (or a `.row` of buttons).
+* **The tab boxes**: each table is a `.brbox` card (`card(name, sub)`: a 14px-cornered frame, the name in the title type with a grey subline
+  over a hairline). In the build-up His is painted by his place among the qualifiers on that step's own number (`rk(f)`), ± is painted on
+  the cell, the Step / Piece / Wk column is frozen with the red edge, and the yellow cell hangs "Expected FP/G" off its right edge
+  (`td.kexp[data-exp]::after`; the table's box `.kbox` is overflow-visible, the two cards stack (`.stack`), and a phone's card slides
+  sideways to the word). The strip under the bars opens closed (no default tab).
+* **The season table has no group-name row** (B-Ref's own has none): the repeated names say whose they are (Rec Yds / Rec TD, Rush Yds /
+  Rush TD, Pass Yds / Pass TD) and a column's tooltip names its group; the red rules still mark the groups.
+* **Settings** has four tabs — Stat glossary · Appearance · **Colour key** (`colourKey()`: the scale and what else is coloured) · How this
+  page works — left-aligned, wrapping on a phone; the player strip's rules are scoped to `.pbelow2 .btabs`, so the Settings tabs keep their
+  own hover and their band-blue picked tab in dark mode. The phone's "Standard ▾" view switch is the dark surface in dark mode.
+* **The header**: the phone menu is three across; ✕ Close stays white while open; the current page pales on hover like the rest; the search
+  box keeps its white edge (`.top .srch input` outranks the generic input rule); the flat schemes keep the lift on the band's buttons.
+  The search tapped empty lists the last five players opened (`fb.recent`, `noteRecent` from `openPlayer` and `route()`), a team code or
+  name ("ATL", "Falcons") lists this season's roster first, Escape clears the box.
+* **Smaller**: the page bar's buttons are 30px with the rail edge on both layouts (the disabled arrows keep the darker one), Per page 600;
+  a pill is 36px / 14px / 0 10px everywhere and an open pill looks no different outside the flat schemes; the current item of a pill's list
+  is tinted; the tap note on a bar carries last season's value and percentile (`ensure(y − 1)` with the page); Classic is 13px on a phone
+  too, with 30px rows.
+* **Not done, on purpose**: `tools/publish.py` wasn't run (the stamp is the merge's job, and the rules of the round said not to); the Position
+  tab ticks one position at a time; the column order has arrows but no drag.
