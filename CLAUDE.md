@@ -690,3 +690,13 @@ This supersedes the column lists in the Skills, Separation and Elusiveness entri
 **What also changed to match the baseball Leaderboard exactly:**
 * A phone's rank column is 22px (`.lbbox:not(.namefz) .br .fz`).
 * `fitNames` doesn't shrink names under Classic (`html.tsans`). The baseball's `.name` size is fixed there, so long names ellipsise at full size. The step-down to 13 / 11.5px stays for the Baseball-Reference look, as the baseball site has it.
+
+## No bounce anywhere (Sean, 23 Oct 2026: "get rid of like the bouncyness when I scroll on the mobile version and maybe this is on desktop too")
+
+The block at the end of `fb.css`:
+* **The page itself**: `html, body { overscroll-behavior: none }`. The page no longer rubber-bands past its top or foot, on an iPhone or a Mac's trackpad.
+* **Every box that scrolls on its own**: the "More about these numbers" note, the Filters dropdown's middle and the pill lists (`.ddmenu`) were `contain`, which still bounced; they're `none` now. The card tabs' strip and the tab cards stop their sideways bounce.
+* **Found alongside**: every `.tbox` had `overscroll-behavior: none` on both axes. So on a phone, an up-or-down swipe that started on a table that only slides sideways was swallowed, and the player page and its popup wouldn't scroll over the season table.
+  * The fix: `.tbox:not(.lbbox)` blocks only its sideways bounce (`overscroll-behavior-y: auto`). The standing lists' box (`.lbbox`), the one vertical scroller on its page, keeps `none` both ways.
+  * Checked headless with the wheel on a phone view (scratch `tbl/swipe3.cjs` / `pop2.cjs`): the page and the popup scroll over the season table, and the table still slides sideways. Synthesised touch gestures don't scroll anything in the headless browser, so they can't test this.
+* `footSync`'s colouring of a phone's page canvas stays. It's harmless now that the page doesn't bounce.
