@@ -599,3 +599,13 @@ Where things live now, and what is still deliberately different from the basebal
   too, with 30px rows.
 * **Not done, on purpose**: `tools/publish.py` wasn't run (the stamp is the merge's job, and the rules of the round said not to); the Position
   tab ticks one position at a time; the column order has arrows but no drag.
+
+## The name column the baseball Leaderboard's (Sean, 23 Oct 2026: "on the leaderboards or tables the player name column takes up less space than it currently does id ideally like it to be identical to how it is on the baseball site")
+
+Every list page's name column is the baseball Leaderboard's (the "name column" rule in the list-pages block of `fb.css`, `fitNames` in `fb.js`, run by `freeze`):
+* **Phone**: 116px on every list. That covers Leaders, Role Watch, Dynasty and Coaches, where the coach's name is the first frozen column (`.lbbox.namefz`).
+  * A long name steps down to 13 and then 11.5px before it ellipsises, measured on a canvas, exactly as the baseball's does.
+  * Role Watch's badge reads **More** on a phone (the IL badge's length) so the name keeps room; it reads "More work" on a desktop and in its tooltip. The 164px Role Watch column is gone.
+* **Desktop**: at least 130px, else the widest name.
+* **Teams** keeps its own width (`.nonm`), since its second frozen column is the club's code.
+* The tables already stand in fixed windows that scroll inside themselves (the list-pages pass).

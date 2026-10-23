@@ -466,7 +466,21 @@
   // the box: id bscroll (route() notes its scroll under its key, so a redraw of the same page — a tick in the dropdown — keeps the place)
   const boxOf = (t, key) => { const box = t.box; box.id = "bscroll"; box.classList.add("lbbox"); box.dataset.key = key; return box; };
   const keepBox = (box) => { const k = LB.keep[box.dataset.key]; if (k) { box.scrollTop = k.top; box.scrollLeft = k.left; } };
-  const freeze = (t) => requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });   // the second frozen column sits after the first's measured width
+  // a phone's long name steps down to 13 then 11.5px before it ellipsises, as the baseball Leaderboard's does (measured on a canvas, the
+  // room read once per cell after one reset, so it costs a single layout)
+  const CV = document.createElement("canvas").getContext("2d");
+  const textW = (t, f) => { if (CV.font !== f) CV.font = f; return CV.measureText(t).width; };
+  function fitNames(t) {
+    if (document.documentElement.dataset.view !== "mobile") return;
+    const box = t.closest(".lbbox"); if (!box) return;
+    const names = [...t.querySelectorAll(box.classList.contains("namefz") ? "tbody td.fz .lnk" : "tbody td.fz2 .lnk")]; if (!names.length) return;
+    for (const a of names) { a.style.fontSize = ""; a.style.letterSpacing = ""; }
+    const cs = getComputedStyle(names[0]), base = parseFloat(cs.fontSize) || 12, fam = cs.fontFamily, wt = cs.fontWeight;
+    const rooms = names.map((a) => { const c = a.closest("td"), p = getComputedStyle(c), b = c.querySelector(".rwflag"); return c.clientWidth - parseFloat(p.paddingLeft) - parseFloat(p.paddingRight) - (b ? b.offsetWidth + 5 : 0) - 1; });
+    const fits = (s, px, ls, room) => textW(s, `${wt} ${px}px ${fam}`) + ls * px * s.length <= room;
+    names.forEach((a, i) => { const s = a.textContent; if (fits(s, base, 0, rooms[i])) return; a.style.fontSize = "13px"; a.style.letterSpacing = "-0.02em"; if (!fits(s, 13, -0.02, rooms[i])) a.style.fontSize = "11.5px"; });
+  }
+  const freeze = (t) => requestAnimationFrame(() => { fitNames(t); const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });   // the second frozen column sits after the first's measured width
   // a percentile among a list (ties at half; the baseball's insertPct), for a page that colours a column by its own rows
   const ranker = (arr, hib = true) => { const s = arr.filter((x) => x != null && isFinite(x)).sort((a, b) => a - b); return (v) => { if (v == null || !isFinite(v) || s.length < 2) return null; let lo = 0, eq = 0; for (const x of s) { if (x < v) lo++; else if (x === v) eq++; } const p = 100 * (lo + 1 + eq / 2) / (s.length + 1); return hib ? p : 100 - p; }; };
   // the dropdown's body: the page's tabs across the top, the tab the page draws (h = the helpers every tab uses), the Table format tab shared
@@ -1289,7 +1303,7 @@
     const board = listFrame(main, { page: "teams", title: "Teams", sub: `by ${NAME[sg]} ${SK[sk]}`,
       ctl: [filtersBtn("Team filters", extra), count(`${rows.length} teams · ${y}${D.meta.through < 18 ? " · through week " + D.meta.through : ""} · PPR${win ? ` · last ${win} games` : ""}`, `${rows.length} teams`)],
       about: "Each offense's PPR points a game by position, and the expected points (xFP) its targets and carries were worth. xFP says how good the opportunities were; FP − xFP is what the players did with them. Every cell is coloured by where that team ranks among the 32 on it (red high); the sorted column is bold. Tap a column name to sort, a team for its backfield week by week. A QB's xFP prices his rushing only and counts his passing points as they were (as on Leaders), so the QB +/− is rushing over expected less fumbles. Fumbles lost and two-point conversions are in FP but not xFP." });
-    const t = table(groups), box = boxOf(t, ["tm", y, win, sortK, dir].join(":"));
+    const t = table(groups), box = boxOf(t, ["tm", y, win, sortK, dir].join(":")); box.classList.add("nonm");   // the second frozen column is the club's code, not a name: it keeps its own width
     rows.forEach((r, i) => {
       const cells = [td(String(i + 1), "fz rk"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(r.n))];
       for (const g of TPOS.concat(["ALL"])) for (const k of ["xfp", "fp", "d"]) {
@@ -1356,11 +1370,11 @@
       { name: `Through week ${K}`, end: 1, cols: [{ h: "G" }, col("Share", "td", "His share in the games he played"), col("Last 3", "l3", "His share in his last three games")] },
       { name: "Rest of season", end: 1, cols: [col("Proj", "proj", "Projected share for the rest of the season: to date, last three and preseason, weighted by what held up in past seasons"), col(mkt ? "vs drafts" : "vs model", "d", "Projected share minus the preseason expectation"), col("Pts/G", "pts", "Projected PPR points a game for the rest of the season")]
         .concat(past ? [col("Actual", "rest", "His actual share over the rest of the season (3+ games)"), { h: "Act pts", t: "His actual PPR points a game over the rest of the season" }] : []) }];
-    const t = table(groups), box = boxOf(t, ["rw", y, pos, K, sortK, dir].join(":")); box.classList.add("widenm");   // a phone gives the name room beside its badge
+    const t = table(groups), box = boxOf(t, ["rw", y, pos, K, sortK, dir].join(":")); // the name ellipsises beside its badge in the 116px column (the baseball's IL badge)
     const prc = ranker(rows.map((x) => x.w[ix("proj")])), sortR = ranker(rows.map((x) => val(x, sortK)), sortK !== "adp");   // the sorted column coloured among the rows (ADP: lower is better)
     rows.forEach((x, i) => {
       const r = x.r, w = x.w, nm = td(null, "l fz2"), wrap = el("div", "nmwrap"); wrap.append(playerLink(r.n, r.id)); nm.append(wrap);   // the name ellipsises on a phone, the badge stays (the baseball's .name.hasil)
-      if (x.d >= thr) wrap.append(el("span", "rwflag", "More work"));
+      if (x.d >= thr) { const f = el("span", "rwflag", document.documentElement.dataset.view === "mobile" ? "More" : "More work"); f.title = "More work: his projected rest-of-season share beats the drafts' by the flag's margin"; wrap.append(f); }   // a phone's says "More" so the name keeps room in the 116px column (the IL badge's length)
       const c = { adp: td(r.adp ? `${num(r.adp, 0)} · ${pos}${adpRank.get(r.id)}` : "–"), mk: td(pc(x.base)), td: td(pc(w[ix("td")])), l3: td(w[ix("l3")] == null ? "–" : pc(w[ix("l3")])), proj: td(pc(w[ix("proj")])), d: td(sgn(x.d)), pts: td(num(w[ix("pts")])), rest: td(w[ix("rest")] == null ? "–" : pc(w[ix("rest")])) };
       paint(c.d, 50 + 50 * Math.max(-1, Math.min(1, x.d / (thr * 2)))); paint(c.proj, prc(w[ix("proj")]));   // vs drafts and Proj are always coloured; bold only on the sorted column
       for (const k of ["d", "proj"]) if (k !== sortK) c[k].classList.remove("heat");
@@ -1564,7 +1578,7 @@
                      { name: "Lead back (in his games)", end: 1, cols: [{ h: "Car%", onSort: sb("car"), lit: sortK === "car" }, { h: "Opp%", onSort: sb("opp"), lit: sortK === "opp" }, { h: "Snap%", onSort: sb("snp"), lit: sortK === "snp" }, { h: "GL%", onSort: sb("gl"), lit: sortK === "gl" }] },
                      { name: "Backfield", end: 1, cols: [{ h: "Backs used", onSort: sb("eff"), lit: sortK === "eff" }, { h: "Bell-cow yrs", onSort: sb("cow"), lit: sortK === "cow", t: "Seasons his lead back took 72%+ of RB carries in his games (the top third of team-seasons)" }, { h: "Committee yrs", onSort: sb("com"), lit: sortK === "com", t: "Seasons his lead back took under 58% (the bottom third)" }] },
                      { name: "Passing game", end: 1, cols: [{ h: "RB Tgt%", onSort: sb("tgt"), lit: sortK === "tgt" }] }]);
-    const box = boxOf(t, ["co", pick, minS, sortK, dir].join(":"));
+    const box = boxOf(t, ["co", pick, minS, sortK, dir].join(":")); box.classList.add("namefz");   // the coach's name is the first frozen column: the 116px name column there
     const carR = ranker(rows.map((r) => r.a.car)), sortR = ranker(rows.map((r) => r.a[sortK]));
     for (const r of rows) {
       const teams = [...new Set(r.all.map((x) => x.tm))].join(", "), [vd, vp] = verdict(r.a), tag = el("span", "tag", vd), vc = td(null, "l"); paint(tag, vp); tag.classList.remove("heat"); vc.append(tag);
@@ -1574,7 +1588,7 @@
       tr.dataset.k = r.n.toLowerCase(); if (q0 && !tr.dataset.k.includes(q0)) tr.hidden = true;
     }
     t.addRow([td("League, 2016–" + String(CUR).slice(2), "l fz"), td(String(L.n)), td(""), td(""), td(""), td(pc(L.car)), td(pc(L.opp)), td(pc(L.snp, 0)), td(pc(L.gl, 0)), td(num(L.eff, 2)), td(String(L.cow)), td(String(L.com)), td(pc(L.tgt))], "tot first");
-    board.append(box); keepBox(box);
+    board.append(box); keepBox(box); freeze(t);
     if (POP.open) { popBody(); placePop(); }
   }
 
