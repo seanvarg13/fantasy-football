@@ -253,7 +253,7 @@
   }
 
   // ---------- B-Ref table helper ----------
-  function table(groups, opts = {}) {
+  function table(groups) {
     const t = el("table", "br"), th = el("thead"), tb = el("tbody");
     if (groups.some((g) => g.name)) { const o = el("tr", "over"); for (const g of groups) { const c = el("th", g.end ? "ge" : "", g.name || ""); c.colSpan = g.cols.length; if (g.cls) c.className += " " + g.cls; o.append(c); } th.append(o); }
     const h = el("tr");
@@ -261,39 +261,8 @@
     th.append(h); t.append(th, tb);
     const ends = []; let i = 0; for (const g of groups) { i += g.cols.length; if (g.end) ends.push(i - 1); }
     t.addRow = (cells, cls) => { const tr = el("tr", cls || ""); cells.forEach((c, j) => { const td = c instanceof Node ? c : el("td", null, c == null ? "" : String(c)); if (ends.includes(j)) td.classList.add("ge"); tr.append(td); }); tb.append(tr); return tr; };
-    const box = el("div", "tbox" + (opts.tall ? " tall" : "")); box.append(t);
-    if (opts.tall) { const w = el("div", "twrap"); w.append(floatHead(t, box, w), box); t.box = w; } else t.box = box;
+    const box = el("div", "tbox"); box.append(t); t.box = box;   // the framed box; a list page's is the one scroller on the page, a detail page's slides sideways
     return t;
-  }
-  // a phone scrolls a tall table's rows with the page (Sean, 20 Oct 2026: "get rid of the table bouncy effect on mobile"): a box that
-  // scrolls inside the page rubber-bands at its ends on an iPhone, so there the box is the table's full height and only slides sideways
-  // (which doesn't bounce), and this copy of the column names is pinned under the site header by the page, slid sideways with the table,
-  // its taps passed to the real names. A desktop doesn't draw it (fb.css); its box keeps scrolling inside.
-  let floatSorted = false;   // a sort tapped on the pinned copy brings the re-sorted table's top back under the header
-  function floatHead(t, box, w) {
-    const fh = el("div", "fhead"), clip = el("div", "fhclip"), t2 = el("table", "br fhtable");
-    t2.append(t.tHead.cloneNode(true)); clip.append(t2); fh.append(clip); fh.setAttribute("aria-hidden", "true");
-    const size = () => {
-      if (!fh.isConnected || !fh.offsetParent) return;
-      const names = t.tHead.rows[t.tHead.rows.length - 1].cells;
-      let cg = t2.querySelector("colgroup"); if (!cg) { cg = el("colgroup"); t2.prepend(cg); }
-      cg.textContent = ""; for (const c of names) { const col = el("col"); col.style.width = c.getBoundingClientRect().width + "px"; cg.append(col); }
-      t2.style.width = t.getBoundingClientRect().width + "px"; clip.style.width = box.clientWidth + "px";
-      w.style.setProperty("--fhh", t.tHead.getBoundingClientRect().height + "px");
-      const fz = names[0] && names[0].classList.contains("fz") ? names[0].getBoundingClientRect().width : 0; if (fz) t2.style.setProperty("--fzw", fz + "px");
-      clip.scrollLeft = box.scrollLeft;
-      if (floatSorted) { floatSorted = false; const y = w.getBoundingClientRect().top - (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--toph")) || 0); if (y < 0) window.scrollBy(0, y); }
-    };
-    const ro = new ResizeObserver(() => size()); ro.observe(t); ro.observe(box);
-    box.addEventListener("scroll", () => { if (clip.scrollLeft !== box.scrollLeft) clip.scrollLeft = box.scrollLeft; }, { passive: true });
-    clip.addEventListener("scroll", () => { if (box.scrollLeft !== clip.scrollLeft) box.scrollLeft = clip.scrollLeft; }, { passive: true });
-    t2.addEventListener("click", (e) => {
-      const c = e.target.closest("th"); if (!c) return;
-      const real = t.tHead.querySelectorAll("th")[[...t2.tHead.querySelectorAll("th")].indexOf(c)]; if (!real) return;
-      if (fh.getBoundingClientRect().top > box.getBoundingClientRect().top + 1) floatSorted = true;   // pinned, so the page is down in the rows
-      real.click();
-    });
-    return fh;
   }
   const td = (txt, cls) => el("td", cls || null, txt);
   const link = (txt, href) => { const a = el("a", "lnk", txt); a.href = href; return a; };
@@ -376,8 +345,11 @@
   // Sean, 23 Oct 2026 ("make the site look and function exactly like the baseball one"): a list page's filters live in one dropdown hung 6px
   // under its Filters button — the tabs across its top, the Clear foot pinned, only the middle scrolling, one size whatever tab is open.
   // Changes apply as they're made (every control redraws the list and the dropdown stays up); ×, a tap outside or a page change close it,
-  // Escape puts back what was there when it opened. POP.open is the tab showing, S.lbTab the last one used, so the button reopens there.
-  const POP = { open: null, snap: null, el: null };
+  // Escape puts back what was there when it opened. POP.open is the tab showing, S.popTab[page] the last one used on that page, so its button reopens there.
+  // Every list page hands the dropdown its own spec before it draws its Filters button — { page, tabs: [[key, label]], keys: the S keys
+  // Escape puts back, draw(tab, h) } — so one dropdown serves Leaders, Teams, Role Watch, Coaches and Dynasty; the Table format tab is
+  // the same on every page (tableTab). S.popTab remembers the tab last used on each page.
+  const POP = { open: null, snap: null, el: null, spec: null };
   function popEl() {
     if (POP.el) return POP.el;
     const p = el("div", "pop grppop"); p.id = "pop"; p.hidden = true;
@@ -385,12 +357,13 @@
     const b = el("div", "pop-body"); b.id = "pop-body"; p.append(x, b); document.body.append(p);
     return (POP.el = p);
   }
-  // what Escape puts back: the filters a tab can change (the position, season, who's listed, the hidden groups, the tables' dress)
-  const filterSnap = () => ({ pos: S.pos, season: S.season, qualOnly: S.qualOnly, lbHide: S.lbHide, tables: window.FB_TABLES ? window.FB_TABLES.get() : null });
-  function openPanel(tab) { POP.snap = JSON.stringify(filterSnap()); POP.open = tab; S.lbTab = tab; save(); route(); }
+  // what Escape puts back: the page's own filter keys (a missing one is kept as null so the snapshot round-trips through JSON) and the tables' dress
+  const filterSnap = () => ({ s: Object.fromEntries((POP.spec ? POP.spec.keys : []).map((k) => [k, S[k] === undefined ? null : S[k]])), tables: window.FB_TABLES ? window.FB_TABLES.get() : null });
+  const popTab = (spec) => { const t = (S.popTab || {})[spec.page]; return spec.tabs.some(([k]) => k === t) ? t : spec.tabs[0][0]; };
+  function openPanel(tab) { POP.snap = JSON.stringify(filterSnap()); POP.open = tab; S.popTab = Object.assign({}, S.popTab, { [POP.spec.page]: tab }); save(); route(); }
   function closePanel(cancel) {
     popEl().hidden = true; ddClose();
-    if (cancel && POP.snap) { const s = JSON.parse(POP.snap); for (const k of ["pos", "season", "qualOnly", "lbHide"]) S[k] = s[k]; if (window.FB_TABLES && s.tables !== window.FB_TABLES.get()) window.FB_TABLES.set(s.tables); }
+    if (cancel && POP.snap) { const s = JSON.parse(POP.snap); for (const k in s.s) { if (s.s[k] == null) delete S[k]; else S[k] = s.s[k]; } if (window.FB_TABLES && s.tables !== window.FB_TABLES.get()) window.FB_TABLES.set(s.tables); }
     POP.open = null; POP.snap = null; save(); route();
   }
   // a tap outside applies and closes (one inside the dropdown or on the button row doesn't count, nor one whose target a redraw just removed)
@@ -423,12 +396,76 @@
     return nav;
   }
 
+  // ---------- a standing list page (the baseball Leaderboard's shape, shared by every list page) ----------
+  // Sean, 23 Oct 2026: "make the site look and function exactly like the baseball one ... formatting and table formatting". Each list page is
+  // section#board — fit-content and centred on a desktop, so the control row, the title and the box share a left edge — holding the control
+  // row (a Filters button labelled by who's listed, with " (n)" for the filters set beyond the defaults, or a pill where there is one choice;
+  // the count beside it), the title over the red rule with the sort beside it and a "More about these numbers" link that folds the page's
+  // notes under the title (the baseball Movers' pattern; the table keeps the room), and the framed box, the one thing on the page that
+  // scrolls (body.lst sizes main to the screen). Nothing sits under the table.
+  const LIST_PAGES = new Set(["leaders", "teams", "roles", "backfields", "coaches", "dynasty"]);
+  const ABOUT = {};   // the pages whose folded note is open this visit
+  function filtersBtn(label, extra) {
+    const tb = el("div", "tbtns");
+    const fb = el("button", "btn btn-quiet tbtn" + (POP.open ? " open" : "") + (extra ? " on" : ""), `${label}${extra ? ` (${extra})` : ""}`);
+    fb.type = "button"; fb.dataset.panel = "grp"; fb.setAttribute("aria-haspopup", "true"); fb.setAttribute("aria-expanded", String(!!POP.open));
+    fb.addEventListener("click", (e) => { e.stopPropagation(); if (POP.open) closePanel(false); else openPanel(popTab(POP.spec)); });
+    tb.append(fb); return tb;
+  }
+  const count = (long, short) => el("span", "count pcount", isMobile() ? short : long);
+  // the frame: the control row (ctl: nodes), the title row and, when there is one, the folded note (a string, or nodes — a note and a findings box)
+  function listFrame(main, { page, ctl, title, sub, about }) {
+    const board = el("section"); board.id = "board";
+    const row = el("div", "ctlrow"); row.id = "pagertop"; row.append(...ctl);
+    const tt = el("div", "lbtitle"); tt.id = "lbtitle"; tt.append(el("h2", null, title), el("span", null, sub));
+    board.append(row, tt);
+    if (about) {
+      const more = el("button", "linkbtn fxmore", isMobile() ? "About" : "More about these numbers"), note = el("div", "fxnote");
+      note.append(...(Array.isArray(about) ? about : [el("p", "note", about)])); note.hidden = !ABOUT[page];
+      more.type = "button"; more.setAttribute("aria-expanded", String(!!ABOUT[page]));
+      more.addEventListener("click", () => { ABOUT[page] = note.hidden; note.hidden = !note.hidden; more.setAttribute("aria-expanded", String(!note.hidden)); });
+      tt.append(more); board.append(note);
+    }
+    main.append(board); return board;
+  }
+  // the box: id bscroll (route() notes its scroll under its key, so a redraw of the same page — a tick in the dropdown — keeps the place)
+  const boxOf = (t, key) => { const box = t.box; box.id = "bscroll"; box.classList.add("lbbox"); box.dataset.key = key; return box; };
+  const keepBox = (box) => { if (LB.keep && LB.keep.key === box.dataset.key) { box.scrollTop = LB.keep.top; box.scrollLeft = LB.keep.left; } LB.keep = null; };
+  const freeze = (t) => requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });   // the second frozen column sits after the first's measured width
+  // a percentile among a list (ties at half; the baseball's insertPct), for a page that colours a column by its own rows
+  const ranker = (arr, hib = true) => { const s = arr.filter((x) => x != null && isFinite(x)).sort((a, b) => a - b); return (v) => { if (v == null || !isFinite(v) || s.length < 2) return null; let lo = 0, eq = 0; for (const x of s) { if (x < v) lo++; else if (x === v) eq++; } const p = 100 * (lo + 1 + eq / 2) / (s.length + 1); return hib ? p : 100 - p; }; };
+  // the dropdown's body: the page's tabs across the top, the tab the page draws (h = the helpers every tab uses), the Table format tab shared
+  function popBody() {
+    const spec = POP.spec, pop = popEl(), body = $("#pop-body", pop); body.textContent = ""; pop.hidden = false;
+    const tabs = el("div", "ptabs grptabs"); tabs.setAttribute("role", "tablist");
+    for (const [tk, lab] of spec.tabs) { const b = el("button", "ptab" + (tk === POP.open ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(tk === POP.open)); b.addEventListener("click", (e) => { e.stopPropagation(); ddClose(); POP.open = tk; S.popTab = Object.assign({}, S.popTab, { [spec.page]: tk }); save(); popBody(); placePop(); }); tabs.append(b); }
+    const w = el("div", "textmodal"), foot = el("div", "row popfoot");
+    const h = {
+      sec: (name) => { const s = el("div", "popsec"); s.append(el("h4", null, name)); w.append(s); return s; },
+      note: (s, txt) => s.append(el("p", "note", txt)),
+      seg: (opts, cur, pick) => { const g = el("div", "seg"); g.setAttribute("role", "group"); for (const [v, lab] of opts) { const b = el("button", "segbtn", lab); b.type = "button"; b.setAttribute("aria-pressed", String(v === cur)); b.addEventListener("click", () => pick(v)); g.append(b); } return g; },
+      row: (...kids) => { const r = el("div", "poprow"); r.append(...kids); return r; },
+      lbl: (txt) => el("span", "splbl", txt),
+      num: (word, val, attrs, pick) => { const f = el("label", "field"), i = el("input"); i.type = "number"; i.inputMode = "numeric"; Object.assign(i, attrs); i.value = val; i.addEventListener("change", () => pick(i.value)); f.append(word, i); return f; },
+      clear: (fn) => { const b = el("button", "linkbtn popclear", "Clear"); b.type = "button"; b.addEventListener("click", fn); foot.append(b); },
+    };
+    if (POP.open === "table") {
+      const s = h.sec("Look"), T = window.FB_TABLES;
+      if (T) s.append(h.seg([["bref", "Baseball-Reference"], ["classic", "Classic"]], T.get(), (v) => { T.set(v); route(); }));
+      h.note(s, "Baseball-Reference: 12px type in 23px rows. Classic: 13px type in roomier rows, the column names the size of the numbers. The same switch as Settings ▸ Appearance ▸ Tables; kept on this device.");
+      if (T && T.own()) h.clear(() => { T.clear(); route(); });
+    } else spec.draw(POP.open, h);
+    body.append(tabs, w); if (foot.children.length) body.append(foot);
+  }
+  const TABLE_TAB = ["table", "Table format"];
+  const seasonPill = (y, pick, opts) => pillSelect(String(y), (opts || [...SEASONS].reverse()).map((v) => [v, String(v)]), y, pick, "Season");
+
   // ---------- Leaders ----------
   // the baseball Leaderboard's dress (23 Oct 2026): one Filters button with the count beside it, the title over the red rule, the table in the
   // framed box with the column names pinned at its top and the page bar at its foot — only the box scrolls — and the note under it. The WR /
   // TE / RB / QB switch, the season and Qualified only live in the dropdown's tabs now, with the column groups and the tables' dress.
   const POS_WORD = { WR: "Receiver", TE: "Tight end", RB: "Running back", QB: "Quarterback" };
-  const LB_TABS = [["position", "Position"], ["season", "Season"], ["stats", "Stats"], ["table", "Table format"]];
+  const LB_TABS = [["position", "Position"], ["season", "Season"], ["stats", "Stats"], TABLE_TAB];
   const LB = { keep: null };   // the box's scroll noted by route() before a redraw, put back when the same page redraws (a tick in the Stats tab)
   const lbSize = () => ([25, 50, 100, 0].includes(S.lbSize) ? S.lbSize : isMobile() ? 25 : 50);   // 0 = everyone on one page
   const lbHidden = (pos) => (S.lbHide && S.lbHide[pos]) || [];
@@ -445,22 +482,16 @@
     const size = lbSize(), n = rows.length, pages = size ? Math.max(1, Math.ceil(n / size)) : 1, page = Math.min(Math.max(1, +S.lbPage || 1), pages);
     const from = size ? (page - 1) * size : 0, to = size ? Math.min(n, from + size) : n;
     main.textContent = "";
-    const board = el("section"); board.id = "board";
+    POP.spec = { page: "leaders", tabs: LB_TABS, keys: ["pos", "season", "qualOnly", "lbHide"], draw: (tab, h) => lbDraw(tab, h, y, pos, meta) };
     // the control row: the Filters button, labelled by who's listed and how many filters beyond the defaults are on, and the count
-    const ctl = el("div", "ctlrow"); ctl.id = "pagertop";
-    const extra = (y !== CUR) + (S.qualOnly === false) + (hide.length > 0), tb = el("div", "tbtns");
-    const fb = el("button", "btn btn-quiet tbtn" + (POP.open ? " open" : "") + (extra ? " on" : ""), `${POS_WORD[pos]} filters${extra ? ` (${extra})` : ""}`);
-    fb.type = "button"; fb.dataset.panel = "grp"; fb.setAttribute("aria-haspopup", "true"); fb.setAttribute("aria-expanded", String(!!POP.open));
-    fb.addEventListener("click", (e) => { e.stopPropagation(); if (POP.open) closePanel(false); else openPanel(LB_TABS.some(([t]) => t === S.lbTab) ? S.lbTab : "position"); });
-    tb.append(fb);
-    const range = `${n ? from + 1 : 0}–${to} of ${n}`;
-    ctl.append(tb, el("span", "count pcount", isMobile() ? range : `${range} ${pos}s · ${y}${meta.through < 18 ? " · through week " + meta.through : ""} · PPR${S.qualOnly === false ? "" : " · " + minText(pos, meta)}`));
-    const title = el("div", "lbtitle"); title.id = "lbtitle"; title.append(el("h2", null, `${POS_WORD[pos]} Leaderboard`), el("span", null, `by ${METRIC[k].h}`));
+    const extra = (y !== CUR) + (S.qualOnly === false) + (hide.length > 0), range = `${n ? from + 1 : 0}–${to} of ${n}`;
+    const board = listFrame(main, { page: "leaders", title: `${POS_WORD[pos]} Leaderboard`, sub: `by ${METRIC[k].h}`,
+      ctl: [filtersBtn(`${POS_WORD[pos]} filters`, extra), count(`${range} ${pos}s · ${y}${meta.through < 18 ? " · through week " + meta.through : ""} · PPR${S.qualOnly === false ? "" : " · " + minText(pos, meta)}`, range)] });
     // the table: Rk · Player · Tm, then the column groups that are showing
     const sortBy = (key) => () => { if (S.sort === key) S.dir = -S.dir; else { S.sort = key; S.dir = METRIC[key].hib === 0 ? 1 : -1; } S.lbPage = 1; save(); route(); };
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }], end: 1 }];
     for (const [name, ks] of cols) groups.push({ name, end: 1, cols: ks.map((kk) => ({ h: METRIC[kk].h, t: (METRIC[kk].t || METRIC[kk].h) + (METRIC[kk].hib === 0 ? " — lower is better" : ""), onSort: sortBy(kk), lit: kk === k })) });
-    const t = table(groups), box = t.box; box.id = "bscroll"; box.classList.add("lbbox");
+    const t = table(groups), box = boxOf(t, [y, pos, page, size, k, dir].join(":")); box.classList.add("noover");   // a phone drops the group names here, as the baseball Leaderboard does
     const pl = pool(y, pos), best = {};   // a value equal to the best among the qualifiers reads bold italic (B-Ref's league leader)
     for (const kk of keys) { const s = pl.sorted[kk]; if (!s || !s.length || kk === "g") continue; const b = METRIC[kk].hib === 0 ? s[0] : s[s.length - 1]; if (s.filter((v) => v === b).length <= 3) best[kk] = b; }   // a best that a dozen share (a 0.0% drop rate) isn't a lead
     rows.slice(from, to).forEach((p, i) => {
@@ -480,55 +511,39 @@
     for (const [v, lab] of [[25, "25"], [50, "50"], [100, "100"], [0, "All"]]) { const o = el("option", null, lab); o.value = v; if (v === size) o.selected = true; sel.append(o); }
     sel.addEventListener("change", () => { S.lbSize = +sel.value; S.lbPage = 1; save(); route(); });
     ps.append(el("span", null, "Per page"), sel); bar.append(ps); box.append(bar);
-    board.append(ctl, title, box); main.append(board);
+    board.append(box);
     main.append(el("p", "note lbnote", `Everyone over the minimum, a page at a time (the page numbers and Per page are under the table). The sorted column is coloured by its percentile among the season's qualified ${pos}s (${minText(pos, meta)}); tap a column name to sort, tap a name for his page. xFP prices each target and carry by what a play like it scores on average in PPR, fitted on the other seasons. ` + (meta.estRoutes ? "Routes this season are estimated from snap share × team dropbacks until nflverse publishes participation." : "Routes are dropbacks he was on the field for.") + (pos === "WR" || pos === "TE" ? " Cont% and ContOE are FTN Data's charting via nflverse (CC BY-SA 4.0), from 2022." : "")));
-    const key = [y, pos, page, size, k, dir].join(":"); box.dataset.key = key;
-    if (LB.keep && LB.keep.key === key) { box.scrollTop = LB.keep.top; box.scrollLeft = LB.keep.left; } LB.keep = null;
-    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
-    if (POP.open) { popBody(y, pos, meta); placePop(); }
+    keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
   }
   // the dropdown's tabs: Position (the four as a segment), Season (the year pill and who's listed), Stats (a tick per column group), Table
   // format (Baseball-Reference / Classic, the same switch as Settings ▸ Appearance). Clear in the foot where one applies.
-  function popBody(y, pos, meta) {
-    const pop = popEl(), body = $("#pop-body", pop); body.textContent = ""; pop.hidden = false;
-    const tabs = el("div", "ptabs grptabs"); tabs.setAttribute("role", "tablist");
-    for (const [tk, lab] of LB_TABS) { const b = el("button", "ptab" + (tk === POP.open ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(tk === POP.open)); b.addEventListener("click", (e) => { e.stopPropagation(); ddClose(); POP.open = tk; S.lbTab = tk; save(); popBody(y, pos, meta); placePop(); }); tabs.append(b); }
-    const w = el("div", "textmodal"), foot = el("div", "row popfoot");
-    const sec = (name) => { const s = el("div", "popsec"); s.append(el("h4", null, name)); w.append(s); return s; };
-    const note = (s, txt) => s.append(el("p", "note", txt));
-    const seg = (opts, cur, pick) => { const g = el("div", "seg"); g.setAttribute("role", "group"); for (const [v, lab] of opts) { const b = el("button", "segbtn", lab); b.type = "button"; b.setAttribute("aria-pressed", String(v === cur)); b.addEventListener("click", () => pick(v)); g.append(b); } return g; };
-    const clear = (fn) => { const b = el("button", "linkbtn popclear", "Clear"); b.type = "button"; b.addEventListener("click", fn); foot.append(b); };
-    if (POP.open === "position") {
-      const s = sec("Position");
-      s.append(seg(["WR", "TE", "RB", "QB"].map((p) => [p, p]), pos, (p) => { S.pos = p; S.sort = null; S.lbPage = 1; save(); route(); }));
-      note(s, `Each position is ranked among its own qualifiers: ${minText(pos, meta)} for ${pos}s this season${meta.through < 18 ? " (the minimums are scaled by the weeks played)" : ""}. Tight ends carry the receivers' columns; fullbacks count as running backs.`);
-    } else if (POP.open === "season") {
-      const s = sec("Which season"), row = el("div", "poprow");
-      row.append(el("span", "splbl", "Season"), pillSelect(String(y), [...SEASONS].reverse().map((v) => [v, String(v)]), y, (v) => { S.season = v; S.lbPage = 1; save(); route(); }, "Season"));
-      s.append(row); note(s, meta.through < 18 ? `${y} is through week ${meta.through}; the qualifying minimums are scaled by the weeks played.` : `${y}, the full season.`);
-      const q = sec("Who's listed");
-      q.append(seg([[true, "Qualified only"], [false, "Everyone"]], S.qualOnly !== false, (v) => { S.qualOnly = v; S.lbPage = 1; save(); route(); }));
-      note(q, `Qualified ${pos}s have ${minText(pos, meta)}. Everyone lists anyone with a target, carry or dropback; the percentiles are always against the qualifiers.`);
-      clear(() => { S.season = CUR; S.qualOnly = true; S.lbPage = 1; save(); route(); });
-    } else if (POP.open === "stats") {
-      const s = sec("Column groups"); note(s, "Tick a group to show its columns; the table redraws as you go. Tap a column name on the table to sort by it.");
+  function lbDraw(tab, h, y, pos, meta) {
+    if (tab === "position") {
+      const s = h.sec("Position");
+      s.append(h.seg(["WR", "TE", "RB", "QB"].map((p) => [p, p]), pos, (p) => { S.pos = p; S.sort = null; S.lbPage = 1; save(); route(); }));
+      h.note(s, `Each position is ranked among its own qualifiers: ${minText(pos, meta)} for ${pos}s this season${meta.through < 18 ? " (the minimums are scaled by the weeks played)" : ""}. Tight ends carry the receivers' columns; fullbacks count as running backs.`);
+    } else if (tab === "season") {
+      const s = h.sec("Which season");
+      s.append(h.row(h.lbl("Season"), seasonPill(y, (v) => { S.season = v; S.lbPage = 1; save(); route(); })));
+      h.note(s, meta.through < 18 ? `${y} is through week ${meta.through}; the qualifying minimums are scaled by the weeks played.` : `${y}, the full season.`);
+      const q = h.sec("Who's listed");
+      q.append(h.seg([[true, "Qualified only"], [false, "Everyone"]], S.qualOnly !== false, (v) => { S.qualOnly = v; S.lbPage = 1; save(); route(); }));
+      h.note(q, `Qualified ${pos}s have ${minText(pos, meta)}. Everyone lists anyone with a target, carry or dropback; the percentiles are always against the qualifiers.`);
+      h.clear(() => { S.season = CUR; S.qualOnly = true; S.lbPage = 1; save(); route(); });
+    } else if (tab === "stats") {
+      const s = h.sec("Column groups"); h.note(s, "Tick a group to show its columns; the table redraws as you go. Tap a column name on the table to sort by it.");
       const grid = el("div", "colgrid"), hide = lbHidden(pos);
       for (const [name, ks] of COLS[pos]) {
         const g = el("div", "colgroup"); g.append(el("h4", null, name));
         const lab = el("label", "toggle"), cb = el("input"); cb.type = "checkbox"; cb.checked = !hide.includes(name);
-        cb.addEventListener("change", () => { const h = hide.filter((x) => x !== name); if (!cb.checked) h.push(name); S.lbHide = Object.assign({}, S.lbHide, { [pos]: h }); S.lbPage = 1; save(); route(); });
+        cb.addEventListener("change", () => { const hd = hide.filter((x) => x !== name); if (!cb.checked) hd.push(name); S.lbHide = Object.assign({}, S.lbHide, { [pos]: hd }); S.lbPage = 1; save(); route(); });
         const txt = el("span"); txt.append(cb.checked ? "Showing" : "Hidden", el("small", null, ks.map((kk) => METRIC[kk].h).join(", ")));
         lab.append(cb, txt); g.append(lab); grid.append(g);
       }
       s.append(grid);
-      if (hide.length) clear(() => { S.lbHide = Object.assign({}, S.lbHide, { [pos]: [] }); save(); route(); });
-    } else {
-      const s = sec("Look"), T = window.FB_TABLES;
-      if (T) s.append(seg([["bref", "Baseball-Reference"], ["classic", "Classic"]], T.get(), (v) => { T.set(v); route(); }));
-      note(s, "Baseball-Reference: 12px type in 23px rows. Classic: 13px type in roomier rows, the column names the size of the numbers. The same switch as Settings ▸ Appearance ▸ Tables; kept on this device.");
-      if (T && T.own()) clear(() => { T.clear(); route(); });
+      if (hide.length) h.clear(() => { S.lbHide = Object.assign({}, S.lbHide, { [pos]: [] }); save(); route(); });
     }
-    body.append(tabs, w); if (foot.children.length) body.append(foot);
   }
 
   // ---------- Player page ----------
@@ -680,7 +695,7 @@
     const xs = p.w.map((r) => r[ix("xfp")]), lo = Math.min(...xs), hi = Math.max(...xs);
     for (const r of p.w) {
       const x = r[ix("xfp")], f = r[ix("fp")], xc = td(num(x)); if (hi > lo) paint(xc, 100 * (x - lo) / (hi - lo));
-      const dc = td(sgn(f - x)); dc.style.color = f - x > 0.5 ? "var(--stripe)" : f - x < -0.5 ? "#3661ad" : "";
+      const dc = td(sgn(f - x)); dc.style.color = f - x > 0.5 ? "var(--red)" : f - x < -0.5 ? "#3661ad" : "";   /* --red: the old --stripe token is the page ground now */
       t.addRow([td(String(r[ix("wk")])), td((r[ix("tm")] && p.tms && p.tms.length > 1 ? r[ix("tm")] + " v " : "") + (r[ix("opp")] || "")), td(r[ix("snp")] == null ? "–" : r[ix("snp")] + "%"), td(num(r[ix("rts")], 0)),
                 td(String(r[ix("tgt")])), td(String(r[ix("rec")])), td(String(r[ix("ryd")])), td(String(r[ix("rtd")])), td(String(r[ix("car")])), td(String(r[ix("ruyd")])), td(String(r[ix("rutd")])), xc, td(num(f)), dc]);
     }
@@ -723,32 +738,38 @@
 
   // ---------- Backfields ----------
   const share = (a, b) => (b ? 100 * a / b : null);
+  // a coach cell: the name (two for a shared job) linked to his page
+  const coachCell = (n) => { const c = td(null, "l"); if (n) n.split(" / ").forEach((nm, i) => { if (i) c.append(" / "); c.append(link(nm, "#coach/" + encodeURIComponent(nm))); }); else c.textContent = "–"; return c; };
+  const BF_COLS = { rb1car: "Car%", rb1opp: "Opp%", rb1snp: "Snap%", rb1gl: "GL%", rb2car: "RB2 Car%", eff: "Backs used", rbtgt: "RB Tgt%", rb1fp: "RB1 FP/Opp", rb2fp: "RB2 FP/Opp" };
   async function backfields(main) {
     const y = SEASONS.includes(+S.bfSeason) ? +S.bfSeason : CUR, rows = TEAMS[y] || [];
     main.textContent = "";
-    main.append(el("h1", "ttl", "Backfields"), el("p", "sub", "How each team split its running back work. Shares count only the games the lead back played, so an injury doesn't make a bell cow look like a committee."));
-    const tools = el("div", "tools"), ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
-    for (const s of [...SEASONS].reverse()) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; ss.append(o); }
-    ss.addEventListener("change", () => { S.bfSeason = +ss.value; save(); route(); }); tools.append(ss); main.append(tools);
-    const sortK = S.bfSort || "rb1car", dir = S.bfDir || -1;
+    const sortK = BF_COLS[S.bfSort] ? S.bfSort : "rb1car", dir = S.bfDir || -1;
     const val = (r, k) => k === "rbtgt" ? share(r.rbtgt, r.tmtgt) : k === "rb1fp" ? fpo(r.rbs[0]) : k === "rb2fp" ? (r.rbs[1] ? fpo(r.rbs[1]) : null) : k === "rb1snp" ? r.rbs[0].snp : r[k];
     const sorted = [...rows].sort((a, b) => { const va = val(a, sortK), vb = val(b, sortK); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
     const sb = (k) => () => { if (S.bfSort === k) S.bfDir = -(S.bfDir || -1); else { S.bfSort = k; S.bfDir = -1; } save(); route(); };
+    // one control, so a season pill in the Filters button's place
+    const board = listFrame(main, { page: "backfields", title: "Backfields", sub: `by ${BF_COLS[sortK]}`,
+      ctl: [seasonPill(y, (v) => { S.bfSeason = v; save(); route(); }), count(`${rows.length} teams · ${y}`, `${rows.length} teams`)],
+      about: "How each team split its running back work. Shares count only the games the lead back played, so an injury doesn't make a bell cow look like a committee. Car% is coloured red for the most bell-cow backfields, blue for the most shared; Backs used the same way round. An RB2 in red outscored his lead back per opportunity, the case where more work tends to follow. Tap a column name to sort, a team for its week-by-week split." });
     const t = table([{ cols: [{ h: "Tm", cls: "fz" }, { h: "Head coach", cls: "l" }, { h: "Off. coordinator", cls: "l" }], end: 1 },
                      { name: "Lead back, in his games", end: 1, cols: [{ h: "RB1", cls: "l" }, { h: "G" }, { h: "Car%", onSort: sb("rb1car"), lit: sortK === "rb1car", t: "His share of the team's RB carries in the games he played" }, { h: "Opp%", onSort: sb("rb1opp"), lit: sortK === "rb1opp", t: "Share of RB carries + targets" }, { h: "Snap%", onSort: sb("rb1snp"), lit: sortK === "rb1snp" }, { h: "GL%", onSort: sb("rb1gl"), lit: sortK === "rb1gl", t: "Share of RB carries inside the 5" }] },
                      { name: "The rest", end: 1, cols: [{ h: "RB2", cls: "l" }, { h: "Car%", onSort: sb("rb2car"), lit: sortK === "rb2car" }, { h: "Backs used", onSort: sb("eff"), lit: sortK === "eff", t: "Effective number of backs: 1 = one back took every carry, 2 = an even split" }] },
                      { name: "Passing game", end: 1, cols: [{ h: "RB Tgt%", onSort: sb("rbtgt"), lit: sortK === "rbtgt", t: "Share of all team targets that went to running backs" }] },
-                     { name: "PPR pts per carry + target", end: 1, cols: [{ h: "RB1", onSort: sb("rb1fp"), lit: sortK === "rb1fp" }, { h: "RB2", onSort: sb("rb2fp"), lit: sortK === "rb2fp" }] }], { tall: true });
-    const all = rows.map((r) => r.rb1car), pctIn = (arr, v, hib = 1) => { const s = arr.filter((x) => x != null).sort((a, b) => a - b); let lo = 0; for (const x of s) if (x < v) lo++; const p = 100 * lo / Math.max(s.length - 1, 1); return hib ? p : 100 - p; };
+                     { name: "PPR pts per carry + target", end: 1, cols: [{ h: "RB1", onSort: sb("rb1fp"), lit: sortK === "rb1fp" }, { h: "RB2", onSort: sb("rb2fp"), lit: sortK === "rb2fp" }] }]);
+    const box = boxOf(t, ["bf", y, sortK, dir].join(":"));
+    const carR = ranker(rows.map((r) => r.rb1car)), effR = ranker(rows.map((x) => x.eff)), sortR = ranker(rows.map((r) => val(r, sortK)));   // the sorted column is coloured among the 32 too
+    const KEYS = ["rb1car", "rb1opp", "rb1snp", "rb1gl", "rb2car", "eff", "rbtgt", "rb1fp", "rb2fp"];
     for (const r of sorted) {
-      const b1 = r.rbs[0], b2 = r.rbs[1], coach = (n) => { const c = td(null, "l"); if (n) n.split(" / ").forEach((nm, i) => { if (i) c.append(" / "); c.append(link(nm, "#coach/" + encodeURIComponent(nm))); }); else c.textContent = "–"; return c; };
-      const car = td(pc(r.rb1car)); paint(car, pctIn(all, r.rb1car));
-      const eff = td(num(r.eff, 2)); paint(eff, pctIn(rows.map((x) => x.eff), r.eff));
-      const f1 = fpo(b1), f2 = b2 ? fpo(b2) : null, f2c = td(num(f2, 2)); if (f2 != null && f1 != null && f2 > f1 + 0.1) { f2c.style.color = "var(--stripe)"; f2c.style.fontWeight = "700"; f2c.title = "More points per opportunity than the lead back"; }
-      t.addRow([cellLink(r.tm, `#team/${r.tm}/${y}`, "fz"), coach(r.hc), coach(r.oc || (r.pc ? r.pc + " (HC)" : null)), cellLink(b1.n, "#player/" + b1.id), td(String(r.rb1g)), car, td(pc(r.rb1opp)), td(b1.snp == null ? "–" : Math.round(b1.snp) + "%"), td(r.rb1gl == null ? "–" : pc(r.rb1gl, 0)),
-                b2 ? cellLink(b2.n, "#player/" + b2.id) : td("–"), td(pc(r.rb2car)), eff, td(pc(share(r.rbtgt, r.tmtgt))), td(num(f1, 2)), f2c]);
+      const b1 = r.rbs[0], b2 = r.rbs[1];
+      const f1 = fpo(b1), f2 = b2 ? fpo(b2) : null, f2c = td(num(f2, 2)); if (f2 != null && f1 != null && f2 > f1 + 0.1) { f2c.style.color = "var(--red)"; f2c.style.fontWeight = "700"; f2c.title = "More points per opportunity than the lead back"; }
+      const c = { rb1car: td(pc(r.rb1car)), rb1opp: td(pc(r.rb1opp)), rb1snp: td(b1.snp == null ? "–" : Math.round(b1.snp) + "%"), rb1gl: td(r.rb1gl == null ? "–" : pc(r.rb1gl, 0)), rb2car: td(pc(r.rb2car)), eff: td(num(r.eff, 2)), rbtgt: td(pc(share(r.rbtgt, r.tmtgt))), rb1fp: td(num(f1, 2)), rb2fp: f2c };
+      paint(c.rb1car, carR(r.rb1car)); c.rb1car.classList.remove("heat"); paint(c.eff, effR(r.eff)); c.eff.classList.remove("heat");
+      if (KEYS.includes(sortK)) paint(c[sortK], sortR(val(r, sortK)));   // bold only on the sorted column
+      t.addRow([cellLink(r.tm, `#team/${r.tm}/${y}`, "fz"), coachCell(r.hc), coachCell(r.oc || (r.pc ? r.pc + " (HC)" : null)), cellLink(b1.n, "#player/" + b1.id), td(String(r.rb1g)), c.rb1car, c.rb1opp, c.rb1snp, c.rb1gl,
+                b2 ? cellLink(b2.n, "#player/" + b2.id) : td("–"), c.rb2car, c.eff, c.rbtgt, c.rb1fp, c.rb2fp]);
     }
-    main.append(t.box, el("p", "note", "Car% is coloured red for the most bell-cow backfields, blue for the most shared; Backs used the same way round. An RB2 in red outscored his lead back per opportunity, the case where more work tends to follow. Tap a team for its week-by-week split."));
+    board.append(box); keepBox(box);
   }
   const fpo = (b) => (b && b.car + b.tgt ? b.fp / (b.car + b.tgt) : null);
 
@@ -761,12 +782,13 @@
     const backs = D.players.filter((p) => posGroup(p.pos) === "RB" && p.w.some((r) => r[ix("tm")] === tm && (r[ix("car")] || r[ix("tgt")] || r[ix("snp")])));
     const tot = (p) => p.w.filter((r) => r[ix("tm")] === tm).reduce((s, r) => s + r[ix("car")] + r[ix("tgt")], 0);
     backs.sort((a, b) => tot(b) - tot(a)); const top = backs.slice(0, 5);
-    main.append(el("h1", "ttl", `${tm} backfield, ${y}`));
-    const sub = el("p", "sub"); if (rec) { sub.append("Head coach "); sub.append(link(rec.hc || "–", "#coach/" + encodeURIComponent(rec.hc || ""))); if (rec.oc) { sub.append(" · coordinator "); rec.oc.split(" / ").forEach((n, i) => { if (i) sub.append(" / "); sub.append(link(n, "#coach/" + encodeURIComponent(n))); }); } }
-    main.append(sub);
-    const tools = el("div", "tools"), ss = el("select", "sel"); for (const s of [...SEASONS].reverse()) if ((TEAMS[s] || []).some((r) => r.tm === tm)) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; ss.append(o); }
-    ss.addEventListener("change", () => { location.hash = `#team/${tm}/${ss.value}`; }); tools.append(ss); main.append(tools);
-    const lg = el("div", "legend"); top.forEach((p, i) => { const s = el("span"), sw = el("i"); sw.style.background = COLORS[i]; s.append(sw, p.n); lg.append(s); }); main.append(lg);
+    // a detail page: the title over the red rule with the staff beside it, a season pill (the one control), the legend, the table sliding sideways
+    const tt = el("h1", "ttl", `${tm} backfield, ${y}`), sub = el("small");
+    if (rec) { sub.append("Head coach "); sub.append(link(rec.hc || "–", "#coach/" + encodeURIComponent(rec.hc || ""))); if (rec.oc) { sub.append(" · coordinator "); rec.oc.split(" / ").forEach((n, i) => { if (i) sub.append(" / "); sub.append(link(n, "#coach/" + encodeURIComponent(n))); }); } }
+    tt.append(sub); main.append(tt);
+    const tools = el("div", "tools"), yrsHere = [...SEASONS].reverse().filter((s) => (TEAMS[s] || []).some((r) => r.tm === tm));
+    tools.append(seasonPill(y, (v) => { location.hash = `#team/${tm}/${v}`; }, yrsHere));
+    const lg = el("div", "legend"); top.forEach((p, i) => { const s = el("span"), sw = el("i"); sw.style.background = COLORS[i]; s.append(sw, p.n); lg.append(s); }); tools.append(lg); main.append(tools);
     const weeks = [...new Set(top.flatMap((p) => p.w.filter((r) => r[ix("tm")] === tm).map((r) => r[ix("wk")])))].sort((a, b) => a - b);
     const groups = [{ cols: [{ h: "Wk" }, { h: "Carry split", cls: "l" }], end: 1 }];
     for (const p of top) groups.push({ name: p.n, end: 1, cols: [{ h: "Snap%" }, { h: "Car" }, { h: "Tgt" }, { h: "FP" }] });
@@ -795,13 +817,11 @@
     const y = SEASONS.includes(+S.tmSeason) ? +S.tmSeason : CUR, D = await ensure(y), F = D.meta.wfields, ix = (k) => F.indexOf(k);
     const win = [0, 4, 8].includes(+S.tmWin) ? +S.tmWin : 0;
     main.textContent = "";
-    main.append(el("h1", "ttl", "Teams"), el("p", "sub", "Each offense's PPR points a game by position, and the expected points (xFP) its targets and carries were worth. xFP says how good the opportunities were; FP − xFP is what the players did with them."));
-    const tools = el("div", "tools"), ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
-    for (const s of [...SEASONS].reverse()) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; ss.append(o); }
-    ss.addEventListener("change", () => { S.tmSeason = +ss.value; save(); route(); });
-    const seg = el("div", "seg");
-    for (const [v, lab] of [[0, "Season"], [4, "Last 4"], [8, "Last 8"]]) { const b = el("button", null, lab); b.type = "button"; b.setAttribute("aria-pressed", v === win); b.addEventListener("click", () => { S.tmWin = v; save(); route(); }); seg.append(b); }
-    tools.append(ss, seg); main.append(tools);
+    // the dropdown: the season and the window (the whole season or its last 4 / 8 games)
+    POP.spec = { page: "teams", tabs: [["season", "Season"], ["window", "Games"], TABLE_TAB], keys: ["tmSeason", "tmWin"], draw: (tab, h) => {
+      if (tab === "season") { const s = h.sec("Which season"); s.append(h.row(h.lbl("Season"), seasonPill(y, (v) => { S.tmSeason = v; save(); route(); }))); h.note(s, D.meta.through < 18 ? `${y} is through week ${D.meta.through}.` : `${y}, the full season.`); if (y !== CUR) h.clear(() => { S.tmSeason = CUR; save(); route(); }); }
+      else { const s = h.sec("Which games"); s.append(h.seg([[0, "Season"], [4, "Last 4"], [8, "Last 8"]], win, (v) => { S.tmWin = v; save(); route(); })); h.note(s, "Per team game over the whole season or its last 4 or 8 games — a team's games are the weeks any of its players has a row."); if (win) h.clear(() => { S.tmWin = 0; save(); route(); }); }
+    } };
     // team → week → position → [fp, xfp]
     const acc = {};
     for (const p of D.players) {
@@ -836,21 +856,25 @@
       { h: "+/−", t: "FP/G − xFP/G", onSort: sb(g + ":d"), lit: sortK === g + ":d" }] });
     for (const r of rows) for (const g of TPOS.concat(["ALL"])) r[g].d = r[g].fp != null && r[g].xfp != null ? r[g].fp - r[g].xfp : null;
     rows.sort((a, b) => { const va = val(a), vb = val(b); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
-    const pct = (g, k, v) => { const s = rows.map((r) => r[g][k]).filter((x) => x != null).sort((a, b) => a - b); let lo = 0; for (const x of s) if (x < v) lo++; return 100 * lo / Math.max(s.length - 1, 1); };
-    const t = table(groups, { tall: true });
+    const rk = {}; for (const g of TPOS.concat(["ALL"])) for (const k of ["xfp", "fp", "d"]) rk[g + ":" + k] = ranker(rows.map((r) => r[g][k]));
+    const extra = (y !== CUR) + (win > 0), SK = { xfp: "xFP/G", fp: "FP/G", d: "+/−" };
+    const board = listFrame(main, { page: "teams", title: "Teams", sub: `by ${NAME[sg]} ${SK[sk]}`,
+      ctl: [filtersBtn("Team filters", extra), count(`${rows.length} teams · ${y}${D.meta.through < 18 ? " · through week " + D.meta.through : ""} · PPR${win ? ` · last ${win} games` : ""}`, `${rows.length} teams`)],
+      about: "Each offense's PPR points a game by position, and the expected points (xFP) its targets and carries were worth. xFP says how good the opportunities were; FP − xFP is what the players did with them. Every cell is coloured by where that team ranks among the 32 on it (red high); the sorted column is bold. Tap a column name to sort, a team for its backfield week by week. A QB's xFP prices his rushing only and counts his passing points as they were (as on Leaders), so the QB +/− is rushing over expected less fumbles. Fumbles lost and two-point conversions are in FP but not xFP." });
+    const t = table(groups), box = boxOf(t, ["tm", y, win, sortK, dir].join(":"));
     rows.forEach((r, i) => {
-      const cells = [td(String(i + 1), "fz"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(r.n))];
+      const cells = [td(String(i + 1), "fz rk"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(r.n))];
       for (const g of TPOS.concat(["ALL"])) for (const k of ["xfp", "fp", "d"]) {
-        const v = r[g][k], c = td(k === "d" ? sgn(v) : num(v)); if (v != null) paint(c, pct(g, k, v)); if (sortK === g + ":" + k) c.style.fontWeight = "700"; cells.push(c);
+        const v = r[g][k], c = td(k === "d" ? sgn(v) : num(v)); if (v != null) { paint(c, rk[g + ":" + k](v)); if (sortK !== g + ":" + k) c.classList.remove("heat"); } cells.push(c);   // every cell coloured by its rank; only the sorted column bold
       }
       t.addRow(cells);
     });
     const avg = (g, k) => { const v = rows.map((r) => r[g][k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-    const ac = [td(""), td("League avg", "l fz2"), td("")];
+    const ac = [td("", "fz"), td("League avg", "l fz2"), td("")];
     for (const g of TPOS.concat(["ALL"])) for (const k of ["xfp", "fp", "d"]) ac.push(td(k === "d" ? sgn(avg(g, k)) : num(avg(g, k))));
     t.addRow(ac, "tot first");
-    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
-    main.append(t.box, el("p", "note", "Every cell is coloured by where that team ranks among the 32 on it (red high). Tap a column name to sort, a team for its backfield week by week. A QB's xFP prices his rushing only and counts his passing points as they were (as on Leaders), so the QB +/− is rushing over expected less fumbles. Fumbles lost and two-point conversions are in FP but not xFP."));
+    board.append(box); keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
   }
 
   // ---------- Role Watch ----------
@@ -867,18 +891,17 @@
     if (!D) { main.append(el("p", "load", "No Role Watch for that season yet.")); return; }
     const meta = D.meta, last = meta.weeks, K = Math.min(Math.max(1, +S.rwWeek || last), last), pos = ["RB", "WR", "TE"].includes(S.rwPos) ? S.rwPos : "RB";
     const g = pos === "RB" ? "RB" : "WR", mkt = meta.market, past = y < CUR || K < last, thr = RW_FLAG[g];
-    main.append(el("h1", "ttl", "Role Watch"), el("p", "sub", pos === "RB"
-      ? "Each back's share of his team's running-back carries and targets, in the games he played, against the share the drafts expected. Red: more work than the market priced in."
-      : "Each receiver's share of his team's targets, in the games he played, against the share the drafts expected. Red: more work than the market priced in."));
-    const tools = el("div", "tools"), seg = el("div", "seg");
-    for (const p of ["RB", "WR", "TE"]) { const b = el("button", null, p); b.type = "button"; b.setAttribute("aria-pressed", p === pos); b.addEventListener("click", () => { S.rwPos = p; save(); route(); }); seg.append(b); }
-    const ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
-    for (const s of [...yrs].reverse()) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; ss.append(o); }
-    ss.addEventListener("change", () => { S.rwSeason = +ss.value; S.rwWeek = null; save(); route(); });
-    const ws = el("select", "sel"); ws.setAttribute("aria-label", "As of week");
-    for (let k = last; k >= 1; k--) { const o = el("option", null, `After week ${k}`); o.value = k; if (k === K) o.selected = true; ws.append(o); }
-    ws.addEventListener("change", () => { S.rwWeek = +ws.value; save(); route(); });
-    tools.append(seg, ss, ws); main.append(tools);
+    // the dropdown: the position, then the season and the week the board is read after
+    POP.spec = { page: "roles", tabs: [["position", "Position"], ["season", "Season"], TABLE_TAB], keys: ["rwPos", "rwSeason", "rwWeek"], draw: (tab, h) => {
+      if (tab === "position") { const s = h.sec("Position"); s.append(h.seg(["RB", "WR", "TE"].map((p) => [p, p]), pos, (p) => { S.rwPos = p; save(); route(); })); h.note(s, "A back's share is of his team's running-back carries and targets, a receiver's or tight end's of his team's targets — always in the games he played."); }
+      else {
+        const s = h.sec("Which season"); s.append(h.row(h.lbl("Season"), seasonPill(y, (v) => { S.rwSeason = v; S.rwWeek = null; save(); route(); }, [...yrs].reverse())));
+        const wk = h.sec("As of week"); const weeks = []; for (let k = last; k >= 1; k--) weeks.push([k, `After week ${k}`]);
+        wk.append(h.row(h.lbl("Week"), pillSelect(`After week ${K}`, weeks, K, (v) => { S.rwWeek = v; save(); route(); }, "As of week")));
+        h.note(wk, "Past weeks and seasons were held out of the fit, so a flag is what the board would have said then.");
+        if (y !== yrs[yrs.length - 1] || K < last) h.clear(() => { S.rwSeason = yrs[yrs.length - 1]; S.rwWeek = null; save(); route(); });
+      }
+    } };
     // his line as of week K: the latest week he played up to K
     const F = meta.wfields, ix = (k) => F.indexOf(k);
     let rows = D.rows.filter((r) => (pos === "RB" ? r.g === "RB" : r.pos === pos)).map((r) => {
@@ -893,29 +916,35 @@
     rows.sort((a, b) => { const va = val(a, sortK), vb = val(b, sortK); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
     const sb = (k) => () => { if (S.rwSort === k) S.rwDir = -(S.rwDir || -1); else { S.rwSort = k; S.rwDir = k === "adp" ? 1 : -1; } save(); route(); };
     const col = (h, k, t) => ({ h, t, onSort: sb(k), lit: sortK === k });
+    const RW_LAB = { d: mkt ? "vs drafts" : "vs model", adp: "ADP", mk: mkt ? "Drafts" : "Model", td: "Share", l3: "Last 3", proj: "Proj", pts: "Pts/G", rest: "Actual" };
+    const extra = (y !== yrs[yrs.length - 1]) + (K < last);
+    const bt = g === "RB" ? "Backtest 2017-25, every season held out of its own fit, after week 3: the projection's rest-of-season share r .87 against .79 for the drafts' expectation; backs flagged More work (10+ points over the drafts) turned into 15+ point misses by the market 43% of the time (15% for everyone) and beat it by 15 points of share on average."
+      : "Backtest 2017-25, every season held out of its own fit, after week 3: the projection's rest-of-season share r .87 against .76 for the drafts' expectation; receivers flagged More work (4+ points of targets over the drafts) beat the market by 5+ points 57% of the time (20% for everyone), by 6 on average.";
+    const board = listFrame(main, { page: "roles", title: "Role Watch", sub: `${POS_WORD[pos]}s · by ${RW_LAB[sortK] || sortK}`,
+      ctl: [filtersBtn(`${POS_WORD[pos]} filters`, extra), count(`${rows.length} ${pos}s with 2+ games · ${y} · after week ${K}`, `${rows.length} ${pos}s`)],
+      about: `${pos === "RB" ? "Each back's share of his team's running-back carries and targets, in the games he played, against the share the drafts expected." : "Each receiver's share of his team's targets, in the games he played, against the share the drafts expected."} More work marks a projected rest-of-season share ${thr}+ points over the drafts'. ${bt} Most backfield turns are an injury or a benching ahead of him, so check back each week. ${mkt ? "" : "This season has no saved preseason ADP (the snapshot service only keeps the last week), so the comparison is with the model's own preseason line; from 2027 the August ADP is saved before Week 1."}` });
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }, col("ADP", "adp", "Preseason PPR ADP, and his rank at the position")], end: 1 },
       { name: "Preseason", end: 1, cols: [col(mkt ? "Drafts" : "Model", "mk", mkt ? "The share his ADP implied: what the market expected" : "No preseason ADP was saved for this season, so this is the model's preseason share (last season and the draft, without ADP)")].concat(mkt ? [{ h: "Model", t: "The model's preseason share: ADP plus last season and the draft" }] : []) },
       { name: `Through week ${K}`, end: 1, cols: [{ h: "G" }, col("Share", "td", "His share in the games he played"), col("Last 3", "l3", "His share in his last three games")] },
       { name: "Rest of season", end: 1, cols: [col("Proj", "proj", "Projected share for the rest of the season: to date, last three and preseason, weighted by what held up in past seasons"), col(mkt ? "vs drafts" : "vs model", "d", "Projected share minus the preseason expectation"), col("Pts/G", "pts", "Projected PPR points a game for the rest of the season")]
         .concat(past ? [col("Actual", "rest", "His actual share over the rest of the season (3+ games)"), { h: "Act pts", t: "His actual PPR points a game over the rest of the season" }] : []) }];
-    const t = table(groups, { tall: true });
-    const projs = rows.map((x) => x.w[ix("proj")]).sort((a, b) => a - b), prc = (v) => { let lo = 0; for (const z of projs) if (z < v) lo++; return 100 * lo / Math.max(projs.length - 1, 1); };
+    const t = table(groups), box = boxOf(t, ["rw", y, pos, K, sortK, dir].join(":")); box.classList.add("widenm");   // a phone gives the name room beside its badge
+    const prc = ranker(rows.map((x) => x.w[ix("proj")])), sortR = ranker(rows.map((x) => val(x, sortK)), sortK !== "adp");   // the sorted column coloured among the rows (ADP: lower is better)
     rows.forEach((x, i) => {
-      const r = x.r, w = x.w, nm = cellLink(r.n, "#player/" + r.id, "l fz2");
-      if (x.d >= thr) { const tg = el("span", "tag rwflag", "More work"); nm.append(" ", tg); }
-      const dc = td(sgn(x.d)); paint(dc, 50 + 50 * Math.max(-1, Math.min(1, x.d / (thr * 2)))); dc.style.fontWeight = "700";
-      const pj = td(pc(w[ix("proj")])); paint(pj, prc(w[ix("proj")]));
-      const cells = [td(String(i + 1), "fz"), nm, td(r.tm), td(r.adp ? `${num(r.adp, 0)} · ${pos}${adpRank.get(r.id)}` : "–"), td(pc(x.base))];
+      const r = x.r, w = x.w, nm = td(null, "l fz2"), wrap = el("div", "nmwrap"); wrap.append(link(r.n, "#player/" + r.id)); nm.append(wrap);   // the name ellipsises on a phone, the badge stays (the baseball's .name.hasil)
+      if (x.d >= thr) wrap.append(el("span", "rwflag", "More work"));
+      const c = { adp: td(r.adp ? `${num(r.adp, 0)} · ${pos}${adpRank.get(r.id)}` : "–"), mk: td(pc(x.base)), td: td(pc(w[ix("td")])), l3: td(w[ix("l3")] == null ? "–" : pc(w[ix("l3")])), proj: td(pc(w[ix("proj")])), d: td(sgn(x.d)), pts: td(num(w[ix("pts")])), rest: td(w[ix("rest")] == null ? "–" : pc(w[ix("rest")])) };
+      paint(c.d, 50 + 50 * Math.max(-1, Math.min(1, x.d / (thr * 2)))); paint(c.proj, prc(w[ix("proj")]));   // vs drafts and Proj are always coloured; bold only on the sorted column
+      for (const k of ["d", "proj"]) if (k !== sortK) c[k].classList.remove("heat");
+      if (c[sortK] && !["d", "proj"].includes(sortK)) paint(c[sortK], sortR(val(x, sortK)));
+      const cells = [td(String(i + 1), "fz rk"), nm, td(r.tm), c.adp, c.mk];
       if (mkt) cells.push(td(pc(r.pre)));
-      cells.push(td(String(w[ix("g")])), td(pc(w[ix("td")])), td(w[ix("l3")] == null ? "–" : pc(w[ix("l3")])), pj, dc, td(num(w[ix("pts")])));
-      if (past) cells.push(td(w[ix("rest")] == null ? "–" : pc(w[ix("rest")])), td(w[ix("restpts")] == null ? "–" : num(w[ix("restpts")])));
+      cells.push(td(String(w[ix("g")])), c.td, c.l3, c.proj, c.d, c.pts);
+      if (past) cells.push(c.rest, td(w[ix("restpts")] == null ? "–" : num(w[ix("restpts")])));
       t.addRow(cells);
     });
-    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
-    main.append(t.box);
-    const bt = g === "RB" ? "Backtest 2017-25, every season held out of its own fit, after week 3: the projection's rest-of-season share r .87 against .79 for the drafts' expectation; backs flagged More work (10+ points over the drafts) turned into 15+ point misses by the market 43% of the time (15% for everyone) and beat it by 15 points of share on average."
-      : "Backtest 2017-25, every season held out of its own fit, after week 3: the projection's rest-of-season share r .87 against .76 for the drafts' expectation; receivers flagged More work (4+ points of targets over the drafts) beat the market by 5+ points 57% of the time (20% for everyone), by 6 on average.";
-    main.append(el("p", "note", `${rows.length} players with 2+ games. ${bt} Most backfield turns are an injury or a benching ahead of him, so check back each week. ${mkt ? "" : "This season has no saved preseason ADP (the snapshot service only keeps the last week), so the comparison is with the model's own preseason line; from 2027 the August ADP is saved before Week 1."}`));
+    board.append(box); keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
   }
 
   // ---------- Dynasty: every season by his year in the league ----------
@@ -978,33 +1007,38 @@
     const ref = hib == null ? null : cohort.map((r) => val(r, k)).filter((x) => x != null && isFinite(x)).sort((a, b) => a - b);
     const pctIn = (v) => { if (v == null || !isFinite(v) || !ref || ref.length < 8) return null; let lo = 0, eq = 0; for (const x of ref) { if (x < v) lo++; else if (x === v) eq++; } const q = 100 * (lo + eq / 2) / ref.length; return hib ? q : 100 - q; };
     main.textContent = "";
-    const yrLab = (DY_YRS.find((x) => x[0] === cy) || [0, "All"])[1];
-    main.append(el("h1", "ttl", "Dynasty"), el("p", "sub", "Every season by the player's year in the league, " + SEASONS[0] + "–" + CUR + ": this year's rookies against every rookie class, second-year players against every second year. The sorted column is coloured against the same year in every class; Next season is what he did the year after."));
-    const tools = el("div", "tools"), seg = el("div", "seg");
-    for (const x of ["WR", "TE", "RB", "QB"]) { const b = el("button", null, x); b.type = "button"; b.setAttribute("aria-pressed", x === pos); b.addEventListener("click", () => { S.dyPos = x; save(); route(); }); seg.append(b); }
-    const ys = el("div", "seg dyseg");
-    for (const [v, lab] of DY_YRS) { const b = el("button", null, lab); b.type = "button"; b.setAttribute("aria-pressed", v === cy); b.addEventListener("click", () => { S.dyYr = v; save(); route(); }); ys.append(b); }
-    const rs = el("select", "sel"); rs.setAttribute("aria-label", "Draft round");
-    for (const [v, lab] of DY_RDS) { const o = el("option", null, lab); o.value = v; if (v === rd) o.selected = true; rs.append(o); }
-    rs.addEventListener("change", () => { S.dyRd = rs.value; save(); route(); });
-    const ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
-    for (const v of [0, ...[...SEASONS].reverse()]) { const o = el("option", null, v ? String(v) : "All seasons"); o.value = v; if (v === sy) o.selected = true; ss.append(o); }
-    ss.addEventListener("change", () => { S.dySeason = +ss.value; save(); route(); });
-    const mb = el("label", "minbox"), mi = el("input"); mi.type = "number"; mi.min = 0; mi.step = 10; mi.value = mn; mi.inputMode = "numeric"; mi.setAttribute("aria-label", "Minimum " + munit);
-    mi.addEventListener("change", () => { const v = Math.max(0, Math.round(+mi.value || 0)); S.dyMin = Object.assign({}, S.dyMin, { [pos]: v }); save(); route(); });
-    mb.append("Min", mi, munit);
-    const curM = window.FB[CUR].meta, partial = curM.through < 18;
-    tools.append(seg, ys, rs, ss, mb, el("span", "count", `${rows.length} ${pos}s · ${yrLab.toLowerCase()}${sy ? " · " + sy : " · every class"} · ${mn}+ ${munit}${partial ? ` (pro-rated for ${CUR} through week ${curM.through})` : ""}`));
-    main.append(tools);
+    const yrLab = (DY_YRS.find((x) => x[0] === cy) || [0, "All"])[1], curM = window.FB[CUR].meta, partial = curM.through < 18;
+    // the dropdown: the position; the year in the league and the draft round; the season (or every class) and the minimum
+    POP.spec = { page: "dynasty", tabs: [["position", "Position"], ["year", "Year and draft"], ["season", "Season"], TABLE_TAB], keys: ["dyPos", "dyYr", "dyRd", "dySeason", "dyMin"], draw: (tab, h) => {
+      if (tab === "position") { const s = h.sec("Position"); s.append(h.seg(["WR", "TE", "RB", "QB"].map((x) => [x, x]), pos, (x) => { S.dyPos = x; save(); route(); })); h.note(s, "Tight ends carry the receivers' columns; fullbacks count as running backs. Each position keeps its own sort and minimum."); }
+      else if (tab === "year") {
+        const s = h.sec("Year in the league"); s.append(h.seg(DY_YRS, cy, (v) => { S.dyYr = v; save(); route(); })); h.note(s, "A career year is the season less his first NFL season (the draft year, else nflverse's rookie season) plus one. All adds a Yr column.");
+        const r = h.sec("Draft"); r.append(h.seg(DY_RDS, rd, (v) => { S.dyRd = v; save(); route(); }));
+        if (cy !== 1 || rd !== "") h.clear(() => { S.dyYr = 1; S.dyRd = ""; save(); route(); });
+      } else {
+        const s = h.sec("Which season"); s.append(h.row(h.lbl("Season"), pillSelect(sy ? String(sy) : "All seasons", [[0, "All seasons"], ...[...SEASONS].reverse().map((v) => [v, String(v)])], sy, (v) => { S.dySeason = v; save(); route(); }, "Season")));
+        h.note(s, "One season lists that class alone; the sorted column is still coloured against the same career year in every class.");
+        const m = h.sec("Minimum"), f = h.num("Min", mn, { min: 0, step: 10 }, (v) => { S.dyMin = Object.assign({}, S.dyMin, { [pos]: Math.max(0, Math.round(+v || 0)) }); save(); route(); }); f.append(munit); m.append(h.row(f));
+        h.note(m, `${mdef} ${munit} by default${partial ? `, pro-rated for ${CUR} through week ${curM.through}` : ""}.`);
+        if (sy || mn !== mdef) h.clear(() => { S.dySeason = 0; S.dyMin = Object.assign({}, S.dyMin, { [pos]: mdef }); save(); route(); });
+      }
+    } };
+    const kLab = (kk) => kk === "y" ? "Season" : kk === "age" ? "Age" : kk === "pick" ? "Draft" : kk === "cy" ? "Yr" : kk.startsWith("n:") ? "next season's " + METRIC[kk.slice(2)].h : METRIC[kk].h;
+    const extra = (cy !== 1) + (rd !== "") + (sy !== 0) + (mn !== mdef);
+    const F = DY_FIND[pos], fbox = el("div", "findings"); if (F) { fbox.append(el("h3", null, "What carries into next season")); const ul = el("ul"); for (const [b, x] of F) { const li = el("li"); li.append(el("b", null, b + ": "), x); ul.append(li); } fbox.append(ul); }
+    const lastFull = partial ? CUR - 1 : null;
+    const board = listFrame(main, { page: "dynasty", title: "Dynasty", sub: `${yrLab} · by ${kLab(k)}`,
+      ctl: [filtersBtn(`${POS_WORD[pos]} filters`, extra), count(`${rows.length} ${pos}s · ${yrLab.toLowerCase()}${sy ? " · " + sy : " · every class"} · ${mn}+ ${munit}${partial ? ` (pro-rated for ${CUR} through week ${curM.through})` : ""}`, `${rows.length} ${pos}s`)],
+      about: [el("p", "note", `Every season by the player's year in the league, ${SEASONS[0]}–${CUR}: this year's rookies against every rookie class, second-year players against every second year. The sorted column is coloured against the same year in every class; Next season is what he did the year after. Tap a column name to sort, a name for his page on that season. Age is on 1 September; Draft is the round and overall pick. ${lastFull ? `Next season for a ${lastFull} row is ${CUR} so far (through week ${curM.through}). ` : ""}${pos === "RB" ? "PFR's charting (the elusive rating, broken tackles, yards after contact) starts in 2018. " : ""}Routes are dropbacks he was on the field for${curM.estRoutes ? `; ${CUR}'s are snap share × team dropbacks until nflverse publishes participation` : ""}.`)].concat(F ? [fbox] : []) });
     const sortBy = (kk) => () => { const sd = Object.assign({}, S.dySort), dd = Object.assign({}, S.dyDir); if (k === kk) dd[pos] = -dir; else { sd[pos] = kk; const mm = kk.startsWith("n:") ? kk.slice(2) : kk; dd[pos] = kk === "pick" || kk === "age" ? 1 : kk === "y" || kk === "cy" ? -1 : METRIC[mm] && METRIC[mm].hib === 0 ? 1 : -1; } S.dySort = sd; S.dyDir = dd; save(); route(); };
     const c0 = (h, kk, t, cls) => ({ h, t, cls, onSort: kk ? sortBy(kk) : null, lit: kk === k });
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, c0("Season", "y")].concat(cy ? [] : [c0("Yr", "cy", "His year in the league that season")]).concat([{ h: "Tm" }, c0("Age", "age", "Age on 1 September of that season"), c0("Draft", "pick", "Round · overall pick; UDFA = undrafted")]), end: 1 }];
     for (const [name, ks] of DY_COLS[pos]) groups.push({ name, end: 1, cols: ks.map((kk) => c0(METRIC[kk].h, kk, METRIC[kk].t)) });
     groups.push({ name: "Next season", end: 1, cls: "nxt", cols: nk.map((kk) => c0(METRIC[kk].h, "n:" + kk, "The season after: " + (METRIC[kk].t || METRIC[kk].h))) });
-    const t = table(groups, { tall: true });
+    const t = table(groups), box = boxOf(t, ["dy", pos, cy, rd, sy, mn, k, dir].join(":"));
     rows.forEach((r, i) => {
       const nm = td(null, "l fz2"), a = link(r.p.n, "#player/" + r.p.id); a.addEventListener("click", () => { S.pseason = Object.assign({}, S.pseason, { [r.p.id]: r.y }); save(); }); nm.append(a);
-      const cells = [td(String(i + 1), "fz"), nm, td(String(r.y))]; if (!cy) cells.push(td(String(r.cy)));
+      const cells = [td(String(i + 1), "fz rk"), nm, td(String(r.y))]; if (!cy) cells.push(td(String(r.cy)));
       cells.push(td(r.p.tms && r.p.tms.length > 1 ? r.p.tms.join("/") : r.p.tm), td(r.p.age != null ? String(Math.floor(r.p.age)) : "–"), td(r.e.dr ? `R${r.e.dr[1]} · ${r.e.dr[2]}` : "UDFA"));
       for (const kk of keys) { const c = td(fmtM(kk, r.m[kk])); if (kk === k) paint(c, pctIn(r.m[kk])); cells.push(c); }
       for (const kk of nk) { const v = r.nm ? r.nm[kk] : null, c = td(r.nx ? fmtM(kk, v) : r.y === CUR ? "" : "–", "nx"); if ("n:" + kk === k) paint(c, pctIn(v)); cells.push(c); }
@@ -1012,17 +1046,13 @@
     });
     if (rows.length) {
       const avg = (f) => { const v = rows.map(f).filter((x) => x != null && isFinite(x)); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
-      const ac = [td(""), td(`Average (${rows.length})`, "l fz2"), td("")]; if (!cy) ac.push(td("")); ac.push(td(""), td(num(avg((r) => r.p.age), 1)), td(""));
+      const ac = [td("", "fz"), td(`Average (${rows.length})`, "l fz2"), td("")]; if (!cy) ac.push(td("")); ac.push(td(""), td(num(avg((r) => r.p.age), 1)), td(""));
       for (const kk of keys) ac.push(td(fmtM(kk, avg((r) => r.m[kk]))));
       for (const kk of nk) ac.push(td(fmtM(kk, avg((r) => (r.nm ? r.nm[kk] : null)))));
       t.addRow(ac, "tot first");
     } else t.addRow([td("No players at that minimum.", "l")]);
-    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
-    main.append(t.box);
-    const lastFull = partial ? CUR - 1 : null;
-    main.append(el("p", "note", `Tap a column name to sort, a name for his page on that season. Age is on 1 September; Draft is the round and overall pick. ${lastFull ? `Next season for a ${lastFull} row is ${CUR} so far (through week ${curM.through}). ` : ""}${pos === "RB" ? "PFR's charting (the elusive rating, broken tackles, yards after contact) starts in 2018. " : ""}Routes are dropbacks he was on the field for${curM.estRoutes ? `; ${CUR}'s are snap share × team dropbacks until nflverse publishes participation` : ""}.`));
-    const F = DY_FIND[pos];
-    if (F) { const box = el("div", "findings"); box.append(el("h3", null, "What carries into next season")); const ul = el("ul"); for (const [b, x] of F) { const li = el("li"); li.append(el("b", null, b + ": "), x); ul.append(li); } box.append(ul); main.append(box); }
+    board.append(box); keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
   }
 
   // ---------- Coaches ----------
@@ -1070,38 +1100,53 @@
   function leagueAvg() { const all = SEASONS.flatMap((y) => TEAMS[y] || []); return agg(all); }
   const ROLE_PICK = { hc: (r) => r.cats.has("HC"), oc: (r) => r.cats.has("OC") || r.cats.has("PC"), all: () => true };
 
+  const ROLE_WORD = { hc: "Head coach", oc: "Coordinator", all: "Staff" }, ROLE_LAB = { hc: "head coaches", oc: "coordinators", all: "all staff" };
+  const C_COLS = { n: "Seasons", car: "Car%", opp: "Opp%", snp: "Snap%", gl: "GL%", eff: "Backs used", cow: "Bell-cow yrs", com: "Committee yrs", tgt: "RB Tgt%" };
   function coaches(main) {
     main.textContent = "";
-    const pick = ROLE_PICK[S.coachRole] ? S.coachRole : "hc";
-    main.append(el("h1", "ttl", "Coaches and their backfields"), el("p", "sub", "Every coach on an offensive staff since 2016, by how his teams split running back work in the seasons he was there. A coach's average counts each of those seasons once."));
-    const tools = el("div", "tools"), seg = el("div", "seg");
-    for (const [k, lab] of [["hc", "Head coaches"], ["oc", "Coordinators"], ["all", "All staff"]]) { const b = el("button", null, lab); b.type = "button"; b.setAttribute("aria-pressed", pick === k); b.addEventListener("click", () => { S.coachRole = k; save(); route(); }); seg.append(b); }
-    const mb = el("label", "minbox"), mi = el("input"); mi.type = "number"; mi.min = 1; mi.max = 11; mi.value = S.coachMin; mi.id = "coachmin"; mb.append("Min seasons", mi);
-    mi.addEventListener("change", () => { S.coachMin = Math.max(1, +mi.value || 1); save(); route(); });
-    const q = el("input", "csearch"); q.type = "search"; q.placeholder = "Find a coach"; q.setAttribute("aria-label", "Find a coach");
-    tools.append(seg, mb, q); main.append(tools);
+    const pick = ROLE_PICK[S.coachRole] ? S.coachRole : "hc", minS = Math.max(1, +S.coachMin || 1); let q0 = String(S.coachQ || "").trim().toLowerCase();   // q0 moves as he types
     const CS = coachSeasons(), L = leagueAvg();
     // the averages are over the seasons in the role picked; Teams / Roles still say where else he's been
-    let rows = [...CS.entries()].map(([n, all]) => ({ n, all, rs: all.filter(ROLE_PICK[pick]) })).filter((x) => x.rs.length >= S.coachMin).map((x) => Object.assign(x, { a: agg(x.rs) }));
-    const sortK = S.cSort || "car", dir = S.cDir || -1;
+    let rows = [...CS.entries()].map(([n, all]) => ({ n, all, rs: all.filter(ROLE_PICK[pick]) })).filter((x) => x.rs.length >= minS).map((x) => Object.assign(x, { a: agg(x.rs) }));
+    const sortK = C_COLS[S.cSort] ? S.cSort : "car", dir = S.cDir || -1;
     rows.sort((x, z) => { const a = x.a[sortK], b = z.a[sortK]; if (a == null) return 1; if (b == null) return -1; return dir * (a - b); });
     const sb = (k) => () => { if (S.cSort === k) S.cDir = -(S.cDir || -1); else { S.cSort = k; S.cDir = -1; } save(); route(); };
+    const shown = () => rows.filter((r) => !q0 || r.n.toLowerCase().includes(q0)).length;
+    // the dropdown: the job and a name search (typing narrows the list in place, no redraw), then the minimum seasons
+    POP.spec = { page: "coaches", tabs: [["coaches", "Coaches"], ["minimum", "Minimum"], TABLE_TAB], keys: ["coachRole", "coachMin", "coachQ"], draw: (tab, h) => {
+      if (tab === "coaches") {
+        const s = h.sec("Which coaches"); s.append(h.seg([["hc", "Head coaches"], ["oc", "Coordinators"], ["all", "All staff"]], pick, (k) => { S.coachRole = k; save(); route(); }));
+        h.note(s, "Head coaches and Coordinators average only the seasons in that job; All staff averages every season he was on the staff, position coach included.");
+        const f = h.sec("Find a coach"), lab = el("label", "search"), q = el("input"); q.type = "search"; q.placeholder = "Search name"; q.value = S.coachQ || ""; q.setAttribute("aria-label", "Find a coach"); lab.append(q); f.append(lab);
+        q.addEventListener("input", () => { S.coachQ = q.value; q0 = q.value.trim().toLowerCase(); save(); t.querySelectorAll("tbody tr[data-k]").forEach((tr) => { tr.hidden = !!q0 && !tr.dataset.k.includes(q0); }); cnt.textContent = cntText(); });
+        if (pick !== "hc" || q0) h.clear(() => { S.coachRole = "hc"; S.coachQ = ""; save(); route(); });
+      } else {
+        const s = h.sec("Minimum"), f = h.num("Min seasons", minS, { min: 1, max: 11 }, (v) => { S.coachMin = Math.max(1, Math.round(+v || 1)); save(); route(); }); s.append(h.row(f));
+        h.note(s, "Seasons in the job picked; a coach with fewer is left off the list.");
+        if (minS !== 2) h.clear(() => { S.coachMin = 2; save(); route(); });
+      }
+    } };
+    const extra = (pick !== "hc") + (minS !== 2) + (!!q0);
+    const cntText = () => isMobile() ? `${shown()} coaches` : `${shown()} coaches · ${minS}+ season${minS > 1 ? "s" : ""} as ${pick === "all" ? "an offensive coach" : pick === "hc" ? "head coach" : "coordinator"}${q0 ? ` · "${S.coachQ.trim()}"` : ""}`;
+    const cnt = count(cntText(), cntText());
+    const board = listFrame(main, { page: "coaches", title: "Coaches", sub: `${ROLE_LAB[pick]} · by ${C_COLS[sortK]}`, ctl: [filtersBtn(`${ROLE_WORD[pick]} filters`, extra), cnt],
+      about: [el("p", "note", "Every coach on an offensive staff since 2016, by how his teams split running back work in the seasons he was there. A coach's average counts each of those seasons once. Style: Bell cow when his lead backs averaged 68%+ of RB carries in their games (the top third of coaches), Committee under 60% (the bottom third), and between them a lead back with a change of pace. A lead back takes 64% of the carries in his games in a typical season. Staffs are each season's final staff on Wikipedia, so a coach let go mid-season isn't listed that year (a head coach always is, from the games). Tap a column name to sort, a name for his page."), findings()] });
     const t = table([{ cols: [{ h: "Coach", cls: "l fz" }, { h: "Seasons", onSort: sb("n"), lit: sortK === "n" }, { h: "Teams", cls: "l" }, { h: "Every job", cls: "l", t: "Seasons in each job across his whole offensive-staff history: HC head coach, OC coordinator, PC play-caller, PGC / RGC pass / run game coordinator, QB / RB / WR / TE / OL position coach" }, { h: "Style", cls: "l" }], end: 1 },
                      { name: "Lead back (in his games)", end: 1, cols: [{ h: "Car%", onSort: sb("car"), lit: sortK === "car" }, { h: "Opp%", onSort: sb("opp"), lit: sortK === "opp" }, { h: "Snap%", onSort: sb("snp"), lit: sortK === "snp" }, { h: "GL%", onSort: sb("gl"), lit: sortK === "gl" }] },
                      { name: "Backfield", end: 1, cols: [{ h: "Backs used", onSort: sb("eff"), lit: sortK === "eff" }, { h: "Bell-cow yrs", onSort: sb("cow"), lit: sortK === "cow", t: "Seasons his lead back took 72%+ of RB carries in his games (the top third of team-seasons)" }, { h: "Committee yrs", onSort: sb("com"), lit: sortK === "com", t: "Seasons his lead back took under 58% (the bottom third)" }] },
-                     { name: "Passing game", end: 1, cols: [{ h: "RB Tgt%", onSort: sb("tgt"), lit: sortK === "tgt" }] }], { tall: true });
-    const carAll = rows.map((r) => r.a.car).filter((v) => v != null).sort((a, b) => a - b), pr = (v) => { let lo = 0; for (const x of carAll) if (x < v) lo++; return 100 * lo / Math.max(carAll.length - 1, 1); };
+                     { name: "Passing game", end: 1, cols: [{ h: "RB Tgt%", onSort: sb("tgt"), lit: sortK === "tgt" }] }]);
+    const box = boxOf(t, ["co", pick, minS, sortK, dir].join(":"));
+    const carR = ranker(rows.map((r) => r.a.car)), sortR = ranker(rows.map((r) => r.a[sortK]));
     for (const r of rows) {
       const teams = [...new Set(r.all.map((x) => x.tm))].join(", "), [vd, vp] = verdict(r.a), tag = el("span", "tag", vd), vc = td(null, "l"); paint(tag, vp); tag.classList.remove("heat"); vc.append(tag);
-      const car = td(pc(r.a.car)); paint(car, pr(r.a.car));
-      const tr = t.addRow([cellLink(r.n, "#coach/" + encodeURIComponent(r.n), "l fz"), td(String(r.a.n)), td(teams, "l"), td(catLine(r.all), "l"), vc, car, td(pc(r.a.opp)), td(pc(r.a.snp, 0)), td(pc(r.a.gl, 0)), td(num(r.a.eff, 2)), td(String(r.a.cow)), td(String(r.a.com)), td(pc(r.a.tgt))]);
-      tr.dataset.k = r.n.toLowerCase();
+      const c = { n: td(String(r.a.n)), car: td(pc(r.a.car)), opp: td(pc(r.a.opp)), snp: td(pc(r.a.snp, 0)), gl: td(pc(r.a.gl, 0)), eff: td(num(r.a.eff, 2)), cow: td(String(r.a.cow)), com: td(String(r.a.com)), tgt: td(pc(r.a.tgt)) };
+      paint(c.car, carR(r.a.car)); c.car.classList.remove("heat"); paint(c[sortK], sortR(r.a[sortK]));   // Car% always coloured; the sorted column coloured and bold
+      const tr = t.addRow([cellLink(r.n, "#coach/" + encodeURIComponent(r.n), "l fz"), c.n, td(teams, "l"), td(catLine(r.all), "l"), vc, c.car, c.opp, c.snp, c.gl, c.eff, c.cow, c.com, c.tgt]);
+      tr.dataset.k = r.n.toLowerCase(); if (q0 && !tr.dataset.k.includes(q0)) tr.hidden = true;
     }
     t.addRow([td("League, 2016–" + String(CUR).slice(2), "l fz"), td(String(L.n)), td(""), td(""), td(""), td(pc(L.car)), td(pc(L.opp)), td(pc(L.snp, 0)), td(pc(L.gl, 0)), td(num(L.eff, 2)), td(String(L.cow)), td(String(L.com)), td(pc(L.tgt))], "tot first");
-    q.addEventListener("input", () => { const s = q.value.trim().toLowerCase(); t.querySelectorAll("tbody tr[data-k]").forEach((tr) => { tr.hidden = !!s && !tr.dataset.k.includes(s); }); });
-    requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
-    main.append(findings());
-    main.append(t.box, el("p", "note", `${rows.length} coaches. Head coaches and Coordinators average only the seasons in that job; All staff averages every season he was on the staff, position coach included. Style: Bell cow when his lead backs averaged 68%+ of RB carries in their games (the top third of coaches), Committee under 60% (the bottom third), and between them a lead back with a change of pace. A lead back takes 64% of the carries in his games in a typical season. Staffs are each season's final staff on Wikipedia, so a coach let go mid-season isn't listed that year (a head coach always is, from the games).`));
+    board.append(box); keepBox(box);
+    if (POP.open) { popBody(); placePop(); }
   }
 
   // what the staff history does and doesn't tell you (every team-season 2016-25, the backs' prior usage and draft capital held equal;
@@ -1140,7 +1185,7 @@
     const allCar = SEASONS.flatMap((y) => (TEAMS[y] || []).map((r) => r.rb1car)).sort((x, z) => x - z), pr = (val) => { let lo = 0; for (const x of allCar) if (x < val) lo++; return 100 * lo / Math.max(allCar.length - 1, 1); };
     for (const r of rs) {
       const b1 = r.rbs[0], b2 = r.rbs[1], car = td(pc(r.rb1car)); paint(car, pr(r.rb1car));
-      const f1 = fpo(b1), f2 = b2 ? fpo(b2) : null, f2c = td(num(f2, 2)); if (f2 != null && f1 != null && f2 > f1 + 0.1) { f2c.style.color = "var(--stripe)"; f2c.style.fontWeight = "700"; }
+      const f1 = fpo(b1), f2 = b2 ? fpo(b2) : null, f2c = td(num(f2, 2)); if (f2 != null && f1 != null && f2 > f1 + 0.1) { f2c.style.color = "var(--red)"; f2c.style.fontWeight = "700"; }
       let nxt = "–"; if (b2) { const nx = (TEAMS[r.y + 1] || []).find((x) => x.rbs.some((b) => b.id === b2.id)); if (nx) { const i = nx.rbs.findIndex((b) => b.id === b2.id), all = nx.rbcar || 1; nxt = pc(100 * nx.rbs[i].car / all) + (nx.tm !== r.tm ? ` (${nx.tm})` : ""); } }
       const job = td(r.roles.join(", ") + (r.cats.has("PC") && !r.cats.has("OC") ? " (called plays)" : ""), "l");
       const hcc = td(null, "l"); if (r.hc && r.hc !== name) hcc.append(link(r.hc, "#coach/" + encodeURIComponent(r.hc))); else hcc.textContent = r.hc === name ? "himself" : "–";
@@ -1267,7 +1312,7 @@
   function route() {
     const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
-    document.body.dataset.page = page;
+    document.body.dataset.page = page; document.body.classList.toggle("lst", LIST_PAGES.has(page));   // a list page stands: main is the screen's height and only the box scrolls
     document.title = PAGE_TITLE[page] ? "Sean's Football · " + PAGE_TITLE[page] : "Sean's Football Site";
     const bs = $("#bscroll"); LB.keep = bs ? { key: bs.dataset.key, top: bs.scrollTop, left: bs.scrollLeft } : null;   // the Leaders box's place, put back by a redraw of the same page
     const main = $("main"); main.innerHTML = '<p class="load">Loading…</p>';

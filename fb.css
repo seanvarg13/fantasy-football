@@ -123,8 +123,9 @@ body.navopen .top { z-index: 300; }
 /* ---- titles, notes ---- */
 h1.ttl { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin: 5px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--stripe-line); font: 700 26px/1 var(--display); letter-spacing: .01em; color: var(--ink); text-wrap: balance; }
 h1.ttl small { font: 500 13px var(--body); color: var(--muted); letter-spacing: 0; }
+h1.ttl small a { color: var(--ink); text-decoration: none; }   /* the staff beside a team's title */
+h1.ttl small a:hover { text-decoration: underline; }
 :root[data-view="mobile"] h1.ttl { font-size: 21px; margin: 2px 0 8px; padding-bottom: 4px; gap: 8px; }
-.sub { color: var(--ink-2); font-size: 13.5px; line-height: 1.5; margin: 0 0 10px; max-width: 90ch; }
 .secttl { font: 700 22px/1.1 var(--display); margin: 34px 0 6px; padding-bottom: 6px; border-bottom: 2px solid var(--stripe-line); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .secttl small { font: 500 13px var(--body); color: var(--muted); }
 .note { color: var(--muted); font: 500 12px/1.55 var(--body); margin: 8px 2px 0; max-width: 90ch; }
@@ -142,16 +143,9 @@ select.sel { padding: 0 8px 0 12px; }
 .btn:disabled, .tbtn:disabled { opacity: .45; cursor: default; }
 .linkbtn { border: 0; background: none; padding: 0; font: inherit; font-weight: 500; color: var(--accent-2-text); text-decoration: underline; cursor: pointer; }
 input[type="number"], input[type="text"], input[type="search"], input[type="date"], textarea { border: 1px solid var(--hair); background: var(--surface); color: var(--ink); }
-.minbox { display: inline-flex; align-items: center; gap: 8px; font: 600 11px var(--body); color: var(--muted); white-space: nowrap; }
-.minbox input { width: 72px; height: 34px; padding: 0 10px; font: 500 13px var(--body); font-variant-numeric: tabular-nums; }
 .count { font: 600 12.5px var(--body); color: var(--muted); white-space: nowrap; }
-.csearch { height: 34px; width: 180px; max-width: 100%; padding: 0 10px; font: 500 13px var(--body); }
-:root[data-view="mobile"] .minbox input, :root[data-view="mobile"] .csearch { font-size: 16px; }
 :root[data-view="mobile"] .count { font-size: 12px; white-space: normal; }   /* a long count wraps on a phone rather than widening the page */
-/* the Dynasty page's career years: one line a button; tighter on a phone so the six fit across */
-.dyseg button { white-space: nowrap; }
 :root[data-view="mobile"] .seg { flex-wrap: wrap; }   /* a segment that doesn't fit a phone wraps instead of pushing the page sideways */
-:root[data-view="mobile"] .dyseg button { padding: 6px 8px; font-size: 13.5px; }
 
 /* ---- the flat schemes (data-flat: Jets and its blues and mint): no outline anywhere, the shadows stay; a white button writes in the
    scheme's one colour, the current page is a bare white word on the band, and a stand-alone button / select fills with the band colour
@@ -171,28 +165,8 @@ input[type="number"], input[type="text"], input[type="search"], input[type="date
    the whole thing in a box with a 1px ink-45% edge, the surface behind it and the soft shadow. Every colour is a color-mix on the
    tokens, so dark mode and the flat schemes come out right without a second set of literals. Classic (html.tsans) is the same table
    at 13px in 28-30px rows. Written from the computed values, not the baseball stylesheet (tables.md). */
-.tbox { width: max-content; max-width: 100%; overflow: auto; overscroll-behavior-x: none; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--boxsh); }
-.tbox.tall { max-height: 72vh; }
+.tbox { width: max-content; max-width: 100%; overflow: auto; overscroll-behavior: none; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--boxsh); }   /* no rubber-band on either axis (Sean, 18 and 20 Oct 2026): a list page's box is the one thing that scrolls, a detail page's slides sideways */
 :root[data-flat] .tbox { border-width: 0; }   /* Jets: no edge, the shadow stays */
-/* no white in a table's bounce (Sean, 18 Oct 2026): an iPhone rubber-bands a scrolled box past its edge and shows the box's own white
-   there. Sideways it doesn't bounce at all (the page never scrolls sideways). Up and down a tall box still hands the swipe to the page at
-   its ends, and the gap it opens is painted to match: the blue of the column names at the top, the blue of a totals row (else the rows'
-   white) at the foot. The box's own ground never shows at rest; the table covers it. */
-.tbox.tall { background: linear-gradient(var(--band2) 0 50%, var(--tail, var(--surface)) 50% 100%) padding-box, var(--surface); }
-.tbox.tall:has(tbody > tr.tot:last-child) { --tail: var(--band2); }
-/* no bounce on a phone at all (Sean, 20 Oct 2026): on a touch screen a tall table is its full height and scrolls with the page (a
-   sideways slide doesn't bounce), and a copy of its column names (floatHead in fb.js) is pinned under the site header in its place —
-   sticky to the page, height-for-height with the real ones so it leaves with the table's foot. (The Leaders page doesn't use it any more:
-   it is a standing page whose box is the one scroller, as the baseball Leaderboard's is.) */
-.twrap > .fhead { display: none; }
-@media (pointer: coarse), (max-width: 640px) {
-  .tbox.tall { max-height: none; }
-  .twrap > .fhead { display: block; position: sticky; top: calc(var(--toph, 0px) - 1px); z-index: 4; height: calc(var(--fhh, 0px) + 1px); padding: 1px 0 0 1px; box-sizing: border-box; pointer-events: none; }
-  .twrap > .fhead + .tbox { margin-top: calc(-1px - var(--fhh, 0px)); }   /* the box slides up under the copy, not the copy down over the box */
-  .fhead > .fhclip { pointer-events: auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: none; }
-  .fhclip::-webkit-scrollbar { display: none; }
-  table.br.fhtable { table-layout: fixed; min-width: 0; }
-}
 table.br { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font: 500 12px/1.25 var(--body); font-variant-numeric: tabular-nums; }
 .br th, .br td { height: 23px; padding: 0 3px; line-height: 1.25; white-space: nowrap; letter-spacing: 0; text-transform: none; }
 /* column names: bold white, centred (a left-aligned column's too), on the band; a thin white rule between them and none under them */
@@ -244,14 +218,25 @@ table.br { border-collapse: separate; border-spacing: 0; width: max-content; min
 :root[data-view="mobile"].tsans table.br { font-size: 12px; }
 :root[data-view="mobile"].tsans .br thead tr.over th { font-size: 11.5px; }
 
-/* ---- the Leaders page in the Leaderboard's dress (Sean, 23 Oct 2026: "exactly like the baseball one"): a standing page — the page never
-   scrolls, the rows' box does — one Filters button with the count beside it, the title over the red rule, the framed box with the column
-   names pinned at its top and the page bar as its last row, the note under it on a desktop ---- */
-body[data-page="leaders"] { padding-bottom: 0; }
-body[data-page="leaders"] main { display: flex; flex-direction: column; max-width: 1240px; margin: 18px auto 0; padding: 0 30px; height: calc(100dvh - var(--header-h, 63px) - 36px); overflow: clip; }
-:root[data-view="mobile"] body[data-page="leaders"] main { margin: 4px 6px 0; padding: 0; height: calc(100dvh - var(--header-h, 47px) - 20px - env(safe-area-inset-bottom, 0px)); }
+/* ---- the list pages in the Leaderboard's dress (Sean, 23 Oct 2026: "exactly like the baseball one"): a standing page — the page never
+   scrolls, the rows' box does — one Filters button (or a pill where there is one choice) with the count beside it, the title over the red
+   rule with the sort beside it and a "More about these numbers" link that folds the page's notes under the title, the framed box with the
+   column names pinned at its top (Leaders: the page bar as its last row, the note under it on a desktop). body.lst is set by route() for
+   Leaders, Teams, Role Watch, Backfields, Coaches and Dynasty; a detail page (a team's backfield, a coach, a player) scrolls as a page ---- */
+body.lst { padding-bottom: 0; }
+body.lst main { display: flex; flex-direction: column; max-width: 1240px; margin: 18px auto 0; padding: 0 30px; height: calc(100dvh - var(--header-h, 63px) - 36px); overflow: clip; }
+:root[data-view="mobile"] body.lst main { margin: 4px 6px 0; padding: 0; height: calc(100dvh - var(--header-h, 47px) - 20px - env(safe-area-inset-bottom, 0px)); }
 #board { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: fit-content; max-width: 100%; margin: 0 auto; }   /* the controls, the title and the box share a left edge */
 :root[data-view="mobile"] #board { width: 100%; margin: 0; }
+#board > .fxnote { flex: none; margin: 0 0 8px; max-height: 9em; overflow-y: auto; overscroll-behavior: contain; }   /* open, the box gives up the room (the baseball Movers' note); it holds the page's note and, on Coaches and Dynasty, the findings */
+#board > .fxnote[hidden] { display: none; }
+#board > .fxnote > .note { margin: 0; max-width: none; padding: 0 2px; }
+#board > .fxnote > .findings { margin: 8px 0 0; }
+:root[data-view="mobile"] #board > .fxnote { margin: 0 12px 8px; }
+.lbtitle .fxmore { margin-left: auto; align-self: center; font-size: 12.5px; white-space: nowrap; }
+:root[data-view="mobile"] .lbtitle .fxmore { font-size: 12px; }
+.ctlrow .pill { min-height: 34px; padding: 0 12px; }   /* a season pill in the Filters button's place (Backfields) sits at the button's height */
+:root[data-view="mobile"] .ctlrow .pill { min-height: 32px; font-size: 13.5px; }
 .ctlrow { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: -6px; padding: 0 0 4px; }   /* midway between the header's red line and the title */
 .ctlrow .tbtns { display: inline-flex; align-items: center; gap: 6px; }
 .ctlrow .tbtn { height: 34px; min-height: 34px; }
@@ -269,10 +254,11 @@ body[data-page="leaders"] main { display: flex; flex-direction: column; max-widt
 :root[data-view="mobile"] .lbtitle h2 { font-size: 21px; white-space: nowrap; }
 .lbbox { flex: 0 1 auto; min-height: 0; overflow: auto; overscroll-behavior: none; margin: 0 auto 14px; }   /* the one scroller on the page; no rubber-band */
 :root[data-view="mobile"] .lbbox { width: auto; max-width: calc(100% - 24px); margin: 0 12px; }
-:root[data-view="mobile"] .lbbox .br tr.over { display: none; }   /* a phone drops the group names and gives the column names a 44px row, level with the page bar */
-:root[data-view="mobile"] .lbbox .br thead tr.over + tr th { top: 0; }
-:root[data-view="mobile"] .lbbox .br thead tr:not(.over) th { height: 44px; }
+:root[data-view="mobile"] .lbbox.noover .br tr.over { display: none; }   /* a phone drops the Leaders' group names (the baseball Leaderboard's way); the other lists keep theirs, which name repeated columns */
+:root[data-view="mobile"] .lbbox.noover .br thead tr.over + tr th { top: 0; }
+:root[data-view="mobile"] .lbbox .br thead tr:not(.over) th { height: 44px; }   /* the column names a 44px row, level with the page bar */
 :root[data-view="mobile"] .lbbox .br td.fz2 { max-width: 116px; overflow: hidden; text-overflow: ellipsis; }   /* a long name ellipsises in the frozen column */
+:root[data-view="mobile"] .lbbox.widenm .br td.fz2 { max-width: 164px; }   /* Role Watch: the More work badge rides beside the name, so the column is wider there */
 .lbbox .br tr.lbgap { display: table-row; }                       /* the strip over the Qualified avg row: a full row in the over-header's blue */
 .lbbox .br tr.lbgap td { height: 23px; border: 0; background: var(--band-dk); }
 .lbnote { flex: none; margin: 8px 0 0; padding: 0 4px; font: 500 12px/1.55 var(--body); color: var(--muted); max-width: none; }
@@ -316,6 +302,12 @@ body[data-page="leaders"] main { display: flex; flex-direction: column; max-widt
 #pop .poprow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; min-height: 32px; }
 :root[data-view="mobile"] #pop .poprow { gap: 8px; }
 #pop .splbl { font: 500 11px var(--body); color: var(--muted); }
+/* a number field ("Min [ ] routes") and a name search inside the dropdown, the baseball's */
+#pop .field { display: flex; align-items: center; gap: 8px; font: 600 11px var(--body); color: var(--muted); }
+#pop .field input[type="number"] { width: 84px; height: 34px; padding: 0 10px; font: 500 13px var(--body); font-variant-numeric: tabular-nums; }
+#pop .search input { width: 160px; height: 30px; padding: 0 10px; font: 500 13px var(--body); }
+:root[data-view="mobile"] #pop .field input[type="number"] { width: 76px; font-size: 16px; }   /* 16px: under that an iPhone zooms into a focused box */
+:root[data-view="mobile"] #pop .search input { height: 32px; font-size: 16px; }
 #pop .popfoot { flex: none; display: flex; justify-content: flex-end; gap: 10px; margin: 0 -12px; padding: 8px 12px; border-top: 1px solid var(--hair); background: var(--surface); }
 #pop .popclear { font: 500 13px var(--body); }
 #pop .seg, #pop .segbtn, #pop .btn, #pop .pill, #pop .tbtn { box-shadow: none; }   /* nothing inside the dropdown carries the lift */
@@ -404,13 +396,15 @@ body[data-page="leaders"] main { display: flex; flex-direction: column; max-widt
 .wbar span { display: block; height: 100%; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin: 8px 0; }
 .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -1px; }
-/* the Coaches pages' findings box */
-.findings { margin: 14px 0 12px; padding: 10px 14px; border-left: 3px solid var(--stripe-line); background: var(--surface); }
-.findings h3 { margin: 0 0 6px; font: 700 18px/1.2 var(--display); }
-.findings ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); max-width: 75ch; }
+/* the findings under the Coaches and Dynasty lists and on a coach's page: the baseball's key under a table (12.5px lines, the key in bold ink) */
+.findings { margin: 14px 0 0; font: 500 12.5px/1.6 var(--body); color: var(--ink-2); max-width: 90ch; }
+.findings h3 { margin: 0 0 4px; font: 700 17px/1.2 var(--display); color: var(--ink); }
+.findings ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
 .findings b { color: var(--ink); font-weight: 700; }
-/* Role Watch: the More work tag beside a name */
-.rwflag { background: var(--red); color: #fff; font-size: 10.5px; padding: 1px 5px; vertical-align: 1px; }
+/* Role Watch: the More work tag beside a name — the baseball's IL badge, a fixed red in every scheme */
+.rwflag { display: inline-block; flex: none; padding: 0 4px; border-radius: 2px; background: var(--red); color: #fff; font: 700 10px/16px var(--body); letter-spacing: .02em; vertical-align: 1px; white-space: nowrap; }
+.br .nmwrap { display: flex; align-items: center; gap: 5px; min-width: 0; }   /* a name with a badge after it: the name gives way (ellipsis) in the phone's 116px column, the badge never does */
+.br .nmwrap .lnk { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
 /* ---- Settings (#settings/<tab>): one white card with three tabs across the top in the Filters-button dress, then the Appearance
    rows (a 220px label column and the control), the glossary grid or the how-to prose; the baseball page's computed values ---- */
