@@ -390,3 +390,52 @@ The chrome is the baseball site's, written against its tokens so every colour sc
   phone menu and the Settings page shot under Titans and Jets in both modes and matched against the baseball crops by computed style —
   the page buttons, tabs, segments and headings read the same values. Found on the way: a segment that doesn't fit a phone now wraps
   (`:root[data-view="mobile"] .seg`) and a long count line wraps, where the Dynasty page's had pushed the page sideways.
+
+## The Leaders page in the Leaderboard's dress (Sean, 23 Oct 2026: "make the site look and function exactly like the baseball one in
+terms of like formatting and table formatting")
+
+The Leaders page is the baseball Leaderboard, page for page (`leaders()` in `fb.js`, the "Leaders page" and "Filters dropdown" blocks
+of `fb.css`): a **standing page** — `body[data-page="leaders"] main` is a flex column the height of the screen under the header, so the
+page never scrolls and only the rows' box does — with, from the top: the control row (`#pagertop.ctlrow`: one **Filters** button in
+the `.tbtn` dress, labelled by who's listed, "Receiver filters", "Running back filters" … with " (n)" when the season, the Everyone
+switch or a hidden column group is set beyond the defaults, and the count beside it — "1–50 of 104 WRs · 2026 · through week 6 · PPR ·
+71+ routes or 14+ targets", a phone's "1–25 of 104"), the title (`#lbtitle`: "Receiver Leaderboard" + the sorted column's name, "by
+xFP/G", over the 2px red rule), the table in the framed box (`#bscroll.tbox.lbbox`: the column names pinned at its top, the page bar
+as its last row, pinned at its foot) and the note under it (`.lbnote`, a desktop only). `#board` is `fit-content` and centred, so the
+button, the title and the box share a left edge (a QB table sits in the middle of the page).
+* **The dropdown** is the baseball's `#pop`: one element `popEl()` appends to body, hung 6px under the Filters button by `placePop()`
+  (560px wide on a desktop, 8px in from each side on a phone; one height whatever tab is open, never under 300px), the tabs across its
+  top (`LB_TABS`: Position · Season · Stats · Table format), the middle scrolling, a Clear link in the foot where one applies.
+  **Position** is a segment of WR · TE · RB · QB; **Season** a year pill (`pillSelect` → the fixed `.ddmenu` list, `ddOpenOn` /
+  `ddPlace` / `ddClose`, the baseball's) and a Qualified only / Everyone segment; **Stats** a tick per column group (`S.lbHide[pos]`,
+  the group's stats named under it — a tick hides or shows the group's columns, and a sort left on a hidden group falls back to the
+  default); **Table format** the Baseball-Reference / Classic switch, the same `FB_TABLES` as Settings ▸ Appearance. Every control
+  redraws the list at once and the dropdown stays up (`POP.open`; `S.lbTab` remembers the tab, so the button reopens on it); ×, a tap
+  outside or a page change close it; **Escape cancels** — `filterSnap()` is taken at `openPanel` and put back by `closePanel(true)`
+  (position, season, who's listed, the hidden groups, the tables' dress). The old WR/TE/RB/QB segment, season select and Qualified
+  only button are gone from the page.
+* **Pages**: 50 a page on a desktop, 25 on a phone (`lbSize()`; `S.lbSize` once picked, 0 = All), `S.lbPage` (back to 1 on any change
+  of position, season, sort or filter). The page bar (`#pagerbot.pagebar`, `pageNav()`) is ‹, five fixed slots, › of 30px buttons (26
+  on a phone) — the arrows never move — and a native Per page select of 25 / 50 / 100 / All. The last page closes with a 23px strip
+  in the over-header's blue (`tr.lbgap`) and the **Qualified avg** row on the band ("Qual. avg" on a phone). A redraw of the same
+  page (a tick in the Stats tab) keeps the box's scroll: `route()` notes it in `LB.keep` before clearing `main`.
+* **The table** is `table.br` in the one dress every table on the site now wears (the "one table dress" block of `fb.css`, written from
+  the baseball's computed styles — tables.md): 12px `--body` at 500 in 23px rows with 3px of side padding, column names 700 white
+  centred on `--band2` with the over-header a shade deeper (`--band-dk`), gridlines top and right at ink 16% (`--grid`), the 2px
+  `--stripe-line` rule at a group's end and down the frozen Player column, Rk / Player sticky (`.fz` / `.fz2`, `--fzw` measured), the
+  sorted column's cells filled by `paint()` and bold, the lit column name (`--lit`, no arrow, no rule), totals on the band in bold
+  white, the box with the ink-45% edge (`--edge`), the surface and the soft shadow (`--boxsh`); `html.tsans` (Classic) is 13px in
+  28-30px rows; `[data-flat]` drops the box's edge. A value equal to the best among the qualifiers reads **bold italic** (B-Ref's
+  league leader; not G, and not when more than three share it). On a phone the box is 12px in from each side, the over-header is
+  hidden, the column names are a 44px row level with the page bar, and a name ellipsises at 116px. The other pages' tables (Teams,
+  Backfields, Coaches, Dynasty, Role Watch, the player page) wear the same dress through their old `table()` calls and the tall
+  scroller / `floatHead` copy they still use — the next pass tidies their controls and notes.
+* **The heat scale is the baseball's, verbatim** (`heat()` / `paint()` in `fb.js`, from the tables scout's heat.js): Savant's blue →
+  pale teal → red blended in CIE Lab, clamped at the 5th / 95th and flat from the 45th to the 55th, white digits when the fill's
+  luminance is under 0.35 (the reds from ~the 74th, the blues from ~the 29th), near-black `rgb(21,24,26)` otherwise. The old straight
+  sRGB blend matched it at 0 / 50 / 100 only and flipped its ink elsewhere. `pctOf` is the baseball's `insertPct` (ties at half,
+  1-based over n + 1), so a cell reads the same on both sites — a point at most from the old formula, on the bars too.
+* **Not changed on purpose**: the column order is Sean's `COLS` (Fantasy last), so the default sort, xFP/G, sits at the right of the
+  table and off a phone's first screen; the baseball's headline column is right after the name. Moving the Fantasy group first (or
+  pinning the sorted column) is a one-line change in `leaders()` if he wants it. The Leaders note is hidden on a phone, as the
+  baseball's is; the FTN credit stays in the tooltips and the glossary's foot.

@@ -34,7 +34,6 @@
   /* type faces (themes.js sets both inline too) */
   --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
   --body: "Source Sans 3", "Source Sans Pro", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
-  --table: Verdana, Geneva, sans-serif;   /* the tables' face until the tables pass puts them in --body */
   --pbox-w: 860px;
   /* derived, as the baseball stylesheet mixes them (given names here so a rule reads one token) */
   --mark: #ffe14d; --mark-ink: #141414;                            /* the yellow "expected" cell in a build-up */
@@ -165,52 +164,182 @@ input[type="number"], input[type="text"], input[type="search"], input[type="date
 :root[data-flat] .tbtn.on, :root[data-flat] .tbtn[aria-pressed="true"], :root[data-flat] .tbtn[aria-expanded="true"], :root[data-flat] .pill[aria-expanded="true"] { background: color-mix(in srgb, var(--accent-2) 16%, #fff); color: var(--flat-ink); }
 :root[data-flat] .hits, :root[data-flat] .tbox, :root[data-flat] .kpis, :root[data-flat] body[data-page="settings"] main, :root[data-flat] #pboard { border-width: 0; }
 
-/* ---- B-Ref tables (the tables pass dresses these further; here only the tokens moved) ---- */
-.tbox { overflow: auto; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--boxsh); max-width: 100%; }
+/* ---- the one table dress: Baseball-Reference's stats_table in the site's type (the baseball site's table.sbt.brt, 23 Oct 2026) ----
+   12px body type at 500 in 23px rows with 3px of side padding; the column names 12px bold white centred on the band; an over-header
+   row of group names a shade deeper; gridlines top and right only, ink at 16%; a 2px red rule where a group ends and down the frozen
+   column's edge; totals rows on the band in bold white; the sorted column's cells filled in their percentile colour with bold digits;
+   the whole thing in a box with a 1px ink-45% edge, the surface behind it and the soft shadow. Every colour is a color-mix on the
+   tokens, so dark mode and the flat schemes come out right without a second set of literals. Classic (html.tsans) is the same table
+   at 13px in 28-30px rows. Written from the computed values, not the baseball stylesheet (tables.md). */
+.tbox { width: max-content; max-width: 100%; overflow: auto; overscroll-behavior-x: none; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--boxsh); }
 .tbox.tall { max-height: 72vh; }
-/* no white in a table's bounce (Sean, 18 Oct 2026: "get rid of the like white stuff that comes when you scroll and it gets bouncy on a
-   table"): an iPhone rubber-bands a scrolled box past its edge and shows the box's own white there. Sideways it doesn't bounce at all (the
-   page never scrolls sideways, so nothing hands off). Up and down a tall box still hands the swipe to the page at its ends — its bottom
-   rows sit below the first screen, so stopping that would strand them — and the gap it opens is painted to match: the blue of the column
-   names at the top, the blue of a totals row (else the rows' white) at the foot. The box's own ground never shows at rest; the table
-   covers it. */
-.tbox { overscroll-behavior-x: none; }
+:root[data-flat] .tbox { border-width: 0; }   /* Jets: no edge, the shadow stays */
+/* no white in a table's bounce (Sean, 18 Oct 2026): an iPhone rubber-bands a scrolled box past its edge and shows the box's own white
+   there. Sideways it doesn't bounce at all (the page never scrolls sideways). Up and down a tall box still hands the swipe to the page at
+   its ends, and the gap it opens is painted to match: the blue of the column names at the top, the blue of a totals row (else the rows'
+   white) at the foot. The box's own ground never shows at rest; the table covers it. */
 .tbox.tall { background: linear-gradient(var(--band2) 0 50%, var(--tail, var(--surface)) 50% 100%) padding-box, var(--surface); }
 .tbox.tall:has(tbody > tr.tot:last-child) { --tail: var(--band2); }
-/* no bounce on a phone at all (Sean, 20 Oct 2026: "get rid of the table bouncy effect on mobile"): on a touch screen a tall table is its
-   full height and scrolls with the page (a sideways slide doesn't bounce), and a copy of its column names (floatHead in fb.js) is pinned
-   under the site header in its place — sticky to the page, height-for-height with the real ones so it leaves with the table's foot */
+/* no bounce on a phone at all (Sean, 20 Oct 2026): on a touch screen a tall table is its full height and scrolls with the page (a
+   sideways slide doesn't bounce), and a copy of its column names (floatHead in fb.js) is pinned under the site header in its place —
+   sticky to the page, height-for-height with the real ones so it leaves with the table's foot. (The Leaders page doesn't use it any more:
+   it is a standing page whose box is the one scroller, as the baseball Leaderboard's is.) */
 .twrap > .fhead { display: none; }
 @media (pointer: coarse), (max-width: 640px) {
   .tbox.tall { max-height: none; }
   .twrap > .fhead { display: block; position: sticky; top: calc(var(--toph, 0px) - 1px); z-index: 4; height: calc(var(--fhh, 0px) + 1px); padding: 1px 0 0 1px; box-sizing: border-box; pointer-events: none; }
-  .twrap > .fhead + .tbox { margin-top: calc(-1px - var(--fhh, 0px)); }   /* the box slides up under the copy, not the copy down over the box: a sticky box's own margin would let it hang past the table's foot */
+  .twrap > .fhead + .tbox { margin-top: calc(-1px - var(--fhh, 0px)); }   /* the box slides up under the copy, not the copy down over the box */
   .fhead > .fhclip { pointer-events: auto; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: none; }
   .fhclip::-webkit-scrollbar { display: none; }
   table.br.fhtable { table-layout: fixed; min-width: 0; }
 }
-table.br { border-collapse: separate; border-spacing: 0; font: 11px/1.25 var(--table); font-variant-numeric: tabular-nums; width: max-content; min-width: 100%; }
-.br th, .br td { padding: 4px 6px; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); text-align: center; white-space: nowrap; background: var(--surface); }
-.br thead th { background: var(--band2); color: #fff; font-weight: 700; position: sticky; top: 0; z-index: 2; }
-.br thead tr.over th { background: var(--band-dk); }
-.br thead tr.over + tr th { top: 21px; }
+table.br { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font: 500 12px/1.25 var(--body); font-variant-numeric: tabular-nums; }
+.br th, .br td { height: 23px; padding: 0 3px; line-height: 1.25; white-space: nowrap; letter-spacing: 0; text-transform: none; }
+/* column names: bold white, centred (a left-aligned column's too), on the band; a thin white rule between them and none under them */
+.br thead th { position: sticky; top: 0; z-index: 4; background: var(--band2); color: #fff; font-weight: 700; text-align: center; border-right: 1px solid rgba(255, 255, 255, .35); border-bottom: 0; }
+.br thead tr.over th { background: var(--band-dk); }           /* the group names, a shade deeper */
+.br thead tr.over + tr th { top: var(--overh, 23px); }          /* the names sit under the over row when both pin */
+.br th:last-child, .br td:last-child { border-right: 0; }
 .br th.sort { cursor: pointer; user-select: none; }
-.br th.lit { background: var(--lit); }
-.br td.l, .br th.l { text-align: left; }
-.br .ge { border-right: 2px solid var(--stripe-line); }
-.br .fz { position: sticky; left: 0; z-index: 1; }
-.br thead .fz { z-index: 3; }
-.br .fz2 { position: sticky; left: var(--fzw, 34px); z-index: 1; border-right: 2px solid var(--stripe-line); }
-.br thead .fz2 { z-index: 3; }
-.br tr.tot td { background: var(--band2); color: #fff; font-weight: 700; border-right-color: rgba(255, 255, 255, .35); }
-.br tr.tot.first td { border-top: 2px solid var(--stripe-line); }
-.br td.heat { font-weight: 700; }
-.br td.dim { color: var(--muted); }
-.br .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ink) 30%, transparent); text-underline-offset: 2px; cursor: pointer; }
-.br td.kexp { background: var(--mark); color: var(--mark-ink); font-weight: 700; }
+.br th.lit { background: var(--lit); font-weight: 700; box-shadow: none; }   /* the sorted column name: a 22% white wash — no arrow, no rule under it */
+.br th.lit::after { content: none; }
+/* cells: right-aligned numbers, gridlines top and right only */
+.br td { background: var(--surface); color: var(--ink); font-weight: 500; text-align: right; border-top: 1px solid var(--grid); border-right: 1px solid var(--grid); }
+.br td.l { text-align: left; }
+.br td.c { text-align: center; }
+.br td.rk { text-align: center; color: var(--muted); }
+.br td.dim { color: var(--muted); }                              /* an "Act" cell beside an "Exp" one, a game he didn't play */
+.br .ge { border-right: 2px solid var(--stripe-line); }         /* a group's last column, on every row alike */
+/* frozen columns: the first at 0, a second at --fzw (the first header cell's measured width); opaque, the red rule down the second's edge */
+.br .fz { position: sticky; left: 0; z-index: 2; }
+.br .fz2 { position: sticky; left: var(--fzw, 34px); z-index: 2; border-right: 2px solid var(--stripe-line); }
+.br thead .fz, .br thead .fz2 { z-index: 6; }
+.br thead th.fz, .br thead th.fz2 { background: var(--band2); }
+.br td.fz, .br td.fz2 { background: var(--surface); }
+.br td.lead { font-weight: 700; }                                /* led the pool: bold; the best of all: bold italic (B-Ref's) */
+.br td.mlblead { font-weight: 700; font-style: italic; }
+.br td.heat { font-weight: 700; }                                /* a heat-mapped cell (paint() sets the colours inline): bold, filled edge to edge */
+.br td.pos { color: #b3261e; font-weight: 600; }
+.br td.neg { color: #2f5fa8; font-weight: 600; }
+/* totals rows on the band, bold white, white separators; a 2px red rule over the first, a thin white one over a second */
+.br tr.tot td { background: var(--band2); color: #fff; font-weight: 700; border-right-color: rgba(255, 255, 255, .55); border-top: 1px solid rgba(255, 255, 255, .55); }
+.br tr.tot.first td, .br tr.gap + tr.tot td { border-top: 2px solid var(--stripe-line); }
+.br tr.tot td.ge { border-right: 2px solid var(--stripe-line); }
+.br tr.tot td.dim { color: #fff; }
+.br tr.gap { display: none; }                                    /* built but hidden; the rule above does its job. The Leaders list shows its own (.lbgap) */
+.br tr.cur td { background: var(--surface); }                    /* the page's own season: no tint any more (18 Oct 2026) */
+/* names: plain type, underlined only on hover (the baseball's .pbname) */
+.br .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 500; color: var(--ink); text-decoration: none; cursor: pointer; }
+.br .lnk:hover { text-decoration: underline; }
+/* a build-up's marked running number: yellow, bold (the player pass hangs its word outside) */
+.br td.kexp { background: var(--mark) !important; color: var(--mark-ink) !important; font-weight: 700; }
 .br tr.kfin td { font-weight: 700; }
-.br .pill { display: inline-block; min-width: 40px; min-height: 0; padding: 1px 5px; border: 0; box-shadow: none; font: inherit; font-weight: 700; }   /* a chip inside a table, not the stand-alone pill */
-.br tr.cur td { background: color-mix(in srgb, var(--band2) 14%, var(--surface)); }
+.br .pill { display: inline-block; min-width: 40px; min-height: 0; padding: 1px 5px; border: 0; box-shadow: none; font: inherit; font-weight: 700; }   /* a chip inside a table (the xFP build-up's ±), not the stand-alone pill */
+/* Classic (Settings ▸ Appearance ▸ Tables, html.tsans): 13px type, 28-30px rows, 5px padding, 30px column names */
+:root.tsans table.br { font-size: 13px; line-height: 1.45; }
+:root.tsans .br thead th { height: 30px; padding: 0 5px; line-height: normal; }
+:root.tsans .br thead tr.over th { height: 24px; padding: 0 5px; font-size: 11.5px; }
+:root.tsans .br thead tr.over + tr th { top: 24px; }
+:root.tsans .br td { height: 28px; padding: 0 5px; }
+:root[data-view="mobile"].tsans table.br { font-size: 12px; }
+:root[data-view="mobile"].tsans .br thead tr.over th { font-size: 11.5px; }
+
+/* ---- the Leaders page in the Leaderboard's dress (Sean, 23 Oct 2026: "exactly like the baseball one"): a standing page — the page never
+   scrolls, the rows' box does — one Filters button with the count beside it, the title over the red rule, the framed box with the column
+   names pinned at its top and the page bar as its last row, the note under it on a desktop ---- */
+body[data-page="leaders"] { padding-bottom: 0; }
+body[data-page="leaders"] main { display: flex; flex-direction: column; max-width: 1240px; margin: 18px auto 0; padding: 0 30px; height: calc(100dvh - var(--header-h, 63px) - 36px); overflow: clip; }
+:root[data-view="mobile"] body[data-page="leaders"] main { margin: 4px 6px 0; padding: 0; height: calc(100dvh - var(--header-h, 47px) - 20px - env(safe-area-inset-bottom, 0px)); }
+#board { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: fit-content; max-width: 100%; margin: 0 auto; }   /* the controls, the title and the box share a left edge */
+:root[data-view="mobile"] #board { width: 100%; margin: 0; }
+.ctlrow { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: -6px; padding: 0 0 4px; }   /* midway between the header's red line and the title */
+.ctlrow .tbtns { display: inline-flex; align-items: center; gap: 6px; }
+.ctlrow .tbtn { height: 34px; min-height: 34px; }
+.ctlrow .count { margin-left: 2px; font-variant-numeric: tabular-nums; }
+:root[data-view="mobile"] .ctlrow { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; gap: 6px; margin-top: 0; padding: 4px 8px 2px; }   /* a long row slides sideways */
+:root[data-view="mobile"] .ctlrow::-webkit-scrollbar { display: none; }
+:root[data-view="mobile"] .ctlrow > * { flex: none; }
+:root[data-view="mobile"] .ctlrow .tbtns { gap: 4px; }
+:root[data-view="mobile"] .ctlrow .tbtn { height: 32px; min-height: 32px; }
+:root[data-view="mobile"] .ctlrow .count { margin-left: 4px; font-size: 12px; white-space: nowrap; }
+.lbtitle { flex: none; display: flex; align-items: baseline; gap: 12px; margin: 5px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--stripe-line); }
+.lbtitle h2 { margin: 0; font: 700 26px/1 var(--display); color: var(--ink); letter-spacing: .01em; }
+.lbtitle span { font: 500 13px var(--body); color: var(--muted); }
+:root[data-view="mobile"] .lbtitle { flex-wrap: wrap; row-gap: 2px; margin: 2px 12px 8px; padding-bottom: 4px; }
+:root[data-view="mobile"] .lbtitle h2 { font-size: 21px; white-space: nowrap; }
+.lbbox { flex: 0 1 auto; min-height: 0; overflow: auto; overscroll-behavior: none; margin: 0 auto 14px; }   /* the one scroller on the page; no rubber-band */
+:root[data-view="mobile"] .lbbox { width: auto; max-width: calc(100% - 24px); margin: 0 12px; }
+:root[data-view="mobile"] .lbbox .br tr.over { display: none; }   /* a phone drops the group names and gives the column names a 44px row, level with the page bar */
+:root[data-view="mobile"] .lbbox .br thead tr.over + tr th { top: 0; }
+:root[data-view="mobile"] .lbbox .br thead tr:not(.over) th { height: 44px; }
+:root[data-view="mobile"] .lbbox .br td.fz2 { max-width: 116px; overflow: hidden; text-overflow: ellipsis; }   /* a long name ellipsises in the frozen column */
+.lbbox .br tr.lbgap { display: table-row; }                       /* the strip over the Qualified avg row: a full row in the over-header's blue */
+.lbbox .br tr.lbgap td { height: 23px; border: 0; background: var(--band-dk); }
+.lbnote { flex: none; margin: 8px 0 0; padding: 0 4px; font: 500 12px/1.55 var(--body); color: var(--muted); max-width: none; }
+:root[data-view="mobile"] .lbnote { display: none; }             /* the room goes to rows */
+/* the page bar as the table's last row: 44px, grey, sticky at the box's foot; ‹ five fixed slots › of 30px buttons, Per page at the right */
+.pagebar { position: sticky; left: 0; bottom: 0; z-index: 4; width: 100%; height: 44px; min-height: 44px; padding: 0 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: var(--barbg); border-top: 1px solid var(--barrule); font-size: 12px; color: var(--ink-2); }
+.pagebar .pnav { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; align-items: center; flex: none; }   /* seven equal cells, so the arrows never move */
+.pagebar .pbtn { width: 30px; min-width: 30px; height: 30px; padding: 0; border: 1px solid var(--edge); background: var(--surface); color: var(--ink); font: 500 13px/28px var(--body); text-align: center; box-shadow: none; }
+.pagebar .pbtn[aria-current] { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); }
+.pagebar .pbtn:disabled { opacity: 1; cursor: default; }         /* a ‹ on the first page looks like an idle one */
+@media (hover: hover) { .pagebar .pbtn:not(:disabled):hover { text-decoration: underline; } }
+.pagebar .pgap, .pagebar .pslot { font: 500 13px var(--body); color: var(--muted); text-align: center; padding: 0 2px; }
+.pagebar .psize { display: flex; align-items: center; gap: 6px; margin: 0; font: 500 12.5px var(--body); color: var(--muted); white-space: nowrap; }
+.pagebar .psize select { height: 30px; padding: 0 6px; border: 1px solid var(--hair); background: var(--surface); color: var(--ink); font: 500 13px var(--body); }
+:root[data-flat] .pagebar .pbtn { border-color: transparent; }
+:root[data-view="mobile"] .pagebar { flex-wrap: nowrap; gap: 8px; padding: 4px 8px; }
+:root[data-view="mobile"] .pagebar .pbtn { width: 26px; min-width: 26px; height: 26px; font-size: 12.5px; line-height: 24px; }
+:root[data-view="mobile"] .pagebar .pgap { font-size: 12px; color: var(--ink-2); }
+:root[data-view="mobile"] .pagebar .psize { font-size: 12px; }
+:root[data-view="mobile"] .pagebar .psize select { height: 26px; padding: 0 2px; }
+
+/* ---- the Filters dropdown (the baseball's #pop): one fixed box of one size whatever tab is open, hung 6px under its button; the tab row
+   pinned at its top, the Clear foot at its bottom, only the middle scrolling; 560px wide on a desktop, 8px in from each side on a phone ---- */
+#pop { position: fixed; z-index: 120; display: flex; flex-direction: column; overflow: hidden; width: 560px; max-width: min(720px, calc(100vw - 16px));
+  height: max(300px, min(560px, calc(100dvh - var(--pop-top, 120px) - 22px - env(safe-area-inset-bottom, 0px)))); border: 1px solid var(--hair); border-radius: 6px; background: var(--surface); color: var(--ink); box-shadow: var(--popsh); }
+#pop[hidden] { display: none; }
+:root[data-view="mobile"] #pop { width: auto; max-width: none; }
+#pop .pop-close { position: absolute; top: 6px; right: 8px; z-index: 2; width: 26px; height: 26px; padding: 0; border: 1px solid var(--hair); background: var(--surface); color: var(--ink); font-size: 17px; line-height: 1; box-shadow: none; }
+#pop .pop-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px 0; }
+#pop .ptabs { flex: none; display: flex; flex-wrap: nowrap; gap: 18px; margin: 0 0 12px; padding: 0 34px 0 2px; border-bottom: 1px solid var(--hair); overflow-x: auto; scrollbar-width: none; }   /* room for the × */
+#pop .ptab { flex: none; margin: 0 0 -1px; padding: 8px 0 7px; min-height: 30px; border: 0; border-bottom: 2px solid transparent; background: none; font: 500 14px var(--display); color: var(--muted); white-space: nowrap; box-shadow: none; }
+#pop .ptab:hover { color: var(--ink); }
+#pop .ptab.on { color: var(--ink); border-bottom-color: var(--hair); }
+:root[data-view="mobile"] #pop .ptabs { gap: 14px; }
+:root[data-view="mobile"] #pop .ptab { min-height: 32px; font-size: 13.5px; }
+#pop .textmodal { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding-right: 4px; }
+#pop .popsec { margin: 14px 0 10px; padding: 10px 0 2px; }
+#pop .popsec h4 { margin: 0 0 6px; font: 500 12px var(--body); color: var(--muted); }
+#pop .popsec p.note { margin: 8px 0 0; font: 500 13px/1.45 var(--body); color: var(--muted); max-width: none; }
+#pop .poprow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; min-height: 32px; }
+:root[data-view="mobile"] #pop .poprow { gap: 8px; }
+#pop .splbl { font: 500 11px var(--body); color: var(--muted); }
+#pop .popfoot { flex: none; display: flex; justify-content: flex-end; gap: 10px; margin: 0 -12px; padding: 8px 12px; border-top: 1px solid var(--hair); background: var(--surface); }
+#pop .popclear { font: 500 13px var(--body); }
+#pop .seg, #pop .segbtn, #pop .btn, #pop .pill, #pop .tbtn { box-shadow: none; }   /* nothing inside the dropdown carries the lift */
+#pop .pill[aria-expanded="true"] { background: var(--surface); color: var(--ink); border-color: var(--rail); }   /* a pill with its list open looks no different (the baseball's .ddon) */
+:root[data-flat] #pop .pill[aria-expanded="true"] { background: color-mix(in srgb, var(--accent-2) 16%, #fff); color: var(--flat-ink); border-color: transparent; }
+#pop .seg { flex-wrap: wrap; }
+#pop .colgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px 24px; margin: 10px 0 4px; }
+:root[data-view="mobile"] #pop .colgrid { grid-template-columns: minmax(0, 1fr); }
+#pop .colgroup h4 { margin: 0 0 6px; padding-bottom: 3px; border-bottom: 1px solid var(--hair); font: 500 12px var(--body); color: var(--accent-2-text); }
+#pop .toggle { display: flex; align-items: flex-start; gap: 6px; padding: 3px 0; font: 600 12px/1.3 var(--body); color: var(--ink-2); cursor: pointer; }
+#pop .toggle input { flex: none; width: 13px; height: 13px; margin: 2px 3px 3px 4px; accent-color: var(--btn); }
+#pop .toggle small { display: block; font-weight: 500; color: var(--muted); }
+/* a pill: the stand-alone box with its chevron in the link colour; .solo (one choice) hides it */
+.pill { gap: 10px; justify-content: space-between; text-align: left; max-width: 100%; overflow: hidden; }
+.pill .pill-text { font-weight: 500; }
+.pill .chev { flex: none; color: var(--accent-2-text); }
+.pill.solo .chev { display: none; }
+.pill.solo { cursor: default; }
+/* the list that opens under a pill, appended to body so no box clips it */
+.ddmenu { position: fixed; z-index: 1000; max-height: min(50vh, 420px); overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 2px 0; border: 1px solid var(--hair); background: var(--surface); box-shadow: none; text-align: left; }
+.ddmenu .ddi { display: block; width: 100%; margin: 0; padding: 1px 12px; border: 0; background: none; text-align: left; font: 500 19px/1.45 var(--display); color: var(--ink); white-space: nowrap; box-shadow: none; }
+.ddmenu .ddi:hover, .ddmenu .ddi:focus { background: var(--hover); outline: 0; }
+.ddmenu .ddh { padding: 6px 12px 2px; font: 700 11px var(--body); color: var(--muted); }
+:root[data-flat] .ddmenu, :root[data-flat] #pop { border-width: 0; }
 
 /* ---- player band (the player pass redraws it; the tokens here) ---- */
 .band { background: var(--band2); color: #fff; border-bottom: 3px solid var(--stripe-line); margin-top: 14px; padding: 14px 16px 10px; }

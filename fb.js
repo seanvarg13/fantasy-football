@@ -32,13 +32,41 @@
   }
 
   // ---------- formatting and colour ----------
-  const STOPS = [[54, 97, 173], [180, 207, 209], [216, 33, 41]];   // Savant's blue / middle / red, as the baseball site's pctStyle
+  // the colour scale is the baseball site's, verbatim (23 Oct 2026): Savant's blue → pale teal → red blended in CIE Lab (d3's interpolateLab,
+  // D50 white), clamped at the 5th / 95th and held flat from the 45th to the 55th; white digits on any fill darker than a mid tone (the reds
+  // from about the 74th percentile, the blues from about the 29th), near-black on the pale ends and the teal. A straight sRGB blend of the
+  // same stops had sat off it at every percentile but 0 / 50 / 100 and flipped its ink in a different place, so the two sites' cells now
+  // read the same (tables.md §3)
+  const LAB = (() => {
+    const Xn = 0.96422, Zn = 0.82521, t0 = 4 / 29, t1 = 6 / 29, t2 = 3 * t1 * t1, t3 = t1 * t1 * t1;
+    const to = (hex) => {
+      const [r, g, b] = [1, 3, 5].map((i) => { const x = parseInt(hex.slice(i, i + 2), 16) / 255; return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; });
+      const f = (t) => (t > t3 ? Math.cbrt(t) : t / t2 + t0), grey = r === g && g === b;
+      const y = f(0.2225045 * r + 0.7168786 * g + 0.0606169 * b);
+      const x = grey ? y : f((0.4360747 * r + 0.3850649 * g + 0.1430804 * b) / Xn), z = grey ? y : f((0.0139322 * r + 0.0971045 * g + 0.7141733 * b) / Zn);
+      return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+    };
+    const from = ([l, a, bb]) => {
+      const g = (t) => (t > t1 ? t * t * t : t2 * (t - t0)), o = (x) => Math.max(0, Math.min(255, Math.round(255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055))));
+      let y = (l + 16) / 116, x = y + a / 500, z = y - bb / 200; x = Xn * g(x); y = g(y); z = Zn * g(z);
+      return [o(3.1338561 * x - 1.6168667 * y - 0.4906146 * z), o(-0.9787684 * x + 1.9161415 * y + 0.0334540 * z), o(0.0719453 * x - 0.2289914 * y + 1.4052427 * z)];
+    };
+    return { to, from };
+  })();
+  const SAVANT = [[5, LAB.to("#3661ad")], [45, LAB.to("#b4cfd1")], [55, LAB.to("#b4cfd1")], [95, LAB.to("#d82129")]];
+  const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  const heatCache = new Map();
   function heat(p) {
-    const t = Math.max(0, Math.min(100, p)) / 100, lo = t < .5, a = lo ? STOPS[0] : STOPS[1], b = lo ? STOPS[1] : STOPS[2], u = lo ? t * 2 : (t - .5) * 2;
-    const c = a.map((x, i) => Math.round(x + (b[i] - x) * u)), lum = (.2126 * c[0] + .7152 * c[1] + .0722 * c[2]) / 255;
-    return { bg: `rgb(${c})`, fg: lum < .55 ? "#fff" : "#0c2340" };
+    if (p == null || !isFinite(p)) return null;
+    if (heatCache.has(p)) return heatCache.get(p);
+    const q = Math.max(5, Math.min(95, p)); let i = 1; while (i < SAVANT.length - 1 && SAVANT[i][0] < q) i++;
+    const [p0, c0] = SAVANT[i - 1], [p1, c1] = SAVANT[i], u = (q - p0) / (p1 - p0), c = LAB.from(c0.map((v, j) => v + (c1[j] - v) * u));
+    const s = { bg: `rgb(${c.join(",")})`, fg: lum(c) < 0.35 ? "rgb(255,255,255)" : "rgb(21,24,26)" };
+    heatCache.set(p, s); return s;
   }
-  const paint = (node, p) => { if (p == null || !isFinite(p)) return node; const h = heat(p); node.style.background = h.bg; node.style.color = h.fg; node.classList.add("heat"); return node; };
+  // a heat-mapped cell: the fill and its ink inline, --heat / --heatfg for a rule that wants them, class heat (bold in the stylesheet)
+  const paint = (node, p) => { const h = heat(p); if (!h) return node; node.style.background = h.bg; node.style.color = h.fg; node.style.setProperty("--heat", h.bg); node.style.setProperty("--heatfg", h.fg); node.classList.add("heat"); return node; };
   const num = (v, d = 1) => v == null || !isFinite(v) ? "–" : v.toFixed(d);
   const sgn = (v, d = 1) => v == null || !isFinite(v) ? "–" : (Math.abs(v) < Math.pow(10, -d) / 2 ? (0).toFixed(d) : (v > 0 ? "+" : "−") + Math.abs(v).toFixed(d));
   const pc = (v, d = 1) => v == null || !isFinite(v) ? "–" : v.toFixed(d) + "%";
@@ -220,7 +248,8 @@
   function pctOf(y, pos, k, v) {
     const s = pool(y, pos).sorted[k]; if (v == null || !isFinite(v) || !s || s.length < 8) return null;
     let lo = 0, eq = 0; for (const x of s) { if (x < v) lo++; else if (x === v) eq++; }
-    const p = 100 * (lo + eq / 2) / s.length; return (METRIC[k] && METRIC[k].hib === 0) ? 100 - p : p;
+    const p = Math.round(100 * (lo + 1 + eq / 2) / (s.length + 1));   // the baseball's insertPct: ties at half, 1-based over n + 1, so a cell reads the same on both sites
+    return (METRIC[k] && METRIC[k].hib === 0) ? 100 - p : p;
   }
 
   // ---------- B-Ref table helper ----------
@@ -305,42 +334,201 @@
     inn.append(nav, sr, nt); top.append(inn); return top;
   }
 
+  // ---------- pills and the list that opens under one (the baseball's pillSelect / ddOpenOn) ----------
+  // a pill is a white boxy button with a chevron; its list is appended to body (fixed, so no box clips it), left-aligned 1px under the
+  // pill, above it when there's no room below; any click elsewhere or Escape closes it, a scroll or resize re-places it
+  let DD = null;
+  const svgEl = (tag, attrs) => { const s = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const k in attrs) s.setAttribute(k, attrs[k]); return s; };
+  const chev = () => { const s = svgEl("svg", { class: "chev", viewBox: "0 0 10 6", width: "10", height: "6", "aria-hidden": "true" }); s.append(svgEl("path", { d: "M1 1l4 4 4-4", fill: "none", stroke: "currentColor", "stroke-width": "1.6", "stroke-linecap": "round", "stroke-linejoin": "round" })); return s; };
+  function pillSelect(text, opts, cur, onPick, aria) {
+    const b = el("button", "pill"); b.type = "button"; b.setAttribute("aria-haspopup", "listbox"); b.setAttribute("aria-expanded", "false"); if (aria) b.setAttribute("aria-label", aria);
+    b.append(el("span", "pill-text", text), chev());
+    if (opts.length < 2) { b.classList.add("solo"); return b; }   // one choice: no list
+    b.addEventListener("click", (e) => { e.stopPropagation(); ddOpenOn(b, opts, cur, onPick); });
+    return b;
+  }
+  function ddOpenOn(trig, opts, cur, onPick) {
+    const was = DD && DD.trig === trig; ddClose(); if (was) return;   // a second click on the same pill just closes
+    const menu = el("div", "ddmenu"); menu.setAttribute("role", "listbox");
+    for (const [v, lab] of opts) {
+      if (v == null) { menu.append(el("div", "ddh", lab)); continue; }
+      const b = el("button", "ddi" + (v === cur ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "option"); b.setAttribute("aria-selected", String(v === cur));
+      b.addEventListener("click", () => { ddClose(); if (v !== cur) onPick(v); }); menu.append(b);
+    }
+    menu.addEventListener("click", (e) => e.stopPropagation());
+    document.body.append(menu); DD = { trig, menu }; trig.classList.add("ddon"); trig.setAttribute("aria-expanded", "true"); ddPlace();
+    const on = menu.querySelector(".ddi.on"); if (on) on.scrollIntoView({ block: "nearest" });
+  }
+  function ddPlace() {
+    if (!DD) return; const { trig, menu } = DD, r = trig.getBoundingClientRect();
+    if (!trig.isConnected || (!r.width && !r.height)) { ddClose(); return; }   // the opener was redrawn away
+    menu.style.minWidth = Math.round(r.width) + "px";
+    const w = menu.offsetWidth, h = menu.offsetHeight;
+    const left = Math.max(6, Math.min(r.left, innerWidth - w - 6)), top = r.bottom + h + 6 > innerHeight && r.top - h - 1 > 6 ? r.top - h - 1 : r.bottom + 1;
+    menu.style.left = Math.round(left) + "px"; menu.style.top = Math.round(top) + "px";
+  }
+  function ddClose() { if (!DD) return; DD.menu.remove(); DD.trig.classList.remove("ddon"); DD.trig.setAttribute("aria-expanded", "false"); DD = null; }
+  document.addEventListener("click", ddClose);
+  window.addEventListener("scroll", (e) => { if (DD && !DD.menu.contains(e.target)) ddPlace(); }, { passive: true, capture: true });
+  window.addEventListener("resize", ddPlace);
+
+  // ---------- the Filters dropdown (the baseball's #pop) ----------
+  // Sean, 23 Oct 2026 ("make the site look and function exactly like the baseball one"): a list page's filters live in one dropdown hung 6px
+  // under its Filters button — the tabs across its top, the Clear foot pinned, only the middle scrolling, one size whatever tab is open.
+  // Changes apply as they're made (every control redraws the list and the dropdown stays up); ×, a tap outside or a page change close it,
+  // Escape puts back what was there when it opened. POP.open is the tab showing, S.lbTab the last one used, so the button reopens there.
+  const POP = { open: null, snap: null, el: null };
+  function popEl() {
+    if (POP.el) return POP.el;
+    const p = el("div", "pop grppop"); p.id = "pop"; p.hidden = true;
+    const x = el("button", "pop-close", "×"); x.type = "button"; x.setAttribute("aria-label", "Close"); x.addEventListener("click", () => closePanel(false));
+    const b = el("div", "pop-body"); b.id = "pop-body"; p.append(x, b); document.body.append(p);
+    return (POP.el = p);
+  }
+  // what Escape puts back: the filters a tab can change (the position, season, who's listed, the hidden groups, the tables' dress)
+  const filterSnap = () => ({ pos: S.pos, season: S.season, qualOnly: S.qualOnly, lbHide: S.lbHide, tables: window.FB_TABLES ? window.FB_TABLES.get() : null });
+  function openPanel(tab) { POP.snap = JSON.stringify(filterSnap()); POP.open = tab; S.lbTab = tab; save(); route(); }
+  function closePanel(cancel) {
+    popEl().hidden = true; ddClose();
+    if (cancel && POP.snap) { const s = JSON.parse(POP.snap); for (const k of ["pos", "season", "qualOnly", "lbHide"]) S[k] = s[k]; if (window.FB_TABLES && s.tables !== window.FB_TABLES.get()) window.FB_TABLES.set(s.tables); }
+    POP.open = null; POP.snap = null; save(); route();
+  }
+  // a tap outside applies and closes (one inside the dropdown or on the button row doesn't count, nor one whose target a redraw just removed)
+  document.addEventListener("click", (e) => { if (!POP.open) return; if (e.composedPath().some((n) => n.id === "pop" || (n.classList && n.classList.contains("tbtns"))) || !e.target.isConnected) return; closePanel(false); });
+  document.addEventListener("keydown", (e) => { if (e.key !== "Escape") return; if (DD) { ddClose(); return; } if (POP.open) closePanel(true); });
+  window.addEventListener("hashchange", () => { if (POP.open) { POP.open = null; POP.snap = null; popEl().hidden = true; } });
+  window.addEventListener("resize", placePop); window.addEventListener("scroll", placePop, true);   // capture: any scroller moving re-places the dropdown under its button
+  function placePop() {
+    const pop = POP.el; if (!pop || pop.hidden) return;
+    const btn = $(".tbtns [data-panel]"); if (!btn) return;
+    const r = btn.getBoundingClientRect(), mob = isMobile();
+    pop.style.maxHeight = Math.max(220, innerHeight - r.bottom - 16) + "px";   // never taller than the room under the button
+    pop.style.top = Math.round(r.bottom + 6) + "px"; pop.style.setProperty("--pop-top", Math.round(r.bottom + 6) + "px");
+    if (mob) { pop.style.left = "8px"; pop.style.right = "8px"; pop.style.width = "auto"; return; }   // a phone: spans the screen 8px in
+    pop.style.right = "auto"; pop.style.width = ""; pop.style.left = "0px";
+    const w = pop.offsetWidth; pop.style.left = Math.round(Math.max(8, Math.min(r.left, innerWidth - w - 8))) + "px";   // left-aligned with the button, clamped 8px inside the window
+  }
+  const isMobile = () => document.documentElement.dataset.view === "mobile";
+
+  // the page bar's numbers: ‹, five fixed slots, › — the arrows never move (Sean, 18 Oct 2026, on the baseball site). ‹ 1 2 3 … N › near the
+  // start, ‹ 1 … c … N › in the middle, ‹ 1 … N−2 N−1 N › at the end; five pages or fewer all shown, centred in the slots
+  function pageNav(page, n, go) {
+    const nav = el("div", "pnav pslots"), btn = (lab, p, cur) => { const b = el("button", "pbtn", lab); b.type = "button"; if (cur) b.setAttribute("aria-current", "page"); if (p == null) b.disabled = true; else b.addEventListener("click", () => go(p)); return b; };
+    let slots;
+    if (n <= 5) { slots = Array(Math.floor((5 - n) / 2)).fill(null); for (let p = 1; p <= n; p++) slots.push(p); while (slots.length < 5) slots.push(null); }
+    else if (page <= 2) slots = [1, 2, 3, "…", n]; else if (page >= n - 1) slots = [1, "…", n - 2, n - 1, n]; else slots = [1, "…", page, "…", n];
+    nav.append(btn("‹", page > 1 ? page - 1 : null));
+    for (const s of slots) nav.append(s == null ? el("span", "pslot") : s === "…" ? el("span", "pgap", "…") : btn(String(s), s, s === page));
+    nav.append(btn("›", page < n ? page + 1 : null));
+    return nav;
+  }
+
   // ---------- Leaders ----------
+  // the baseball Leaderboard's dress (23 Oct 2026): one Filters button with the count beside it, the title over the red rule, the table in the
+  // framed box with the column names pinned at its top and the page bar at its foot — only the box scrolls — and the note under it. The WR /
+  // TE / RB / QB switch, the season and Qualified only live in the dropdown's tabs now, with the column groups and the tables' dress.
+  const POS_WORD = { WR: "Receiver", TE: "Tight end", RB: "Running back", QB: "Quarterback" };
+  const LB_TABS = [["position", "Position"], ["season", "Season"], ["stats", "Stats"], ["table", "Table format"]];
+  const LB = { keep: null };   // the box's scroll noted by route() before a redraw, put back when the same page redraws (a tick in the Stats tab)
+  const lbSize = () => ([25, 50, 100, 0].includes(S.lbSize) ? S.lbSize : isMobile() ? 25 : 50);   // 0 = everyone on one page
+  const lbHidden = (pos) => (S.lbHide && S.lbHide[pos]) || [];
+  const minText = (pos, meta) => { const f = frac(meta); return pos === "QB" ? `${Math.round(200 * f)}+ dropbacks` : pos === "RB" ? `${Math.round(90 * f)}+ carries + targets` : `${Math.round(200 * f)}+ routes or ${Math.round(40 * f)}+ targets`; };
   async function leaders(main) {
     const y = SEASONS.includes(+S.season) ? +S.season : CUR, pos = ["WR", "TE", "RB", "QB"].includes(S.pos) ? S.pos : "WR";
     const D = await ensure(y), meta = D.meta;
+    const hide = lbHidden(pos), cols = COLS[pos].filter(([name]) => !hide.includes(name)), keys = cols.flatMap((g) => g[1]);
     const defSort = pos === "QB" ? "fpg" : "xfpg";
-    if (!S.sort || !COLS[pos].some((g) => g[1].includes(S.sort))) { S.sort = defSort; S.dir = -1; }
-    main.textContent = "";
-    const tools = el("div", "tools"), seg = el("div", "seg");
-    for (const p of ["WR", "TE", "RB", "QB"]) { const b = el("button", null, p); b.type = "button"; b.setAttribute("aria-pressed", p === pos); b.addEventListener("click", () => { S.pos = p; S.sort = null; save(); route(); }); seg.append(b); }
-    const ss = el("select", "sel"); ss.setAttribute("aria-label", "Season");
-    for (const s of [...SEASONS].reverse()) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; ss.append(o); }
-    ss.addEventListener("change", () => { S.season = +ss.value; save(); route(); });
-    const all = el("button", "tbtn", "Qualified only"); all.type = "button"; all.setAttribute("aria-pressed", S.qualOnly !== false);
-    all.addEventListener("click", () => { S.qualOnly = S.qualOnly === false; save(); route(); });
-    const rows = D.players.filter((p) => posGroup(p.pos) === pos && (S.qualOnly === false ? (p.tgt || p.car || p.db) : qualifies(p, meta)));
+    if (!S.sort || !keys.includes(S.sort)) { S.sort = keys.includes(defSort) ? defSort : keys[0]; S.dir = METRIC[S.sort].hib === 0 ? 1 : -1; }
     const k = S.sort, dir = S.dir;
+    const rows = D.players.filter((p) => posGroup(p.pos) === pos && (S.qualOnly === false ? (p.tgt || p.car || p.db) : qualifies(p, meta)));
     rows.sort((a, b) => { const va = M(a)[k], vb = M(b)[k]; if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
-    const f = frac(meta), minTxt = pos === "QB" ? `${Math.round(200 * f)}+ dropbacks` : pos === "RB" ? `${Math.round(90 * f)}+ carries + targets` : `${Math.round(200 * f)}+ routes or ${Math.round(40 * f)}+ targets`;
-    tools.append(seg, ss, all, el("span", "count", `${rows.length} ${pos}s · ${y}${meta.through < 18 ? " · through week " + meta.through : ""} · PPR${S.qualOnly === false ? "" : " · " + minTxt}`));
-    main.append(el("h1", "ttl", `${pos === "QB" ? "Quarterback" : pos === "RB" ? "Running back" : pos === "TE" ? "Tight end" : "Receiver"} Leaderboard`), tools);
-    const sortBy = (key) => () => { if (S.sort === key) S.dir = -S.dir; else { S.sort = key; S.dir = METRIC[key].hib === 0 ? 1 : -1; } save(); route(); };
+    const size = lbSize(), n = rows.length, pages = size ? Math.max(1, Math.ceil(n / size)) : 1, page = Math.min(Math.max(1, +S.lbPage || 1), pages);
+    const from = size ? (page - 1) * size : 0, to = size ? Math.min(n, from + size) : n;
+    main.textContent = "";
+    const board = el("section"); board.id = "board";
+    // the control row: the Filters button, labelled by who's listed and how many filters beyond the defaults are on, and the count
+    const ctl = el("div", "ctlrow"); ctl.id = "pagertop";
+    const extra = (y !== CUR) + (S.qualOnly === false) + (hide.length > 0), tb = el("div", "tbtns");
+    const fb = el("button", "btn btn-quiet tbtn" + (POP.open ? " open" : "") + (extra ? " on" : ""), `${POS_WORD[pos]} filters${extra ? ` (${extra})` : ""}`);
+    fb.type = "button"; fb.dataset.panel = "grp"; fb.setAttribute("aria-haspopup", "true"); fb.setAttribute("aria-expanded", String(!!POP.open));
+    fb.addEventListener("click", (e) => { e.stopPropagation(); if (POP.open) closePanel(false); else openPanel(LB_TABS.some(([t]) => t === S.lbTab) ? S.lbTab : "position"); });
+    tb.append(fb);
+    const range = `${n ? from + 1 : 0}–${to} of ${n}`;
+    ctl.append(tb, el("span", "count pcount", isMobile() ? range : `${range} ${pos}s · ${y}${meta.through < 18 ? " · through week " + meta.through : ""} · PPR${S.qualOnly === false ? "" : " · " + minText(pos, meta)}`));
+    const title = el("div", "lbtitle"); title.id = "lbtitle"; title.append(el("h2", null, `${POS_WORD[pos]} Leaderboard`), el("span", null, `by ${METRIC[k].h}`));
+    // the table: Rk · Player · Tm, then the column groups that are showing
+    const sortBy = (key) => () => { if (S.sort === key) S.dir = -S.dir; else { S.sort = key; S.dir = METRIC[key].hib === 0 ? 1 : -1; } S.lbPage = 1; save(); route(); };
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }], end: 1 }];
-    for (const [name, keys] of COLS[pos]) groups.push({ name, end: 1, cols: keys.map((kk) => ({ h: METRIC[kk].h, t: METRIC[kk].t, onSort: sortBy(kk), lit: kk === k })) });
-    const t = table(groups, { tall: true });
-    rows.forEach((p, i) => {
-      const m = M(p), cells = [td(String(i + 1), "fz"), cellLink(p.n, "#player/" + p.id, "l fz2"), td(p.tms && p.tms.length > 1 ? p.tms.join("/") : p.tm)];
-      for (const [, keys] of COLS[pos]) for (const kk of keys) { const c = td(fmtM(kk, m[kk])); if (kk === k) paint(c, pctOf(y, pos, kk, m[kk])); cells.push(c); }
+    for (const [name, ks] of cols) groups.push({ name, end: 1, cols: ks.map((kk) => ({ h: METRIC[kk].h, t: (METRIC[kk].t || METRIC[kk].h) + (METRIC[kk].hib === 0 ? " — lower is better" : ""), onSort: sortBy(kk), lit: kk === k })) });
+    const t = table(groups), box = t.box; box.id = "bscroll"; box.classList.add("lbbox");
+    const pl = pool(y, pos), best = {};   // a value equal to the best among the qualifiers reads bold italic (B-Ref's league leader)
+    for (const kk of keys) { const s = pl.sorted[kk]; if (!s || !s.length || kk === "g") continue; const b = METRIC[kk].hib === 0 ? s[0] : s[s.length - 1]; if (s.filter((v) => v === b).length <= 3) best[kk] = b; }   // a best that a dozen share (a 0.0% drop rate) isn't a lead
+    rows.slice(from, to).forEach((p, i) => {
+      const m = M(p), cells = [td(String(from + i + 1), "fz rk"), cellLink(p.n, "#player/" + p.id, "l fz2"), td(p.tms && p.tms.length > 1 ? p.tms.join("/") : p.tm, "c")];
+      for (const kk of keys) { const c = td(fmtM(kk, m[kk])); if (kk === k) paint(c, pctOf(y, pos, kk, m[kk])); if (best[kk] != null && m[kk] === best[kk] && qualifies(p, meta)) { c.classList.add("mlblead"); c.title = `Best among the qualified ${pos}s`; } cells.push(c); }
       t.addRow(cells);
     });
-    main.append(t.box);
-    const pl = pool(y, pos), avg = (kk) => { const v = pl.ref.map((p) => M(p)[kk]).filter((x) => x != null && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
-    const ac = [td(""), td(`Qualified avg (${pl.ref.length})`, "l fz2"), td("")];
-    for (const [, keys] of COLS[pos]) for (const kk of keys) ac.push(td(fmtM(kk, avg(kk))));
-    t.addRow(ac, "tot first");
+    if (page === pages) {   // the last page closes with the strip and the Qualified avg row
+      t.addRow(keys.map(() => td("")).concat([td(""), td(""), td("")]), "lbgap");
+      const avg = (kk) => { const v = pl.ref.map((p) => M(p)[kk]).filter((x) => x != null && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+      t.addRow([td("", "fz"), td(`${isMobile() ? "Qual." : "Qualified"} avg (${pl.ref.length})`, "l fz2"), td("")].concat(keys.map((kk) => td(fmtM(kk, avg(kk))))), "tot first");
+    }
+    // the page bar as the table's last row
+    const bar = el("div", "pagebar phbot"); bar.id = "pagerbot";
+    bar.append(pageNav(page, pages, (p) => { S.lbPage = p; save(); route(); }));
+    const ps = el("label", "field psize phsize"), sel = el("select"); sel.setAttribute("aria-label", "Per page");
+    for (const [v, lab] of [[25, "25"], [50, "50"], [100, "100"], [0, "All"]]) { const o = el("option", null, lab); o.value = v; if (v === size) o.selected = true; sel.append(o); }
+    sel.addEventListener("change", () => { S.lbSize = +sel.value; S.lbPage = 1; save(); route(); });
+    ps.append(el("span", null, "Per page"), sel); bar.append(ps); box.append(bar);
+    board.append(ctl, title, box); main.append(board);
+    main.append(el("p", "note lbnote", `Everyone over the minimum, a page at a time (the page numbers and Per page are under the table). The sorted column is coloured by its percentile among the season's qualified ${pos}s (${minText(pos, meta)}); tap a column name to sort, tap a name for his page. xFP prices each target and carry by what a play like it scores on average in PPR, fitted on the other seasons. ` + (meta.estRoutes ? "Routes this season are estimated from snap share × team dropbacks until nflverse publishes participation." : "Routes are dropbacks he was on the field for.") + (pos === "WR" || pos === "TE" ? " Cont% and ContOE are FTN Data's charting via nflverse (CC BY-SA 4.0), from 2022." : "")));
+    const key = [y, pos, page, size, k, dir].join(":"); box.dataset.key = key;
+    if (LB.keep && LB.keep.key === key) { box.scrollTop = LB.keep.top; box.scrollLeft = LB.keep.left; } LB.keep = null;
     requestAnimationFrame(() => { const first = t.querySelector("tbody td.fz"); if (first) t.style.setProperty("--fzw", first.offsetWidth + "px"); });
-    main.append(el("p", "note", "Tap a column name to sort, tap a name for his page. xFP prices each target and carry by what a play like it scores on average in PPR, fitted on the other seasons. " + (meta.estRoutes ? "Routes this season are estimated from snap share × team dropbacks until nflverse publishes participation." : "Routes are dropbacks he was on the field for.") + (pos === "WR" || pos === "TE" ? " Cont% and ContOE are FTN Data's charting via nflverse (CC BY-SA 4.0), from 2022." : "")));
+    if (POP.open) { popBody(y, pos, meta); placePop(); }
+  }
+  // the dropdown's tabs: Position (the four as a segment), Season (the year pill and who's listed), Stats (a tick per column group), Table
+  // format (Baseball-Reference / Classic, the same switch as Settings ▸ Appearance). Clear in the foot where one applies.
+  function popBody(y, pos, meta) {
+    const pop = popEl(), body = $("#pop-body", pop); body.textContent = ""; pop.hidden = false;
+    const tabs = el("div", "ptabs grptabs"); tabs.setAttribute("role", "tablist");
+    for (const [tk, lab] of LB_TABS) { const b = el("button", "ptab" + (tk === POP.open ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(tk === POP.open)); b.addEventListener("click", (e) => { e.stopPropagation(); ddClose(); POP.open = tk; S.lbTab = tk; save(); popBody(y, pos, meta); placePop(); }); tabs.append(b); }
+    const w = el("div", "textmodal"), foot = el("div", "row popfoot");
+    const sec = (name) => { const s = el("div", "popsec"); s.append(el("h4", null, name)); w.append(s); return s; };
+    const note = (s, txt) => s.append(el("p", "note", txt));
+    const seg = (opts, cur, pick) => { const g = el("div", "seg"); g.setAttribute("role", "group"); for (const [v, lab] of opts) { const b = el("button", "segbtn", lab); b.type = "button"; b.setAttribute("aria-pressed", String(v === cur)); b.addEventListener("click", () => pick(v)); g.append(b); } return g; };
+    const clear = (fn) => { const b = el("button", "linkbtn popclear", "Clear"); b.type = "button"; b.addEventListener("click", fn); foot.append(b); };
+    if (POP.open === "position") {
+      const s = sec("Position");
+      s.append(seg(["WR", "TE", "RB", "QB"].map((p) => [p, p]), pos, (p) => { S.pos = p; S.sort = null; S.lbPage = 1; save(); route(); }));
+      note(s, `Each position is ranked among its own qualifiers: ${minText(pos, meta)} for ${pos}s this season${meta.through < 18 ? " (the minimums are scaled by the weeks played)" : ""}. Tight ends carry the receivers' columns; fullbacks count as running backs.`);
+    } else if (POP.open === "season") {
+      const s = sec("Which season"), row = el("div", "poprow");
+      row.append(el("span", "splbl", "Season"), pillSelect(String(y), [...SEASONS].reverse().map((v) => [v, String(v)]), y, (v) => { S.season = v; S.lbPage = 1; save(); route(); }, "Season"));
+      s.append(row); note(s, meta.through < 18 ? `${y} is through week ${meta.through}; the qualifying minimums are scaled by the weeks played.` : `${y}, the full season.`);
+      const q = sec("Who's listed");
+      q.append(seg([[true, "Qualified only"], [false, "Everyone"]], S.qualOnly !== false, (v) => { S.qualOnly = v; S.lbPage = 1; save(); route(); }));
+      note(q, `Qualified ${pos}s have ${minText(pos, meta)}. Everyone lists anyone with a target, carry or dropback; the percentiles are always against the qualifiers.`);
+      clear(() => { S.season = CUR; S.qualOnly = true; S.lbPage = 1; save(); route(); });
+    } else if (POP.open === "stats") {
+      const s = sec("Column groups"); note(s, "Tick a group to show its columns; the table redraws as you go. Tap a column name on the table to sort by it.");
+      const grid = el("div", "colgrid"), hide = lbHidden(pos);
+      for (const [name, ks] of COLS[pos]) {
+        const g = el("div", "colgroup"); g.append(el("h4", null, name));
+        const lab = el("label", "toggle"), cb = el("input"); cb.type = "checkbox"; cb.checked = !hide.includes(name);
+        cb.addEventListener("change", () => { const h = hide.filter((x) => x !== name); if (!cb.checked) h.push(name); S.lbHide = Object.assign({}, S.lbHide, { [pos]: h }); S.lbPage = 1; save(); route(); });
+        const txt = el("span"); txt.append(cb.checked ? "Showing" : "Hidden", el("small", null, ks.map((kk) => METRIC[kk].h).join(", ")));
+        lab.append(cb, txt); g.append(lab); grid.append(g);
+      }
+      s.append(grid);
+      if (hide.length) clear(() => { S.lbHide = Object.assign({}, S.lbHide, { [pos]: [] }); save(); route(); });
+    } else {
+      const s = sec("Look"), T = window.FB_TABLES;
+      if (T) s.append(seg([["bref", "Baseball-Reference"], ["classic", "Classic"]], T.get(), (v) => { T.set(v); route(); }));
+      note(s, "Baseball-Reference: 12px type in 23px rows. Classic: 13px type in roomier rows, the column names the size of the numbers. The same switch as Settings ▸ Appearance ▸ Tables; kept on this device.");
+      if (T && T.own()) clear(() => { T.clear(); route(); });
+    }
+    body.append(tabs, w); if (foot.children.length) body.append(foot);
   }
 
   // ---------- Player page ----------
@@ -1081,6 +1269,7 @@
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
     document.body.dataset.page = page;
     document.title = PAGE_TITLE[page] ? "Sean's Football · " + PAGE_TITLE[page] : "Sean's Football Site";
+    const bs = $("#bscroll"); LB.keep = bs ? { key: bs.dataset.key, top: bs.scrollTop, left: bs.scrollLeft } : null;   // the Leaders box's place, put back by a redraw of the same page
     const main = $("main"); main.innerHTML = '<p class="load">Loading…</p>';
     const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
