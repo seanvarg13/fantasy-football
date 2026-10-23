@@ -271,11 +271,15 @@
   const cellLink = (txt, href, cls) => { const c = td(null, cls || "l"); c.append(link(txt, href)); return c; };
 
   // ---------- header and search ----------
+  // the baseball site's header (23 Oct 2026): the band with the red rule, every page a white boxy button in the condensed face — the
+  // current one filled navy — and the search at the right; on a phone the search and a "☰ Menu" button share the one line and the
+  // pages open under it as a grid of the same buttons (body.navopen), closing on a pick, a page change or a tap elsewhere
+  const PAGES = [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
     nav.setAttribute("aria-label", "Pages");
-    for (const [h, lab] of [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"]]) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); nav.append(a); }
-    const sr = el("div", "srch"), inp = el("input"); inp.type = "search"; inp.placeholder = "Search players"; inp.setAttribute("aria-label", "Search players");
+    for (const [h, lab] of PAGES) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); if (h === "#settings") a.title = "Stat glossary, appearance and how the pages work"; nav.append(a); }
+    const sr = el("div", "srch"), inp = el("input"); inp.type = "search"; inp.placeholder = "Find a player…"; inp.setAttribute("aria-label", "Find a player");
     const hits = el("div", "hits"); hits.hidden = true; sr.append(inp, hits);
     const ALL = Object.entries(IDX).map(([id, e]) => ({ id, e, k: e.n.toLowerCase(), last: Math.max(...e.s) }));
     let cur = -1;
@@ -291,7 +295,14 @@
       if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); cur = (cur + (e.key === "ArrowDown" ? 1 : -1) + bs.length) % bs.length; bs.forEach((b, i) => b.classList.toggle("cur", i === cur)); }
       if (e.key === "Enter") (bs[cur] || bs[0]).click(); if (e.key === "Escape") { hits.hidden = true; } });
     document.addEventListener("click", (e) => { if (!sr.contains(e.target)) hits.hidden = true; });
-    nav.append(sr); inn.append(nav); top.append(inn); return top;   // the search rides in the pages' row, so a phone's wraps two lines, not three
+    document.addEventListener("keydown", (e) => { if (e.key === "/" && !/^(input|textarea|select)$/i.test(e.target.tagName)) { e.preventDefault(); inp.focus(); } });   // "/" finds a player, as on the baseball site
+    const nt = el("button", "navtog", "☰ Menu"); nt.type = "button"; nt.setAttribute("aria-expanded", "false");
+    const setNav = (on) => { document.body.classList.toggle("navopen", on); nt.setAttribute("aria-expanded", String(on)); nt.textContent = on ? "✕ Close" : "☰ Menu"; };
+    nt.addEventListener("click", (e) => { e.stopPropagation(); setNav(!document.body.classList.contains("navopen")); });
+    window.addEventListener("hashchange", () => setNav(false));
+    document.addEventListener("click", (e) => { if (document.body.classList.contains("navopen") && !top.contains(e.target)) setNav(false); });
+    nav.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => setNav(false)));
+    inn.append(nav, sr, nt); top.append(inn); return top;
   }
 
   // ---------- Leaders ----------
@@ -951,17 +962,132 @@
     main.append(t.box, findings(), el("p", "note", "Every season he was on an offensive staff, in whatever job. Car% is coloured against every team-season since 2016. An RB2's FP/Opp in red beat the lead back's; Next yr Car% shows whether he got more of the work the following season (his share of that team's RB carries over the whole season)."));
   }
 
+  // ---------- Settings ----------
+  // (23 Oct 2026, the football site in the baseball site's dress): one white card with three tabs across the top in the Filters-button
+  // dress — a tab is a link to #settings/<tab>, so Back works — the Appearance rows the baseball page has (colour scheme, light or dark,
+  // layout, tables, font, site default; no wOBA scale or sync here, they're baseball's), the stat glossary from METRIC by position, and a
+  // paragraph per page under How this page works. themes.js (window.FB_THEMES / FB_TABLES) holds the schemes and the device's picks.
+  const SET_TABS = [["glossary", "Stat glossary"], ["appearance", "Appearance"], ["how", "How this page works"]];
+  // a line for the counting stats METRIC leaves without a tooltip
+  const GLOSS_X = { g: "Games played", tgt: "Targets", rec: "Receptions", ryd: "Receiving yards", rtd: "Receiving touchdowns", car: "Carries", ruyd: "Rushing yards", rutd: "Rushing touchdowns",
+    att: "Pass attempts", cmpp: "Completion percentage", pyd: "Passing yards", ptd: "Passing touchdowns", int: "Interceptions thrown", rzc: "Carries inside the 20", ypr: "Yards per reception", ypc: "Yards per carry",
+    sackp: "Sacks per dropback", ruxg: "Expected PPR points per game from his carries alone", carg: "Carries per game" };
+  function settingsPage(main, tab0) {
+    const tab = SET_TABS.some(([k]) => k === tab0) ? tab0 : "glossary";
+    main.textContent = "";
+    const box = el("section"); box.id = "pboard";
+    const head = el("div", "ahd shd"); head.append(el("h2", "ahead", "Settings")); box.append(head);
+    const tabs = el("div", "btabs stabs");
+    for (const [k, label] of SET_TABS) { const a = el("a", "btab", label); a.href = "#settings/" + k; if (k === tab) { a.classList.add("on"); a.setAttribute("aria-current", "page"); } tabs.append(a); }
+    const body = el("div", "sbody"); box.append(tabs, body);
+    const lead = (title, note) => { const h = el("div", "ahd"); h.append(el("h2", "ahead", title)); if (note) h.append(el("p", "hublead", note)); body.append(h); };
+    if (tab === "appearance") appearance(body);
+    else if (tab === "glossary") {
+      lead("Stat glossary", "Every stat the lists and the player page carry, in the lists' order — receivers and tight ends first, then backs, then quarterbacks.");
+      for (const [pos, word] of [["WR", "Receivers and tight ends"], ["RB", "Running backs"], ["QB", "Quarterbacks"]]) body.append(el("h3", "sgh", word), glossary(pos));
+      const f = el("div", "gcredit"); f.append(el("p", "note", `nflverse play-by-play, participation, snap counts and Next Gen Stats ${SEASONS[0]}–${CUR}; PFR's charting; FTN Data's charting via nflverse (CC BY-SA 4.0). PPR scoring throughout; every percentile is against the position's qualifiers that season.`)); body.append(f);
+    } else { lead("How this page works", "What each page shows and where the numbers come from."); body.append(howTo()); }
+    const stamp = el("p", "sstamp", `${CUR} season`); box.append(stamp);
+    ensure(CUR).then((D) => { const w = D.meta && D.meta.through; stamp.textContent = w && w < 18 ? `Through week ${w} · ${CUR}` : `${CUR} season`; }).catch(() => {});
+    main.append(box);
+  }
+  function glossary(pos) {
+    const box = el("div", "glossary"), seen = new Set();
+    for (const [, keys] of COLS[pos]) for (const k of keys) {
+      const m = METRIC[k], txt = m && (m.t || GLOSS_X[k]); if (!m || seen.has(k) || !txt) continue;
+      seen.add(k);
+      const d = el("div", "gitem"), b = el("b", null, LABEL[k] || m.h);
+      if (LABEL[k] && LABEL[k] !== m.h) b.append(el("small", null, " · " + m.h));
+      d.append(b, el("p", null, txt)); box.append(d);
+    }
+    return box;
+  }
+  function appearance(box) {
+    const T = window.FB_THEMES;
+    if (!T) { box.append(el("p", "note", "themes.js didn't load, so there is nothing to pick here.")); return; }
+    const cur = T.current();
+    const head = el("div", "ahd"); head.append(el("h2", "ahead", "Appearance"), el("p", "hublead", "Colours, type and layout. Each device follows the site default until you pick something on it; the phone app and Safari count as separate devices."));
+    box.append(head);
+    const row = (title, note, ...ctl) => { const r = el("section", "aset"), l = el("div", "alab"), c = el("div", "actl"); l.append(el("h3", null, title)); if (note) l.append(el("p", null, note)); c.append(...ctl); r.append(l, c); box.append(r); return c; };
+    const segOf = (label, opts, on, pick) => {
+      const seg = el("div", "seg"); seg.setAttribute("role", "group"); seg.setAttribute("aria-label", label);
+      for (const [v, l] of opts) { const b = el("button", "segbtn", l); b.type = "button"; b.setAttribute("aria-pressed", String(v === on)); b.addEventListener("click", () => pick(v)); seg.append(b); }
+      return seg;
+    };
+    // colour schemes: a swatch each (the banner with the site's name, then its colours), the blurb on hover; the name in the scheme's ink on
+    // its band unless the two are the same colour (Warm's are), then white or near-black, whichever reads
+    const lumOf = (hex) => { const m = /^#?([0-9a-f]{6})$/i.exec(hex || ""); if (!m) return null; const v = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4))); return 0.2126 * v[0] + 0.7152 * v[1] + 0.0722 * v[2]; };
+    const contrastOf = (a, b) => { const x = lumOf(a), y = lumOf(b); return x == null || y == null ? 21 : (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+    const inkOn = (bg, ink) => (contrastOf(bg, ink) >= 1.5 ? ink : contrastOf(bg, "#ffffff") >= contrastOf(bg, "#141414") ? "#ffffff" : "#141414");
+    const sg = el("div", "schemes");
+    for (const [id, sc] of Object.entries(T.schemes)) {
+      const L = sc.light, b = el("button", "scheme"); b.type = "button"; b.title = sc.blurb || ""; b.setAttribute("aria-pressed", String(id === cur.scheme));
+      const bar = el("div", "spv-bar"); bar.style.background = L["accent-2"]; bar.style.borderBottom = `3px solid ${L.rule}`;
+      const word = el("span", "spv-word", "Sean's Football"); word.style.color = inkOn(L["accent-2"], L["accent-2-ink"]); bar.append(word);
+      const dots = el("div", "spv-dots");
+      for (const c of [L.rule, L["accent-2"], L.btn || L["accent-2"], L.pop || L["accent-2-text"]]) { const i = el("i"); i.style.background = c; dots.append(i); }
+      b.append(bar, dots, el("span", "sname", sc.name));
+      b.addEventListener("click", () => { T.set({ scheme: id }); route(); });
+      sg.append(b);
+    }
+    row("Colour scheme", "The site's colours. The percentile colours (blue cold, red hot) are the same in every scheme.", sg);
+    row("Light or dark", null, segOf("Light or dark", [["system", "Match device"], ["light", "Light"], ["dark", "Dark"]], cur.theme, (v) => { T.set({ theme: v }); route(); }));
+    row("Layout", "Auto gives a phone the compact layout; Desktop on a phone shows the full layout zoomed out.",
+      segOf("Layout", [["auto", "Auto"], ["mobile", "Mobile"], ["desktop", "Desktop"]], T.viewPref(), (v) => { T.setView(v); route(); }));
+    if (window.FB_TABLES) row("Tables", "Baseball-Reference: 12px type, compact 23px rows. Classic: the larger type with column names the size of the numbers, roomier rows.",
+      segOf("Tables", [["bref", "Baseball-Reference"], ["classic", "Classic"]], window.FB_TABLES.get(), (v) => { window.FB_TABLES.set(v); route(); }));
+    // type: one card per font, set in that font
+    T.preloadFonts();
+    const fg = el("div", "fonts");
+    for (const [id, f] of Object.entries(T.fonts)) {
+      const b = el("button", "fontcard"); b.type = "button"; b.title = f.blurb || ""; b.setAttribute("aria-pressed", String(id === cur.font));
+      const h = el("span", "ffname", f.name); h.style.fontFamily = f.display;
+      const bd = el("span", "fbody", "Ja'Marr Chase · 2.84 YPRR · 22.1 FP/G"); bd.style.fontFamily = f.body;
+      b.append(h, bd);
+      b.addEventListener("click", () => { T.set({ font: id }); route(); });
+      fg.append(b);
+    }
+    row("Font", null, fg);
+    // the site default: what every device shows until it picks its own (inline in themes.js — this site has no defaults.js)
+    const d = T.defaults, own = T.hasOwn(), def = el("div", "sitedef");
+    def.append(el("span", null, `${T.schemes[d.scheme] ? T.schemes[d.scheme].name : d.scheme} · ${T.fonts[d.font] ? T.fonts[d.font].name : d.font} · ${d.theme === "system" ? "match device" : d.theme} · ${d.view === "auto" ? "auto layout" : d.view}`));
+    def.append(el("span", "note", own ? "This device has its own choices." : "This device is following it."));
+    if (own) { const b = el("button", "btn btn-quiet", "Follow the site default"); b.type = "button"; b.addEventListener("click", () => { T.useDefaults(); route(); }); def.append(b); }
+    row("Site default", "What a device shows before you pick anything on it.", def);
+  }
+  function howTo() {
+    const b = el("div", "prose");
+    const key = el("div"), scale = el("span", "scale"); [5, 25, 50, 75, 95].forEach((p) => { const i = el("i"); paint(i, p); scale.append(i); });
+    key.append("Percentiles run 0–100 within the position's qualifiers that season", scale, "blue is cold, red is hot. Stats where lower is better (drops, contested targets, stuffed carries, interceptions) are flipped so 100 is always the best. Click a column name to sort by it; click a name for his page.");
+    b.append(key);
+    for (const html of [
+      `<b>Leaders</b> — WR / TE / RB / QB for any season since ${SEASONS[0]}: Basic, Usage, Weighted opportunity, Efficiency, Separation, Skills and Fantasy groups, the sorted column coloured by its percentile among the position's qualifiers (receivers and tight ends with 200 routes or 40 targets, backs with 90 carries + targets, quarterbacks with 200 dropbacks — scaled by weeks played in a season in progress), a Qualified avg row at the foot. Qualified only lists just them.`,
+      `<b>A player's page</b> — the band with his bio and FP / G · xFP / G · FPOE / G, percentile bars by section against his position's qualifiers, the <b>xFP build-up</b> (the league's per-game expected points with his routes, targets per route, points per target and rushing swapped in one at a time, then touchdown luck and the rest to his real points), a game log, a Backfield tab for a back, and his season table with each year's head coach and coordinator.`,
+      `<b>xFP</b> — expected PPR points: every target priced by its air yards, field position, down and distance, location and formation, every carry by field position, down, distance and gap, by what a play like it scores; fitted on every other season and anchored so each season's xFP sums to its real points. FPOE is points over expected, TDOE touchdowns over expected. Skills like separation, broken tackles and yards after contact are shown with how well they repeat and what they're worth, but stay out of xFP, which prices the opportunity.`,
+      `<b>Teams</b> — each offense's xFP / G, FP / G and +/− by position (QB, RB, WR, TE, and all four) for a season or its last 4 or 8 games, each cell coloured by its rank among the 32. A traded player counts for the team he played for that week; a QB's xFP is his rushing xFP plus his actual passing points.`,
+      `<b>Role Watch</b> — every back, receiver and tight end's share of his team's work in the games he played (a back's carries + targets, a receiver's targets) against what the drafts expected, after any week since 2017. <b>More work</b> marks a projected rest-of-season share 10+ points over the drafts' for a back, 4+ for a receiver — a weekly read, since most backfield turns are an injury or a benching ahead of him.`,
+      `<b>Backfields</b> — every team's lead back's share of the carries, opportunities, snaps and goal-line carries in the games he played (so an injury doesn't read as a committee), the RB2, backs used, the backs' share of targets, and FP per opportunity for both — the RB2 in red when he out-produced the lead back per touch. A team opens its week-by-week split.`,
+      `<b>Coaches</b> — every coach on an offensive staff since 2016, by how his teams split running back work in the seasons he was there: <b>Bell cow</b> when his lead backs averaged 68%+ of the RB carries in their games, <b>Committee</b> under 60%. Head coaches, coordinators or the whole staff; a coach's page lists every stint and season. Tested before building on it: what follows a coach to a new team is the RB share of targets — the lead back's share is the room, not the staff.`,
+      `<b>Dynasty</b> — every season laid out by the player's year in the league (rookies, year 2 …), by position, draft round and class; the sorted column is coloured against the same career year in every class since ${SEASONS[0]}, with what he did the next season beside it.`,
+      `<b>Settings ▸ Appearance</b> — the colour scheme, light or dark, the layout, the tables' dress and the font, each kept on this device until you change it. The baseball site's settings are its own.`,
+    ]) b.append(Object.assign(el("div"), { innerHTML: html }));
+    return b;
+  }
+
   // ---------- routing ----------
+  const PAGE_TITLE = { leaders: "Leaders", teams: "Teams", roles: "Role Watch", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
   function route() {
     const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
-    document.querySelectorAll(".nav a[data-page]").forEach((x) => x.classList.toggle("on", x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches")));
+    document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
+    document.body.dataset.page = page;
+    document.title = PAGE_TITLE[page] ? "Sean's Football · " + PAGE_TITLE[page] : "Sean's Football Site";
     const main = $("main"); main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "player" ? player(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
+    const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
   document.body.prepend(header());
-  { const top = $(".top"), set = () => document.documentElement.style.setProperty("--toph", top.offsetHeight + "px"); new ResizeObserver(set).observe(top); set(); }   // where a table's pinned column names sit
+  { const top = $(".top"), set = () => { for (const k of ["--toph", "--header-h"]) document.documentElement.style.setProperty(k, top.offsetHeight + "px"); }; new ResizeObserver(set).observe(top); set(); }   // where a table's pinned column names sit (--header-h is the baseball stylesheet's name for it)
   window.addEventListener("hashchange", route);
   route();
 })();

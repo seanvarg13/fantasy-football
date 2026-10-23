@@ -1,76 +1,172 @@
-/* Sean's football site: the baseball site's dress (Carolina-blue band with the red stripe, Savant percentile
-   bars, B-Ref tables in 11px Verdana with red group rules), in one stylesheet. */
+/* Sean's football site, in the baseball site's dress (23 Oct 2026): the Carolina-blue band with the red stripe, white boxy buttons in
+   the condensed face, B-Ref tables, Savant percentile bars — one stylesheet, written against the baseball site's tokens. themes.js sets
+   the chosen scheme's tokens INLINE on <html> before the first paint (Titans is the default); the :root block below is the same values,
+   the fallback for a device where the script never runs. Rules for a phone key on :root[data-view="mobile"] (themes.js sets it — a
+   narrow or touch screen, unless Settings ▸ Appearance ▸ Layout forces one), never on a media query, so "Desktop on a phone" works.
+   Dark mode is the same token list twice: the OS's dark with no forced light, and a forced dark. The flat schemes (the Jets family)
+   carry data-flat and lose every outline. The percentile / heat colours are not tokens — they are the same in every scheme. */
 :root {
-  --ground: #ffffff; --surface: #ffffff; --surface-2: #f3f6fa; --ink: #0c2340; --ink-2: #4a5d78; --muted: #74859c;
-  --band: #7bafd4; --band-dk: #6a9ec4; --stripe: #c8102e; --line: #dde4ed; --grid: rgba(12, 35, 64, .16);
-  --track: #e9edf2; --mark: #fff3a3; --edge: rgba(12, 35, 64, .45);
-  --shadow: 0 2px 10px rgba(12, 35, 64, .10), 0 1px 2px rgba(12, 35, 64, .08);
-  --display: "Barlow Condensed", "Arial Narrow", sans-serif; --body: "Source Sans 3", "Segoe UI", Arial, sans-serif;
-  --table: Verdana, Geneva, sans-serif;
+  color-scheme: light;
+  /* the page and its surfaces */
+  --page: #ffffff; --ground: #ffffff; --surface: #ffffff; --surface-2: #f3f6fa; --stripe: #ffffff; --hover: #eef4fb; --pop: #ffffff;
+  /* type */
+  --ink: #0c2340; --ink-2: #3d4e68; --muted: #6f7c90;
+  --ink-day: #0c2340;        /* set by themes.js: the LIGHT palette's ink, in dark mode too — the type of any white box drawn on the band */
+  --band2-ink: #0c2340;      /* set by themes.js: the ink for type set straight on the band (the band ink where it reads at 4.5:1, else the light ink, white or near-black) */
+  --warn: #b26a00; --red: #c8102e;   /* the red is fixed in every scheme: the More work tag, an RB2 who out-produced his lead back */
+  /* lines */
+  --hair: #dde4ed; --rail: #c9d3e0; --rule: #dde4ed; --frame: #dde4ed; --line-soft: #dde4ed; --secrule: #dde4ed; --plate: #dde4ed;
+  --lift-line: 1px solid var(--rule); --lift-edge: 1px solid var(--rule); --lift-card: none; --lift-menu: none; --lift-btn: none; --shadow: none;
+  --ddline: #43616b;
+  /* the brand colours */
+  --accent: #7bafd4; --accent-ink: #ffffff; --accent-2: #7bafd4; --band2: var(--accent-2);
+  --accent-2-ink: #ffffff; --accent-2-dim: rgba(255, 255, 255, 0.9); --accent-2-text: #2f6fb3;
+  --on-fill-wash: rgba(255, 255, 255, 0.14); --on-fill-wash-2: rgba(255, 255, 255, 0.24); --on-fill-line: rgba(255, 255, 255, 0.4);
+  --onband: #ffffff; --onband-dim: rgba(255, 255, 255, 0.82); --onband-line: rgba(255, 255, 255, 0.55);
+  --tab-ink: #ffffff; --tab-fill: #7bafd4; --btn: #7bafd4; --btn-ink: #ffffff; --btn-line: #dde4ed;
+  --stripe-line: #c8102e; --accent-wash: rgba(123, 175, 212, 0.12);
+  --band: #ffffff; --band-ink: #0c2340; --band-dim: rgba(255, 255, 255, 0.72); --band-line: rgba(255, 255, 255, 0.35);   /* the oldest baseball pass's band token: Titans makes it white, so NOTHING here reads --band for the blue — that is --band2 */
+  --flat-ink: initial;       /* only the flat schemes set it: their one type colour, kept in dark mode for the white buttons */
+  /* the percentile bars (Savant's drawing) and the old heat tokens — the same in every scheme */
+  --pctrack: #e6ecf3; --pctrule: #bed8d1; --svline: #c7dcdc; --svrule: #dde4ed; --svtext: #0c2340;
+  --svframe: #4499aa; --svsec: #399098; --svdots: #4499aa; --svhead: #000000; --svtitle: #333333; --svpoor: #3a62a8; --svavg: #b8d3cd; --svgreat: #d41c23;
+  --lo: #325aa1; --mid: #b3b3b3; --hi: #d22d49;
+  /* type faces (themes.js sets both inline too) */
+  --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --body: "Source Sans 3", "Source Sans Pro", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --table: Verdana, Geneva, sans-serif;   /* the tables' face until the tables pass puts them in --body */
+  --pbox-w: 860px;
+  /* derived, as the baseball stylesheet mixes them (given names here so a rule reads one token) */
+  --mark: #ffe14d; --mark-ink: #141414;                            /* the yellow "expected" cell in a build-up */
+  --edge: color-mix(in srgb, var(--ink) 45%, var(--surface));      /* the one frame round every table, box and popup */
+  --grid: color-mix(in srgb, var(--ink) 16%, var(--surface));      /* a table's gridlines */
+  --band-dk: color-mix(in srgb, var(--ink) 9%, var(--band2));      /* a table's over-header row, the band 9% darker */
+  --lit: color-mix(in srgb, #fff 22%, var(--band2));               /* the sorted column name's wash */
+  --barbg: color-mix(in srgb, var(--ink) 9%, var(--surface)); --barrule: color-mix(in srgb, var(--ink) 18%, var(--surface));   /* the page bar at a table's foot */
+  --lift: 0 2px 8px rgba(0, 0, 0, 0.14), 0 1px 2px rgba(0, 0, 0, 0.10);          /* stand-alone buttons, pills, segments, tabs */
+  --boxsh: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);        /* every table frame */
+  --popsh: 0 12px 32px rgba(20, 20, 20, 0.10);                                    /* dropdowns and panels */
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --ground: #0b1628; --surface: #112138; --surface-2: #16294a; --ink: #edf3fa; --ink-2: #b5c4d8; --muted: #8394ad;
-  --band: #3f6f96; --band-dk: #34607f; --line: #24395a; --grid: rgba(237, 243, 250, .14); --track: #1c3152; --mark: #6b5b12;
-  --edge: rgba(237, 243, 250, .35); --shadow: 0 2px 10px rgba(0, 0, 0, .35); color-scheme: dark; } }
+/* dark: the OS says dark and the user hasn't forced light */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0b1628; --ground: #0b1628; --surface: #112138; --surface-2: #172a46; --stripe: #0b1628; --hover: #172a46; --pop: #112138;
+    --ink: #edf3fa; --ink-2: #b7c5d8; --muted: #8ea0b8; --warn: #e0a04a;
+    --hair: #233b5c; --rail: #2d4a70; --rule: #233b5c; --frame: #233b5c; --line-soft: #233b5c; --secrule: #233b5c; --plate: #233b5c; --ddline: #9ab8c2;
+    --accent: #8dc0ee; --accent-ink: #071427; --accent-2: #7bafd4; --accent-2-ink: #071427; --accent-2-dim: rgba(7, 20, 39, 0.85); --accent-2-text: #8dc0ee;
+    --on-fill-wash: rgba(7, 20, 39, 0.1); --on-fill-wash-2: rgba(7, 20, 39, 0.18); --on-fill-line: rgba(7, 20, 39, 0.35);
+    --tab-ink: #071427; --tab-fill: #7bafd4; --btn: #7bafd4; --btn-ink: #071427; --btn-line: #233b5c; --stripe-line: #c8102e; --accent-wash: rgba(123, 175, 212, 0.22);
+    --band: #112138; --band-ink: #edf3fa;
+    --pctrack: #1b2f4c; --pctrule: #3a4f4b; --svline: #34504d; --svrule: #233b5c; --svtext: #edf3fa; --svframe: #4f9fad; --svsec: #4f9fad; --svdots: #5fb0bd;
+    --svhead: #e8eeee; --svtitle: #e3e8e8; --svpoor: #6f95d6; --svavg: #8fb3ad; --svgreat: #f0555b; --lo: #4a86dd; --mid: #6a7382; --hi: #e2455c;
+  }
+}
+/* dark: forced (themes.js writes data-theme from Settings ▸ Appearance ▸ Light or dark) — the same values again */
 :root[data-theme="dark"] {
-  --ground: #0b1628; --surface: #112138; --surface-2: #16294a; --ink: #edf3fa; --ink-2: #b5c4d8; --muted: #8394ad;
-  --band: #3f6f96; --band-dk: #34607f; --line: #24395a; --grid: rgba(237, 243, 250, .14); --track: #1c3152; --mark: #6b5b12;
-  --edge: rgba(237, 243, 250, .35); --shadow: 0 2px 10px rgba(0, 0, 0, .35); color-scheme: dark; }
+  color-scheme: dark;
+  --page: #0b1628; --ground: #0b1628; --surface: #112138; --surface-2: #172a46; --stripe: #0b1628; --hover: #172a46; --pop: #112138;
+  --ink: #edf3fa; --ink-2: #b7c5d8; --muted: #8ea0b8; --warn: #e0a04a;
+  --hair: #233b5c; --rail: #2d4a70; --rule: #233b5c; --frame: #233b5c; --line-soft: #233b5c; --secrule: #233b5c; --plate: #233b5c; --ddline: #9ab8c2;
+  --accent: #8dc0ee; --accent-ink: #071427; --accent-2: #7bafd4; --accent-2-ink: #071427; --accent-2-dim: rgba(7, 20, 39, 0.85); --accent-2-text: #8dc0ee;
+  --on-fill-wash: rgba(7, 20, 39, 0.1); --on-fill-wash-2: rgba(7, 20, 39, 0.18); --on-fill-line: rgba(7, 20, 39, 0.35);
+  --tab-ink: #071427; --tab-fill: #7bafd4; --btn: #7bafd4; --btn-ink: #071427; --btn-line: #233b5c; --stripe-line: #c8102e; --accent-wash: rgba(123, 175, 212, 0.22);
+  --band: #112138; --band-ink: #edf3fa;
+  --pctrack: #1b2f4c; --pctrule: #3a4f4b; --svline: #34504d; --svrule: #233b5c; --svtext: #edf3fa; --svframe: #4f9fad; --svsec: #4f9fad; --svdots: #5fb0bd;
+  --svhead: #e8eeee; --svtitle: #e3e8e8; --svpoor: #6f95d6; --svavg: #8fb3ad; --svgreat: #f0555b; --lo: #4a86dd; --mid: #6a7382; --hi: #e2455c;
+}
 
+/* ---- the page ---- */
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
-body { background: var(--ground); color: var(--ink); font: 15px/1.45 var(--body); margin: 0; }
-button, select, input { font: inherit; color: inherit; }
+body { background: var(--ground); color: var(--ink); font: 500 13px/1.45 var(--body); margin: 0; padding: 0 0 48px; }
+:root[data-view="mobile"] body { padding-bottom: env(safe-area-inset-bottom, 0px); }
+button, select, input, textarea { font: inherit; color: inherit; letter-spacing: 0; }
 button { cursor: pointer; }
-:focus-visible { outline: 2px solid var(--stripe); outline-offset: 2px; }
+button, input, select, textarea { border-radius: 0; }   /* square corners everywhere; only headshots are round */
+:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 a { color: inherit; }
-
-/* header */
-.top { background: var(--band); border-bottom: 3px solid var(--stripe); position: sticky; top: 0; z-index: 20; }
-.top .in { max-width: 1180px; margin: 0 auto; padding: 10px 16px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.nav { display: flex; gap: 8px; flex-wrap: wrap; flex: 1 1 auto; }
-.nav a { display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border: 1px solid #fff; color: #fff; text-decoration: none; font: 600 17px/1 var(--display); }
-.nav a.on { background: #fff; color: #0c2340; }
-.nav a:hover:not(.on) { background: rgba(255, 255, 255, .18); }
-.nav a.alt { border-style: dashed; }
-.srch { position: relative; flex: 0 1 240px; }
-.srch input { height: 32px; width: 100%; border: 1px solid #fff; background: rgba(255, 255, 255, .96); color: #0c2340; padding: 0 10px; font-size: 14px; border-radius: 0; }
-.hits { position: absolute; top: 34px; left: 0; right: 0; background: var(--surface); border: 1px solid var(--edge); box-shadow: var(--shadow); z-index: 30; max-height: 60vh; overflow: auto; }
-.hits button { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 7px 10px; }
-.hits button:hover, .hits button.cur { background: var(--surface-2); }
-.hits small { color: var(--muted); }
-/* the search box sits in the pages' row (header() puts it in the nav): pushed right on a desktop; on a phone the six pages and the
-   search wrap into two lines, the search taking what's left of the second (Dynasty, 18 Oct 2026, made six pages too many for one line) */
-.nav .srch { margin-left: auto; }
-@media (max-width: 640px) { .nav { gap: 4px; flex-wrap: wrap; min-width: 0; } .nav .srch { flex: 4 1 150px; margin-left: 0; } .srch input { height: 30px; } .nav a { flex: 1 1 auto; justify-content: center; font-size: 13px; padding: 0 4px; height: 30px; white-space: nowrap; } }
-@media (max-width: 380px) { .nav { gap: 3px; } .nav a { font-size: 12px; padding: 0 3px; } }
-
-main { max-width: 1180px; margin: 0 auto; padding-block: 6px 56px; padding-inline: 16px; }
+main { max-width: 1240px; margin: 0 auto; padding: 6px 16px 0; }
+:root[data-view="mobile"] main { padding: 4px 10px 0; }
 .load { color: var(--muted); padding: 40px 0; }
-h1.ttl { font: 700 28px/1.1 var(--display); margin: 16px 0 2px; text-wrap: balance; }
-.sub { color: var(--ink-2); font-size: 14px; margin: 0 0 10px; }
-.secttl { font: 700 22px/1.1 var(--display); margin: 34px 0 6px; padding-bottom: 6px; border-bottom: 2px solid var(--stripe); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-.secttl small { font: 400 13px var(--body); color: var(--muted); }
-.note { color: var(--muted); font-size: 12.5px; margin: 6px 2px 0; max-width: 78ch; }
 
-/* controls */
-.tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 14px 0 6px; }
-.seg { display: inline-flex; box-shadow: var(--shadow); }
-.seg button, .tbtn { height: 32px; padding: 0 12px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 14px; }
-.seg button + button { border-left: 0; }
-.seg button[aria-pressed="true"], .tbtn[aria-pressed="true"] { background: var(--band); border-color: var(--band); color: #fff; }
-.tbtn { box-shadow: var(--shadow); }
-.sel { height: 32px; padding: 0 8px; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); border-radius: 0; font-weight: 600; font-size: 14px; }
-.minbox { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
-.minbox input { width: 64px; height: 32px; border: 1px solid var(--line); background: var(--surface); padding: 0 6px; border-radius: 0; }
-.count { color: var(--muted); font-size: 13px; }
+/* ---- the header: the band, a 3px red rule, white boxy page buttons, the search ---- */
+.top { position: sticky; top: 0; z-index: 20; background: var(--band2); border-bottom: 3px solid var(--stripe-line); color: var(--ink); }
+body.navopen .top { z-index: 300; }
+.top .in { display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center; gap: 0 26px; min-height: 52px; padding: 8px max(16px, calc((100% - 1240px) / 2)); }
+.nav { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.nav a { display: flex; align-items: center; justify-content: center; gap: 3px; height: 32px; padding: 0 14px; border: 1px solid #fff; background: #fff; color: var(--ink-day, var(--ink));
+  font: 600 17px/1.2 var(--display); text-decoration: none; white-space: nowrap; box-shadow: var(--lift); }
+.nav a:hover { background: #f3f7fb; }
+.nav a.on, .nav a[aria-current="page"] { background: var(--ink-day, var(--ink)); color: #fff; border-color: var(--ink); }   /* the current page: filled navy; in dark mode its edge is the page's light ink */
+.srch { position: relative; align-self: center; flex: 0 1 200px; min-width: 150px; width: 200px; border: 1px solid #fff; background: var(--surface); }
+.srch input { display: block; width: 100%; height: 30px; padding: 0 10px; border: 1px solid #fff; background: var(--surface); color: var(--ink); font: 500 13px var(--body); -webkit-appearance: none; appearance: none; }
+.srch input::placeholder { color: var(--muted); }
+.srch input::-webkit-search-decoration, .srch input::-webkit-search-cancel-button { -webkit-appearance: none; }
+.hits { position: absolute; top: calc(100% + 4px); left: 0; z-index: 30; min-width: 300px; width: max-content; max-width: min(420px, 90vw); margin: 0; padding: 4px; border: 1px solid var(--hair); background: var(--surface); max-height: 60vh; overflow: auto; }
+.hits button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 7px 10px; font-size: 13px; color: var(--ink); }
+.hits button span { display: block; }
+.hits small { display: block; font-size: 12px; color: var(--muted); }
+.hits button:hover, .hits button.cur, .hits button:focus { background: var(--accent-wash); outline: 0; }
+.navtog { display: none; }
+/* the phone's header: the search and a ☰ Menu button on one line (47px); the pages open under it as a grid of the same buttons */
+:root[data-view="mobile"] .top .in { align-items: center; gap: 0 10px; padding: 0 12px 4px; min-height: 0; }
+:root[data-view="mobile"] .srch { order: 0; flex: 1 1 100px; width: auto; min-width: 0; margin: 6px 0 0; }
+:root[data-view="mobile"] .srch input { height: 32px; font-size: 16px; }   /* 16px: under that an iPhone zooms into a focused box */
+:root[data-view="mobile"] .hits { left: auto; right: 0; }
+:root[data-view="mobile"] .navtog { display: inline-flex; align-items: center; order: 1; flex: none; height: 34px; margin: 6px 0 0; padding: 0 12px; border: 1px solid #fff; background: #fff; color: var(--ink-day, var(--ink)); font: 700 12px/1.45 var(--display); white-space: nowrap; box-shadow: var(--lift); }
+:root[data-view="mobile"] .navtog[aria-expanded="true"] { background: #f3f7fb; }
+:root[data-view="mobile"] .nav { display: none; }
+:root[data-view="mobile"] body.navopen .nav { display: grid; order: 3; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: calc(100% + 24px); margin: 2px -12px 0; padding: 10px 12px 12px; }
+:root[data-view="mobile"] .nav a { height: 42px; padding: 0 12px; font: 600 18px/1 var(--display); gap: 6px; }
+:root[data-view="mobile"] .nav a:last-child:nth-child(odd) { grid-column: 1 / -1; }   /* seven pages in two columns: Settings takes the last row alone */
+
+/* ---- titles, notes ---- */
+h1.ttl { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin: 5px 0 8px; padding-bottom: 5px; border-bottom: 2px solid var(--stripe-line); font: 700 26px/1 var(--display); letter-spacing: .01em; color: var(--ink); text-wrap: balance; }
+h1.ttl small { font: 500 13px var(--body); color: var(--muted); letter-spacing: 0; }
+:root[data-view="mobile"] h1.ttl { font-size: 21px; margin: 2px 0 8px; padding-bottom: 4px; gap: 8px; }
+.sub { color: var(--ink-2); font-size: 13.5px; line-height: 1.5; margin: 0 0 10px; max-width: 90ch; }
+.secttl { font: 700 22px/1.1 var(--display); margin: 34px 0 6px; padding-bottom: 6px; border-bottom: 2px solid var(--stripe-line); display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.secttl small { font: 500 13px var(--body); color: var(--muted); }
+.note { color: var(--muted); font: 500 12px/1.55 var(--body); margin: 8px 2px 0; max-width: 90ch; }
+
+/* ---- the generic controls: white, square, a rail edge, the lift; pressed = the --btn fill ---- */
+.tools { display: flex; gap: 8px 10px; flex-wrap: wrap; align-items: center; margin: 10px 0 8px; }
+:root[data-view="mobile"] .tools { gap: 6px 8px; }
+.btn, .tbtn, .pill, select.sel { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 0 14px; border: 1px solid var(--rail); background: var(--surface); color: var(--ink);
+  font: 600 14px var(--body); white-space: nowrap; cursor: pointer; box-shadow: var(--lift); }
+select.sel { padding: 0 8px 0 12px; }
+.seg { display: inline-flex; gap: 6px; overflow: hidden; box-shadow: var(--lift); }   /* the lift sits on the segment as one piece; its buttons are flat */
+.seg button, .segbtn { min-height: 36px; padding: 6px 14px; border: 1px solid var(--rail); background: var(--surface); color: var(--ink); font: 600 14px/1.45 var(--display); white-space: nowrap; text-align: center; box-shadow: none; }
+.seg button[aria-pressed="true"], .segbtn[aria-pressed="true"], .btn.on, .btn[aria-pressed="true"], .btn[aria-expanded="true"],
+.tbtn.on, .tbtn[aria-pressed="true"], .tbtn[aria-expanded="true"], .pill[aria-expanded="true"] { background: var(--btn); color: var(--btn-ink); border-color: var(--btn); }
+.btn:disabled, .tbtn:disabled { opacity: .45; cursor: default; }
+.linkbtn { border: 0; background: none; padding: 0; font: inherit; font-weight: 500; color: var(--accent-2-text); text-decoration: underline; cursor: pointer; }
+input[type="number"], input[type="text"], input[type="search"], input[type="date"], textarea { border: 1px solid var(--hair); background: var(--surface); color: var(--ink); }
+.minbox { display: inline-flex; align-items: center; gap: 8px; font: 600 11px var(--body); color: var(--muted); white-space: nowrap; }
+.minbox input { width: 72px; height: 34px; padding: 0 10px; font: 500 13px var(--body); font-variant-numeric: tabular-nums; }
+.count { font: 600 12.5px var(--body); color: var(--muted); white-space: nowrap; }
+.csearch { height: 34px; width: 180px; max-width: 100%; padding: 0 10px; font: 500 13px var(--body); }
+:root[data-view="mobile"] .minbox input, :root[data-view="mobile"] .csearch { font-size: 16px; }
+:root[data-view="mobile"] .count { font-size: 12px; white-space: normal; }   /* a long count wraps on a phone rather than widening the page */
 /* the Dynasty page's career years: one line a button; tighter on a phone so the six fit across */
 .dyseg button { white-space: nowrap; }
-@media (max-width: 640px) { .dyseg button { padding: 0 8px; font-size: 13.5px; } }
-@media (max-width: 360px) { .dyseg button { padding: 0 6px; font-size: 12.5px; } }
+:root[data-view="mobile"] .seg { flex-wrap: wrap; }   /* a segment that doesn't fit a phone wraps instead of pushing the page sideways */
+:root[data-view="mobile"] .dyseg button { padding: 6px 8px; font-size: 13.5px; }
 
-/* B-Ref tables */
-.tbox { overflow: auto; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--shadow); max-width: 100%; }
+/* ---- the flat schemes (data-flat: Jets and its blues and mint): no outline anywhere, the shadows stay; a white button writes in the
+   scheme's one colour, the current page is a bare white word on the band, and a stand-alone button / select fills with the band colour
+   idle (pale while pressed) so it doesn't vanish on the white page once its edge is gone ---- */
+:root[data-flat] .nav a, :root[data-flat] .navtog, :root[data-flat] .btn, :root[data-flat] .tbtn, :root[data-flat] .pill, :root[data-flat] select.sel,
+:root[data-flat] .seg button, :root[data-flat] .segbtn, :root[data-flat] .tabs button, :root[data-flat] .stabs .btab, :root[data-flat] .ctl select { border-color: transparent; }
+:root[data-flat] .nav a, :root[data-flat] .navtog { box-shadow: none; color: var(--flat-ink); }
+:root[data-flat] .nav a.on, :root[data-flat] .nav a[aria-current="page"] { background: transparent; color: #fff; }
+:root[data-flat] .tbtn:not(.on):not([aria-pressed="true"]):not([aria-expanded="true"]), :root[data-flat] .pill:not([aria-expanded="true"]), :root[data-flat] select.sel { background: var(--btn); color: var(--btn-ink); }
+:root[data-flat] .tbtn.on, :root[data-flat] .tbtn[aria-pressed="true"], :root[data-flat] .tbtn[aria-expanded="true"], :root[data-flat] .pill[aria-expanded="true"] { background: color-mix(in srgb, var(--accent-2) 16%, #fff); color: var(--flat-ink); }
+:root[data-flat] .hits, :root[data-flat] .tbox, :root[data-flat] .kpis, :root[data-flat] body[data-page="settings"] main, :root[data-flat] #pboard { border-width: 0; }
+
+/* ---- B-Ref tables (the tables pass dresses these further; here only the tokens moved) ---- */
+.tbox { overflow: auto; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--boxsh); max-width: 100%; }
 .tbox.tall { max-height: 72vh; }
 /* no white in a table's bounce (Sean, 18 Oct 2026: "get rid of the like white stuff that comes when you scroll and it gets bouncy on a
    table"): an iPhone rubber-bands a scrolled box past its edge and shows the box's own white there. Sideways it doesn't bounce at all (the
@@ -79,8 +175,8 @@ h1.ttl { font: 700 28px/1.1 var(--display); margin: 16px 0 2px; text-wrap: balan
    names at the top, the blue of a totals row (else the rows' white) at the foot. The box's own ground never shows at rest; the table
    covers it. */
 .tbox { overscroll-behavior-x: none; }
-.tbox.tall { background: linear-gradient(var(--band) 0 50%, var(--tail, var(--surface)) 50% 100%) padding-box, var(--surface); }
-.tbox.tall:has(tbody > tr.tot:last-child) { --tail: var(--band); }
+.tbox.tall { background: linear-gradient(var(--band2) 0 50%, var(--tail, var(--surface)) 50% 100%) padding-box, var(--surface); }
+.tbox.tall:has(tbody > tr.tot:last-child) { --tail: var(--band2); }
 /* no bounce on a phone at all (Sean, 20 Oct 2026: "get rid of the table bouncy effect on mobile"): on a touch screen a tall table is its
    full height and scrolls with the page (a sideways slide doesn't bounce), and a copy of its column names (floatHead in fb.js) is pinned
    under the site header in its place — sticky to the page, height-for-height with the real ones so it leaves with the table's foot */
@@ -95,29 +191,29 @@ h1.ttl { font: 700 28px/1.1 var(--display); margin: 16px 0 2px; text-wrap: balan
 }
 table.br { border-collapse: separate; border-spacing: 0; font: 11px/1.25 var(--table); font-variant-numeric: tabular-nums; width: max-content; min-width: 100%; }
 .br th, .br td { padding: 4px 6px; border-right: 1px solid var(--grid); border-bottom: 1px solid var(--grid); text-align: center; white-space: nowrap; background: var(--surface); }
-.br thead th { background: var(--band); color: #fff; font-weight: 700; position: sticky; top: 0; z-index: 2; }
+.br thead th { background: var(--band2); color: #fff; font-weight: 700; position: sticky; top: 0; z-index: 2; }
 .br thead tr.over th { background: var(--band-dk); }
 .br thead tr.over + tr th { top: 21px; }
 .br th.sort { cursor: pointer; user-select: none; }
-.br th.lit { background: color-mix(in srgb, #fff 22%, var(--band)); }
+.br th.lit { background: var(--lit); }
 .br td.l, .br th.l { text-align: left; }
-.br .ge { border-right: 2px solid var(--stripe); }
+.br .ge { border-right: 2px solid var(--stripe-line); }
 .br .fz { position: sticky; left: 0; z-index: 1; }
 .br thead .fz { z-index: 3; }
-.br .fz2 { position: sticky; left: var(--fzw, 34px); z-index: 1; border-right: 2px solid var(--stripe); }
+.br .fz2 { position: sticky; left: var(--fzw, 34px); z-index: 1; border-right: 2px solid var(--stripe-line); }
 .br thead .fz2 { z-index: 3; }
-.br tr.tot td { background: var(--band); color: #fff; font-weight: 700; border-right-color: rgba(255, 255, 255, .35); }
-.br tr.tot.first td { border-top: 2px solid var(--stripe); }
+.br tr.tot td { background: var(--band2); color: #fff; font-weight: 700; border-right-color: rgba(255, 255, 255, .35); }
+.br tr.tot.first td { border-top: 2px solid var(--stripe-line); }
 .br td.heat { font-weight: 700; }
 .br td.dim { color: var(--muted); }
 .br .lnk { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--ink) 30%, transparent); text-underline-offset: 2px; cursor: pointer; }
-.br td.kexp { background: var(--mark); font-weight: 700; }
+.br td.kexp { background: var(--mark); color: var(--mark-ink); font-weight: 700; }
 .br tr.kfin td { font-weight: 700; }
-.br .pill { display: inline-block; min-width: 40px; padding: 1px 5px; font-weight: 700; }
-.br tr.cur td { background: color-mix(in srgb, var(--band) 14%, var(--surface)); }
+.br .pill { display: inline-block; min-width: 40px; min-height: 0; padding: 1px 5px; border: 0; box-shadow: none; font: inherit; font-weight: 700; }   /* a chip inside a table, not the stand-alone pill */
+.br tr.cur td { background: color-mix(in srgb, var(--band2) 14%, var(--surface)); }
 
-/* player band */
-.band { background: var(--band); color: #fff; border-bottom: 3px solid var(--stripe); margin-top: 14px; padding: 14px 16px 10px; }
+/* ---- player band (the player pass redraws it; the tokens here) ---- */
+.band { background: var(--band2); color: #fff; border-bottom: 3px solid var(--stripe-line); margin-top: 14px; padding: 14px 16px 10px; }
 .band .row1 { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .mug { width: 72px; height: 72px; border-radius: 50%; background: rgba(255, 255, 255, .25) center / cover no-repeat; border: 2px solid #fff; flex: none; }
 .who { flex: 1 1 260px; min-width: 0; }
@@ -127,7 +223,7 @@ table.br { border-collapse: separate; border-spacing: 0; font: 11px/1.25 var(--t
 .bio span { white-space: nowrap; }
 .bio span::before { content: "·"; display: inline-block; width: 20px; text-align: center; opacity: .8; }
 .ctl { display: flex; gap: 8px; flex-wrap: wrap; }
-.ctl select { height: 32px; border: 1px solid #fff; background: #fff; color: #0c2340; font: 700 15px var(--display); padding: 0 6px; border-radius: 0; }
+.ctl select { height: 32px; border: 1px solid #fff; background: #fff; color: var(--ink-day, var(--ink)); font: 700 15px var(--display); padding: 0 6px; }
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, .45); }
 .facts div { padding: 8px 4px 2px; text-align: center; border-right: 1px solid rgba(255, 255, 255, .3); }
 .facts div:last-child { border-right: 0; }
@@ -136,53 +232,114 @@ table.br { border-collapse: separate; border-spacing: 0; font: 11px/1.25 var(--t
 .facts .chip { display: inline-block; padding: 0 6px; }
 .facts .lnk { color: #fff; }
 
-/* percentile bars, Savant style */
+/* ---- percentile bars, Savant style ---- */
 .pcthd { text-align: center; font: 700 22px var(--display); margin: 26px 0 4px; }
 .pcols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 40px; }
-@media (max-width: 760px) { .pcols { grid-template-columns: 1fr; } }
-.psec h4 { font: 700 19px var(--display); margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+:root[data-view="mobile"] .pcols { grid-template-columns: 1fr; }
+.psec h4 { font: 700 19px var(--display); margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--hair); }
 .prow { display: grid; grid-template-columns: minmax(104px, 10em) minmax(0, 1fr) 4.4em; align-items: center; gap: 10px; height: 30px; }
 .prow .lb { text-align: right; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prow .val { font-size: 13.5px; font-variant-numeric: tabular-nums; }
 .prow.none .lb, .prow.none .val { color: var(--muted); }
-.trk { position: relative; height: 10px; background: var(--track); margin-right: 14px; }
+.trk { position: relative; height: 10px; background: var(--pctrack); margin-right: 14px; }
 .trk .fill { position: absolute; inset: 0 auto 0 0; }
 .trk .tick { position: absolute; top: -3px; bottom: -3px; width: 1px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
 .bub { position: absolute; top: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; border: 2px solid var(--surface); display: grid; place-items: center; font: 700 11px/1 var(--display); color: #fff; }
 .scale { display: grid; grid-template-columns: minmax(104px, 10em) minmax(0, 1fr) 4.4em; gap: 10px; font-size: 11px; color: var(--muted); }
 .scale div { display: flex; justify-content: space-between; margin-right: 14px; }
+@media (prefers-reduced-motion: no-preference) { .fill, .bub { transition: width .25s, left .25s; } }
 
-/* card tabs */
-.tabs { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin: 28px 0 0; }
-.tabs button { height: 32px; padding: 0 14px; background: var(--surface); border: 1px solid var(--ink); font-size: 15px; box-shadow: var(--shadow); }
-.tabs button[aria-pressed="true"] { background: var(--band); border-color: var(--band); color: #fff; }
+/* ---- card tabs (the player pass's; the band-filled tab dress of the baseball card) ---- */
+.tabs { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 28px 0 0; }
+.tabs button { display: inline-flex; align-items: center; height: 40px; padding: 0 14px; background: var(--band2); border: 1px solid var(--band2); color: #fff; font: 700 18px/1 var(--display); box-shadow: var(--lift); }
+.tabs button:hover { background: color-mix(in srgb, var(--band2) 86%, #000); }
+.tabs button[aria-pressed="true"] { background: var(--ink-day, var(--ink)); border-color: var(--ink-day, var(--ink)); color: #fff; }
+:root[data-view="mobile"] .tabs button { height: 36px; padding: 0 10px; font-size: 14px; }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
-@media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+:root[data-view="mobile"] .split { grid-template-columns: 1fr; }
 .split > div { min-width: 0; }   /* a wide table scrolls in its own box; a grid item's auto minimum had pushed the page sideways on a 320px phone */
 
-/* coach verdict chips */
+/* ---- coach pages ---- */
 .tag { display: inline-block; padding: 1px 7px; font: 700 12px var(--body); color: #fff; }
 .verdict { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 8px 0 0; font-size: 14px; color: var(--ink-2); }
-.csearch { height: 32px; width: 180px; max-width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 0 8px; border-radius: 0; font: inherit; font-size: 14px; }
 /* a coach's stints: one club and its seasons a line, the jobs after it */
 .stints { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 3px; font-size: 14px; color: var(--ink-2); }
 .stints a { font-weight: 700; }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--shadow); margin-top: 12px; }
-.kpis div { padding: 10px 12px; border-right: 1px solid var(--line); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0; border: 1px solid var(--edge); background: var(--surface); box-shadow: var(--boxsh); margin-top: 12px; }
+.kpis div { padding: 10px 12px; border-right: 1px solid var(--hair); }
 .kpis div:last-child { border-right: 0; }
 .kpis b { display: block; font: 700 26px/1.1 var(--display); }
 .kpis small { color: var(--ink-2); font-size: 12.5px; }
-
 /* weekly split bars on the backfield page */
-.wbar { display: flex; height: 14px; min-width: 120px; background: var(--track); }
+.wbar { display: flex; height: 14px; min-width: 120px; background: var(--pctrack); }
 .wbar span { display: block; height: 100%; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin: 8px 0; }
 .legend i { display: inline-block; width: 12px; height: 12px; margin-right: 5px; vertical-align: -1px; }
-@media (prefers-reduced-motion: no-preference) { .fill, .bub { transition: width .25s, left .25s; } }
 /* the Coaches pages' findings box */
-.findings { margin: 14px 0 12px; padding: 10px 14px; border-left: 3px solid var(--stripe); background: var(--surface); }
+.findings { margin: 14px 0 12px; padding: 10px 14px; border-left: 3px solid var(--stripe-line); background: var(--surface); }
 .findings h3 { margin: 0 0 6px; font: 700 18px/1.2 var(--display); }
 .findings ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 14px; color: var(--ink-2); max-width: 75ch; }
-.findings b { color: var(--ink); }
+.findings b { color: var(--ink); font-weight: 700; }
 /* Role Watch: the More work tag beside a name */
-.rwflag { background: var(--stripe); color: #fff; font-size: 10.5px; padding: 1px 5px; vertical-align: 1px; }
+.rwflag { background: var(--red); color: #fff; font-size: 10.5px; padding: 1px 5px; vertical-align: 1px; }
+
+/* ---- Settings (#settings/<tab>): one white card with three tabs across the top in the Filters-button dress, then the Appearance
+   rows (a 220px label column and the control), the glossary grid or the how-to prose; the baseball page's computed values ---- */
+body[data-page="settings"] main { background: var(--surface); border: 1px solid var(--hair); border-radius: 6px; padding-top: 0; }
+#pboard { display: block; max-width: 960px; margin: 18px auto 28px; padding: 22px 28px 10px; background: var(--surface); border: 1px solid var(--frame); overflow: clip; }
+:root[data-view="mobile"] #pboard { margin: 10px 6px 18px; padding: 16px 14px 6px; }
+#pboard .ahd.shd { padding-bottom: 12px; }
+#pboard .ahead { margin: 0 0 4px; font: 700 24px/1.45 var(--body); color: var(--accent); }   /* the one heading in the band colour, in the body face */
+#pboard .sbody .ahd { padding-bottom: 10px; }
+#pboard .hublead { margin: 0; max-width: 640px; font-size: 13.5px; line-height: 1.45; color: var(--muted); }
+.stabs { display: flex; flex-wrap: wrap; gap: 14px; margin: 0 0 22px; }
+.stabs .btab { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 14px; background: #fff; color: var(--ink-day, var(--ink)); border: 1px solid #c3d3e3;
+  font: 700 18px/1 var(--display); text-decoration: none; white-space: nowrap; cursor: pointer; box-shadow: var(--lift); }   /* literal white and the light ink: the same box in dark mode */
+.stabs .btab:hover { background: #f3f7fb; }
+.stabs .btab.on { background: var(--band2); color: #fff; border-color: var(--band2); }
+:root[data-view="mobile"] .stabs { gap: 8px; margin-bottom: 16px; }
+:root[data-view="mobile"] .stabs .btab { height: 36px; padding: 0 10px; font-size: 14px; flex: 1 1 auto; }
+:root[data-flat] .stabs .btab:not(.on) { color: var(--flat-ink); }
+#pboard .aset { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 10px 32px; align-items: start; padding: 18px 0; border-top: 1px solid var(--hair); }
+:root[data-view="mobile"] #pboard .aset { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 0; }
+#pboard .alab h3 { margin: 0; font: 700 14px/1.45 var(--display); color: var(--ink); }
+#pboard .alab p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+#pboard .actl { min-width: 0; }
+/* colour schemes: a swatch each — the banner with the site's name, then its colours — always from the scheme's LIGHT palette (inline from fb.js) */
+.schemes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+:root[data-view="mobile"] .schemes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.scheme { display: flex; flex-direction: column; gap: 0; padding: 0 0 8px; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--hair); overflow: hidden; cursor: pointer; font: inherit; }
+.scheme:hover { border-color: var(--accent-2); }
+.scheme[aria-pressed="true"] { border: 2px solid var(--rule); }
+.scheme .spv-bar { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; font: 500 12px/1.45 var(--display); }
+.scheme .spv-dots { display: flex; gap: 4px; padding: 8px 10px 2px; }
+.scheme .spv-dots i { display: block; width: 14px; height: 14px; }
+.scheme .sname { padding: 4px 10px 0; font: 500 13px/1.45 var(--display); color: var(--ink); }
+.scheme[aria-pressed="true"] .sname::after { content: " · in use"; font-weight: 400; color: var(--accent-2-text); }
+/* the font card */
+.fonts { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+:root[data-view="mobile"] .fonts { grid-template-columns: minmax(0, 1fr); }
+.fontcard { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px 12px; text-align: left; background: var(--surface); color: var(--ink); border: 1px solid var(--hair); cursor: pointer; }
+.fontcard[aria-pressed="true"] { border: 2px solid var(--rule); }
+.fontcard .ffname { font-size: 16px; font-weight: 500; line-height: 1.45; color: var(--ink); }
+.fontcard[aria-pressed="true"] .ffname::after { content: " · in use"; font-weight: 400; font-size: 12px; color: var(--accent-2-text); }
+.fontcard .fbody { font-size: 12.5px; color: var(--muted); }
+/* the site default line and its quiet button */
+.sitedef { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 13px; }
+.sitedef .note { margin: 0; font-size: 12.5px; }
+/* the glossary: one card a stat, grouped by position */
+.sgh { margin: 18px 0 8px; font: 700 17px/1.2 var(--display); color: var(--ink); }
+#pboard .sbody > .sgh:first-of-type { margin-top: 6px; }
+.glossary { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin: 0; }
+:root[data-view="mobile"] .glossary { grid-template-columns: 1fr; }
+.gitem { padding: 10px 12px; background: var(--surface); border: 1px solid var(--hair); border-top: 3px solid var(--accent-2); }
+.gitem b { display: block; font: 500 13.5px/1.45 var(--display); color: var(--accent); }
+.gitem b small { font-size: 12px; color: var(--muted); }
+.gitem p { margin: 4px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+.gcredit p.note { margin: 18px 0 13px; font-size: 13px; color: var(--muted); max-width: none; }
+/* the how-to prose: a paragraph a page, a <b> darker, not bolder */
+#pboard .prose { display: grid; gap: 12px; margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
+#pboard .prose b { color: var(--ink); font-weight: 500; }
+#pboard .prose .scale { display: inline-flex; gap: 3px; vertical-align: middle; margin-inline: 4px; grid-template-columns: none; font-size: inherit; }
+#pboard .prose .scale i { display: inline-block; width: 14px; height: 10px; }
+#pboard .sstamp { margin: 24px 0 4px; padding-top: 10px; border-top: 1px solid var(--hair); font-size: 12.5px; color: var(--muted); }

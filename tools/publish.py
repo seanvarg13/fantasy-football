@@ -10,7 +10,7 @@ build at once. The push: keep the built files aside, reset to origin/main, put t
 import argparse, hashlib, os, re, shutil, subprocess, sys, tempfile, time, urllib.request
 
 ROOT = "."
-LOADED = ["fb.css", "fb.js", "data/index.js", "data/teams.js"]
+LOADED = ["themes.js", "fb.css", "fb.js", "data/index.js", "data/teams.js"]
 
 
 def stamp():

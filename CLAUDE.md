@@ -3,7 +3,7 @@
 Live: **https://seanvarg13.github.io/fantasy-football/** · repo: `seanvarg13/fantasy-football`
 
 Sean reads it on his phone from the hosted copy, so **anything that is not published does not exist for him**. Publishing is merging
-to `main`; after a hand edit to `fb.js` / `fb.css` / `index.html` run `python3 tools/publish.py` (stamps the `?v=` hashes so a phone
+to `main`; after a hand edit to `fb.js` / `fb.css` / `themes.js` / `index.html` run `python3 tools/publish.py` (stamps the `?v=` hashes so a phone
 picks the change up at once) before merging. Code style: dense, comments say why, no framework, no build step.
 
 Sean, 13 Oct 2026: "I'd be curious what a fantasy football website in the exact same nature of this site would look like", then
@@ -15,7 +15,8 @@ site (the light-blue band with the red stripe, B-Ref tables, Savant percentile b
 PPR scoring throughout, and its own home-screen app (`manifest.json`, the football icon in `icons/`). No links between the two sites.
 
 **Files**: `index.html` (stamped by `tools/publish.py`: `?v=` = sha1 of every loaded file and `data/*.js`),
-`fb.js` (one IIFE, no build step, no framework), `fb.css`, and generated `data/`:
+`themes.js` (the colour schemes, loaded first in `<head>` — see "The baseball dress" at the end), `fb.js` (one IIFE, no build step, no
+framework), `fb.css`, and generated `data/`:
 `fb-<season>.js` (`window.FB[y] = {meta, players}`, a player's weekly rows named by `meta.wfields` — append only),
 `index.js` (`FB_INDEX`: name, position, seasons, bio, headshot, draft, `rk` = his first NFL season — the draft year, else nflverse's
 `rookie_season` for the undrafted; the Dynasty page's career year), `teams.js` (`FB_TEAMS`: every team-season's coaches and RB
@@ -311,7 +312,7 @@ WOPR .60, YPRR .58, TPRR .52. On top of his FP / G, draft capital adds the most 
 beat their rookie line the next year), then youth and YPRR for receivers and RYOE for backs; TPRR, target share and the backs' elusive rating /
 broken tackles add little or nothing.
 
-**The phone header** carries six pages now: the search box sits in the pages' row (`header()` puts it in the nav, pushed right on a desktop),
+**The phone header** (superseded 23 Oct 2026 by the ☰ Menu — "The baseball dress" at the end) carried six pages: the search box sat in the pages' row (`header()` puts it in the nav, pushed right on a desktop),
 so on a phone the pages and the search wrap into two lines — Leaders · Teams · Role Watch · Backfields · Coaches over Dynasty + the search —
 the same height as before. `.split > div` has `min-width: 0`, so the build-up tables scroll in their own boxes on a 320px phone instead of
 pushing the page sideways (an old bug).
@@ -345,3 +346,47 @@ the ADP files' OAK / SD the same way, found none of them in the drafts. `OLD_COD
 list's, as `team_seasons` already did); the next build files them as LV / LAC with their shares. Checked on a 2018-20 build: only those teams'
 team fields and the opponent codes in other teams' week rows change.
 
+## The baseball dress — the colour options, the header and Settings (Sean, 23 Oct 2026: "make the site look and function exactly like the
+baseball one in terms of like formatting and table formatting and whatnot and color options")
+
+The chrome is the baseball site's, written against its tokens so every colour scheme and dark mode come along. What lives where:
+* **`themes.js`** — the baseball site's `themes.js` ported: the same twelve schemes with the same tokens and names (Titans the default, the
+  four Jets schemes `flat`), light-or-dark, the mobile / desktop layout switch (`data-view` on `<html>`, the viewport meta swapped for
+  "Desktop on a phone"), `--ink-day` (the light palette's ink, in dark mode too — the type of every white box on the band) and
+  `--band2-ink` (the type set straight on the band, picked by contrast), the Google Fonts link (Barlow Condensed, Source Sans 3, Roboto
+  Condensed 700 for the bars' digits), `window.FB_THEMES` / `FB_TABLES` (`html.tsans` for the Classic tables) / `FB_DEFAULTS`. It loads
+  **first in `<head>`, before `fb.css`**, a plain script, so the scheme's tokens are inline on `<html>` before the first paint; `index.html`
+  has no fonts link of its own any more (`apply()` makes it, and rewrites `<meta theme-color>` to the band). **The localStorage keys are
+  `fb.scheme` / `fb.theme` / `fb.view` / `fb.font` / `fb.tables`** — both sites live on `seanvarg13.github.io`, one storage origin, so the
+  baseball site's `draft2027.*` keys would otherwise be shared; there are no one-time migrations (nothing to migrate) and no `defaults.js`
+  (the defaults are inline; the baseball "Make my choices the site default" button isn't here). `tools/publish.py` stamps it (`LOADED`).
+* **`fb.css`** is one sheet: a `:root` block carrying every token the baseball stylesheet reads at Titans' resolved values (the fallback for a
+  device where the script fails), the dark set twice (`@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` and
+  `:root[data-theme="dark"]`), a few derived tokens the baseball sheet mixes inline (`--edge` the table frame at ink 45%, `--grid`, `--band-dk`,
+  `--lit`, `--lift` / `--boxsh` / `--popsh` — the only shadows), then the chrome at the baseball site's computed values: body 500 13px
+  Source Sans 3 on `--ground`; the sticky header on `--band2` with the 3px `--stripe-line` rule, every page a 32px white boxy button in 600
+  17px Barlow Condensed writing in `--ink-day`, the current one filled `--ink-day` with white type (its edge `--ink`, so it shows in dark
+  mode), the 200px "Find a player…" box with its hits list; `.btn` / `.tbtn` / `.pill` / `select.sel` as 36px white rail-edged lifted boxes,
+  `.seg` buttons in the condensed face with the lift on the segment as one piece, pressed = `--btn` with `--btn-ink`; inputs 1px `--hair`;
+  `h1.ttl` 700 26px condensed over a 2px `--stripe-line` rule, `.note` 500 12px muted. **Every phone rule keys on `:root[data-view="mobile"]`,
+  not a media query** (the Layout switch depends on it); the one media query left is the tables' floating-header block, which is the tables
+  pass's. **Never read `--band` for the blue** — Titans makes that old baseball token white; the band is `--band2`. `[data-flat]` (the Jets
+  schemes) takes every outline off, writes white buttons in `--flat-ink`, makes the current page a bare white word and fills a stand-alone
+  button / select with the band colour idle (pale while pressed). The table rules (`table.br`, `.tbox`, the player band, the bars, the card
+  tabs) are the same as before with the tokens renamed — the tables and player passes dress them.
+* **The header** is Leaders · Teams · Role Watch · Backfields · Coaches · Dynasty · **Settings** with the search at the right (`PAGES` in
+  `header()`); `aria-current="page"` marks the page. **On a phone** the line is the search (32px, 16px type so iOS doesn't zoom) and a
+  "☰ Menu" button (`.navtog`); open, the pages are a two-column grid of 42px buttons under it (`body.navopen`; Settings takes the last row
+  alone), closing on a pick, a hash change or a tap elsewhere. "/" focuses the search. `route()` sets `body[data-page]` (the Settings card
+  keys on it) and the tab title.
+* **Settings** (`#settings`, `#settings/<tab>`; `settingsPage` in `fb.js`, `#pboard`): one white card with three tabs across the top in the
+  Filters-button dress (a tab is a link, so Back works) — **Stat glossary** (every `METRIC` with a tooltip, in the lists' column order, WR / TE
+  then RB then QB; the counting stats get a line from `GLOSS_X`; the data and credit line once at the foot), **Appearance** (the baseball
+  rows: Colour scheme swatches with the banner word "Sean's Football", Light or dark, Layout, Tables — Baseball-Reference / Classic, Font,
+  Site default with "Follow the site default"; no wOBA scale or Sync — those are baseball's) and **How this page works** (the colour key with
+  the five-swatch scale, then a paragraph per page). "Through week N · 2026" at the foot from `FB[CUR].meta.through`. A pick re-renders the
+  page through `route()`.
+* **Checked**: `fbcheck.cjs` (the dress scratch folder's page check: every page, phone and desktop, light and dark) ALL OK; the header, the
+  phone menu and the Settings page shot under Titans and Jets in both modes and matched against the baseball crops by computed style —
+  the page buttons, tabs, segments and headings read the same values. Found on the way: a segment that doesn't fit a phone now wraps
+  (`:root[data-view="mobile"] .seg`) and a long count line wraps, where the Dynasty page's had pushed the page sideways.
