@@ -234,7 +234,7 @@ body.lst main { display: flex; flex-direction: column; max-width: 1240px; margin
 :root[data-view="mobile"] body.lst main { margin: 4px 6px 0; padding: 0; height: calc(100dvh - var(--header-h, 47px) - 20px - env(safe-area-inset-bottom, 0px)); }
 #board { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; width: fit-content; max-width: 100%; margin: 0 auto; }   /* the controls, the title and the box share a left edge */
 :root[data-view="mobile"] #board { width: 100%; margin: 0; }
-#board > .fxnote { flex: none; margin: 0 0 8px; max-height: 9em; overflow-y: auto; overscroll-behavior: contain; }   /* open, the box gives up the room (the baseball Movers' note); it holds the page's note and, on Coaches and Dynasty, the findings */
+#board > .fxnote { flex: none; margin: 0 0 8px; max-height: 9em; overflow-y: auto; overscroll-behavior: none; }   /* open, the box gives up the room (the baseball Movers' note); it holds the page's note and, on Coaches and Dynasty, the findings */
 #board > .fxnote[hidden] { display: none; }
 #board > .fxnote > .note { margin: 0; max-width: none; padding: 0 2px; }
 #board > .fxnote > .findings { margin: 8px 0 0; }
@@ -313,7 +313,7 @@ body.lst main { display: flex; flex-direction: column; max-width: 1240px; margin
 #pop .ptab.on { color: var(--ink); border-bottom-color: var(--hair); }
 :root[data-view="mobile"] #pop .ptabs { gap: 14px; }
 :root[data-view="mobile"] #pop .ptab { min-height: 32px; font-size: 13.5px; }
-#pop .textmodal { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding-right: 4px; }
+#pop .textmodal { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: none; padding-right: 4px; }
 #pop .popsec { margin: 14px 0 10px; padding: 10px 0 2px; }
 #pop .popsec h4 { margin: 0 0 6px; font: 500 12px var(--body); color: var(--muted); }
 #pop .popsec p.note { margin: 8px 0 0; font: 500 13px/1.45 var(--body); color: var(--muted); max-width: none; }
@@ -369,7 +369,7 @@ body.lst main { display: flex; flex-direction: column; max-width: 1240px; margin
 .pill.solo .chev { display: none; }
 .pill.solo { cursor: default; }
 /* the list that opens under a pill, appended to body so no box clips it */
-.ddmenu { position: fixed; z-index: 1000; max-height: min(50vh, 420px); overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 2px 0; border: 1px solid var(--hair); background: var(--surface); box-shadow: none; text-align: left; }
+.ddmenu { position: fixed; z-index: 1000; max-height: min(50vh, 420px); overflow-y: auto; overscroll-behavior: none; margin: 0; padding: 2px 0; border: 1px solid var(--hair); background: var(--surface); box-shadow: none; text-align: left; }
 .ddmenu .ddi { display: block; width: 100%; margin: 0; padding: 1px 12px; border: 0; background: none; text-align: left; font: 500 19px/1.45 var(--display); color: var(--ink); white-space: nowrap; box-shadow: none; }
 .ddmenu .ddi:hover, .ddmenu .ddi:focus, .ddmenu .ddi.on { background: var(--hover); outline: 0; }   /* the current item tinted, like the baseball's */
 .ddmenu .ddh { padding: 6px 12px 2px; font: 700 11px var(--body); color: var(--muted); }
@@ -645,3 +645,13 @@ body[data-page="settings"] main { background: var(--surface); border: 1px solid 
 #pboard .prose .scale { display: inline-flex; gap: 3px; vertical-align: middle; margin-inline: 4px; }
 #pboard .prose .scale i { display: inline-block; width: 14px; height: 10px; }
 #pboard .sstamp { margin: 24px 0 4px; padding-top: 10px; border-top: 1px solid var(--hair); font-size: 12.5px; color: var(--muted); }
+
+/* No bounce anywhere (Sean, 23 Oct 2026: "get rid of the bouncyness when I scroll on the mobile version and maybe this is on desktop too"):
+   the page itself no longer rubber-bands past its top or foot (iPhone, and a Mac's trackpad), and every box that scrolls on its own stops
+   dead at its ends instead of bouncing — the tables and the popup already did; the notes, the Filters dropdown's middle, the pill lists
+   and the card tabs' strip now do too. A box that only slides sideways still hands an up-or-down swipe to the page. */
+html, body { overscroll-behavior: none; }
+.pbelow2 .btabs, .btabbody, .brbox, .kbox { overscroll-behavior-x: none; }
+/* a table that only slides sideways (every one but the standing lists' box) stops its sideways bounce only: blocking its up-and-down too
+   swallowed a vertical swipe that started on it, so on a phone the player page wouldn't scroll over the season table (found 23 Oct 2026) */
+.tbox:not(.lbbox) { overscroll-behavior-x: none; overscroll-behavior-y: auto; }
