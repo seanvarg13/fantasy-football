@@ -151,7 +151,7 @@ input[type="number"], input[type="text"], input[type="search"], input[type="date
    scheme's one colour, the current page is a bare white word on the band, and a stand-alone button / select fills with the band colour
    idle (pale while pressed) so it doesn't vanish on the white page once its edge is gone ---- */
 :root[data-flat] .nav a, :root[data-flat] .navtog, :root[data-flat] .btn, :root[data-flat] .tbtn, :root[data-flat] .pill, :root[data-flat] select.sel,
-:root[data-flat] .seg button, :root[data-flat] .segbtn, :root[data-flat] .tabs button, :root[data-flat] .stabs .btab, :root[data-flat] .ctl select { border-color: transparent; }
+:root[data-flat] .seg button, :root[data-flat] .segbtn, :root[data-flat] .stabs .btab { border-color: transparent; }
 :root[data-flat] .nav a, :root[data-flat] .navtog { box-shadow: none; color: var(--flat-ink); }
 :root[data-flat] .nav a.on, :root[data-flat] .nav a[aria-current="page"] { background: transparent; color: #fff; }
 :root[data-flat] .tbtn:not(.on):not([aria-pressed="true"]):not([aria-expanded="true"]), :root[data-flat] .pill:not([aria-expanded="true"]), :root[data-flat] select.sel { background: var(--btn); color: var(--btn-ink); }
@@ -333,49 +333,154 @@ body.lst main { display: flex; flex-direction: column; max-width: 1240px; margin
 .ddmenu .ddh { padding: 6px 12px 2px; font: 700 11px var(--body); color: var(--muted); }
 :root[data-flat] .ddmenu, :root[data-flat] #pop { border-width: 0; }
 
-/* ---- player band (the player pass redraws it; the tokens here) ---- */
-.band { background: var(--band2); color: #fff; border-bottom: 3px solid var(--stripe-line); margin-top: 14px; padding: 14px 16px 10px; }
-.band .row1 { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.mug { width: 72px; height: 72px; border-radius: 50%; background: rgba(255, 255, 255, .25) center / cover no-repeat; border: 2px solid #fff; flex: none; }
-.who { flex: 1 1 260px; min-width: 0; }
-.who h1 { font: 700 30px/1 var(--display); margin: 0 0 5px; }
-/* every item carries its dot and the box hides the first 20px of each line, so a wrapped line never starts with one */
-.bio { font-size: 14px; display: flex; flex-wrap: wrap; gap: 2px 0; margin-left: -20px; clip-path: inset(0 0 0 20px); }
-.bio span { white-space: nowrap; }
-.bio span::before { content: "·"; display: inline-block; width: 20px; text-align: center; opacity: .8; }
-.ctl { display: flex; gap: 8px; flex-wrap: wrap; }
-.ctl select { height: 32px; border: 1px solid #fff; background: #fff; color: var(--ink-day, var(--ink)); font: 700 15px var(--display); padding: 0 6px; }
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(76px, 1fr)); margin-top: 12px; border-top: 1px solid rgba(255, 255, 255, .45); }
-.facts div { padding: 8px 4px 2px; text-align: center; border-right: 1px solid rgba(255, 255, 255, .3); }
-.facts div:last-child { border-right: 0; }
-.facts b { display: block; font: 700 22px/1.15 var(--display); }
-.facts small { font-size: 12px; opacity: .92; }
-.facts .chip { display: inline-block; padding: 0 6px; }
-.facts .lnk { color: #fff; }
-
-/* ---- percentile bars, Savant style ---- */
-.pcthd { text-align: center; font: 700 22px var(--display); margin: 26px 0 4px; }
-.pcols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 40px; }
-:root[data-view="mobile"] .pcols { grid-template-columns: 1fr; }
-.psec h4 { font: 700 19px var(--display); margin: 14px 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--hair); }
-.prow { display: grid; grid-template-columns: minmax(104px, 10em) minmax(0, 1fr) 4.4em; align-items: center; gap: 10px; height: 30px; }
-.prow .lb { text-align: right; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.prow .val { font-size: 13.5px; font-variant-numeric: tabular-nums; }
-.prow.none .lb, .prow.none .val { color: var(--muted); }
-.trk { position: relative; height: 10px; background: var(--pctrack); margin-right: 14px; }
-.trk .fill { position: absolute; inset: 0 auto 0 0; }
-.trk .tick { position: absolute; top: -3px; bottom: -3px; width: 1px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
-.bub { position: absolute; top: 50%; width: 24px; height: 24px; margin: -12px 0 0 -12px; border-radius: 50%; border: 2px solid var(--surface); display: grid; place-items: center; font: 700 11px/1 var(--display); color: #fff; }
-.scale { display: grid; grid-template-columns: minmax(104px, 10em) minmax(0, 1fr) 4.4em; gap: 10px; font-size: 11px; color: var(--muted); }
-.scale div { display: flex; justify-content: space-between; margin-right: 14px; }
-@media (prefers-reduced-motion: no-preference) { .fill, .bub { transition: width .25s, left .25s; } }
-
-/* ---- card tabs (the player pass's; the band-filled tab dress of the baseball card) ---- */
-.tabs { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; margin: 28px 0 0; }
-.tabs button { display: inline-flex; align-items: center; height: 40px; padding: 0 14px; background: var(--band2); border: 1px solid var(--band2); color: #fff; font: 700 18px/1 var(--display); box-shadow: var(--lift); }
-.tabs button:hover { background: color-mix(in srgb, var(--band2) 86%, #000); }
-.tabs button[aria-pressed="true"] { background: var(--ink-day, var(--ink)); border-color: var(--ink-day, var(--ink)); color: #fff; }
-:root[data-view="mobile"] .tabs button { height: 36px; padding: 0 10px; font-size: 14px; }
+/* ---- the player page (Sean, 23 Oct 2026: "exactly like the baseball one"): the baseball player page's computed values, piece for piece
+   (player.md). The page runs the screen's width with the baseball's gutter (min(6vw, 96px)); the bar bleeds past it (fb.js's bleedBar), the
+   band and the blue-rule section take the same negative margins; a phone has no gutter and each block keeps its own 12px ---- */
+body[data-page="player"] { padding-bottom: 0; }                                   /* the section under the bars carries the foot's air */
+body[data-page="player"] main { max-width: none; padding: 0 min(6vw, 96px); }
+body[data-page="player"] .top { z-index: 60; }                                     /* the header's menus and search list over the sticky bar */
+:root[data-view="mobile"] body[data-page="player"] main { padding: 0; }
+/* a phone's bounce: the html canvas is the band's colour at the top (it meets the header) and the page's white past the foot (html.pgfoot, set
+   by footSync once the page is scrolled past its middle) */
+:root[data-view="mobile"]:has(body[data-page="player"]) { background: var(--band2); }
+:root[data-view="mobile"].pgfoot:has(body[data-page="player"]) { background: var(--surface); }
+/* the sticky bar: headshot · name over the bio line · the season button; stuck under the site header, the red rule once the band is under it */
+.pgbar { position: sticky; top: var(--header-h, 63px); z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 14px; min-height: 84px; padding: 10px 0; background: var(--band2); color: #fff; }
+.pgbar.stuck { box-shadow: 0 3px 0 var(--stripe-line); }
+.pgbmug { flex: none; width: 64px; height: 64px; border-radius: 50%; overflow: hidden; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 2px #fff; }
+.pgbmug .mug { display: block; width: 100%; height: 100%; border: 0; border-radius: 0; background: none; object-fit: cover; object-position: center top; }
+.pgbtxt { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.pgbnrow { font: 700 28px/1.1 var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pgbnrow h2 { display: inline; margin: 0; font: inherit; color: #fff; }
+.pbrow1 { display: flex; align-items: center; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; min-width: 0; }
+.pbline { display: flex; flex-wrap: wrap; align-items: center; margin-left: -18px; color: #fff; font: 500 15px/1.35 var(--body); }   /* pulled left a dot's width: the dot that starts a line is clipped away */
+.pbit { display: inline-flex; align-items: center; white-space: nowrap; }
+.pbdot { display: inline-block; width: 18px; text-align: center; opacity: .75; }
+.pbteam { text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.pgfix { display: flex; align-items: center; gap: 8px; flex: none; align-self: center; }
+.pgfix .seg { gap: 0; overflow: hidden; box-shadow: var(--lift); }
+.pgfix .segbtn { display: inline-flex; align-items: center; justify-content: center; height: 40px; min-height: 40px; padding: 0 14px; border: 1px solid #fff; background: #fff; color: var(--ink-day, var(--ink)); font: 700 18px/1 var(--display); letter-spacing: 0; }
+.pgfix .segbtn:hover, .pgfix .segbtn.ddon, .pgfix .segbtn[aria-expanded="true"] { background: #f3f7fb; color: var(--ink-day, var(--ink)); border-color: #fff; }
+.pgfix .segbtn:disabled { opacity: 1; cursor: default; }
+:root[data-view="mobile"] .pgbar { gap: 10px; min-height: 66px; padding: 8px 0; justify-content: flex-end; }
+:root[data-view="mobile"] .pgbmug { width: 50px; height: 50px; }
+:root[data-view="mobile"] .pgbtxt { gap: 2px; }
+:root[data-view="mobile"] .pgbnrow { font-size: 20px; line-height: 1.05; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }   /* a long name takes two lines */
+:root[data-view="mobile"] .pbline { font-size: 12.5px; margin-left: -13px; }
+:root[data-view="mobile"] .pbdot { width: 13px; }
+:root[data-view="mobile"] .pgfix { gap: 5px; }
+:root[data-view="mobile"] .pgfix .segbtn { height: 36px; min-height: 36px; padding: 0 7px; font-size: 14px; }
+/* the band: the blue plate holding the Summary alone, the 3px stripe and its 2px shadow under it (a 5px red rule) */
+.pagehead { margin: 0 calc(-1 * min(6vw, 96px)); }
+.mplate { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 10px; padding: 4px min(6vw, 96px) 12px; background: var(--band2); color: #fff; border-bottom: 3px solid var(--stripe-line); box-shadow: 0 2px 0 var(--stripe-line); }
+:root[data-view="mobile"] .pagehead { margin: 0; }
+:root[data-view="mobile"] .mplate { padding: 4px 12px 12px; }
+.pbsum { display: flex; flex-direction: column; border-top: 1px solid rgba(255, 255, 255, .45); padding-top: 6px; }
+.pbsrow { display: grid; grid-template-columns: 80px repeat(var(--n, 11), minmax(0, 1fr)); align-items: center; height: 30px; }
+.pbsrow.pbshead { height: 22px; }
+.pbsl { text-align: left; font-size: 13px; color: var(--band2-ink); }
+.pbshead .pbsl { font-size: 11px; opacity: .9; }
+.pbsh { display: flex; align-items: center; justify-content: center; height: 100%; font-size: 11px; opacity: .9; text-align: center; white-space: nowrap; color: var(--band2-ink); }
+.pbsv { display: flex; align-items: center; justify-content: center; height: 100%; font: 500 18px var(--display); font-variant-numeric: tabular-nums; text-align: center; color: var(--band2-ink); }
+.pbsh.sep, .pbsv.sep { border-left: 1px solid rgba(255, 255, 255, .45); }
+.pbchip { display: inline-block; min-width: 3.8em; padding: 2px 10px; border-radius: 999px; font: 500 17px/1.35 var(--display); font-variant-numeric: tabular-nums; text-align: center; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, .35); }
+:root[data-view="mobile"] .pbsrow { grid-template-columns: 50px minmax(0, 1.35fr) minmax(0, 1.35fr); grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: 26px; }   /* the two pill columns wider */
+:root[data-view="mobile"] .pbsrow.pbshead { height: 20px; }
+:root[data-view="mobile"] .pbsl { font-size: 12px; }
+:root[data-view="mobile"] .pbshead .pbsl, :root[data-view="mobile"] .pbsh { font-size: 10px; }
+:root[data-view="mobile"] .pbsv { font-size: 15px; }
+:root[data-view="mobile"] .pbx { display: none; }
+:root[data-view="mobile"] .pbchip { min-width: 0; max-width: calc(100% - 4px); padding: 1px 5px; font-size: 13.5px; }
+:root[data-flat] .pbsum { border-top-color: transparent; }
+:root[data-flat] .pbsum .pbsl, :root[data-flat] .pbsum .pbsh, :root[data-flat] .pbsum .pbsv { color: #fff; }
+/* the Bio box: 72px under the band (36 on a phone), 680px at most, the band-blue head over a red rule, the lines with bold keys */
+.pbinfo { margin: 72px 0 0; width: min(100%, 680px); border: 1px solid var(--edge); background: var(--surface); box-shadow: 0 2px 10px rgba(0, 0, 0, .12), 0 1px 3px rgba(0, 0, 0, .08); }
+.pbinfohd { padding: 9px 12px; background: var(--band2); color: #fff; font: 700 15px/1 var(--body); border-bottom: 2px solid var(--stripe-line); }
+.pbinfobd { display: grid; grid-template-columns: 1fr; gap: 5px; padding: 12px 14px 14px; }
+.pbil { font: 500 14px/1.4 var(--body); color: var(--ink); }
+.pbil b { font-weight: 700; }
+.pbil.pbfull { font: 700 17px/1.3 var(--body); }
+:root[data-view="mobile"] .pbinfo { margin: 36px 12px 0; width: auto; }
+:root[data-view="mobile"] .pbinfobd { gap: 4px; padding: 10px 12px 12px; }
+:root[data-view="mobile"] .pbil, :root[data-view="mobile"] .pbil.pbfull { font-size: 13.5px; }
+:root[data-flat] .pbinfo { border-width: 0; }
+/* the season block: the view switch, the title, the table in the B-Ref dress (Season and Tm frozen, Age fading under them), the note */
+.sblock { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 58px; padding: 14px 0 0; }
+.sblock > .note { margin-top: 2px; }
+.sblock .tbox { max-width: 100%; }
+.sblock .br td.age, .sblock .br th.age { opacity: var(--sbage, 1); }
+.sbviews { display: inline-flex; align-self: flex-start; margin-bottom: 22px; padding: 4px; gap: 4px; background: var(--surface-2); border: 1px solid color-mix(in srgb, var(--ink) 22%, var(--surface)); box-shadow: var(--lift); }
+.sbview { height: 34px; padding: 0 16px; border: 0; background: transparent; color: var(--ink); font: 500 13.5px var(--body); white-space: nowrap; box-shadow: none; }
+.sbview:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.sbview.on { background: var(--btn); color: var(--btn-ink); font-weight: 600; }
+.sbhead { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+.sbtitle { margin: 0; font: 700 26px var(--display); color: var(--ink); letter-spacing: .01em; }
+:root[data-view="mobile"] .sblock { margin-top: 26px; padding: 10px 12px 0; align-self: stretch; }
+:root[data-view="mobile"] .sbtitle { font-size: 22px; }
+/* a phone's switch is one "Standard ▾" button in the Filters button's dress, its list the site's dropdown */
+.sbviews.sbviewsdd { display: block; margin-bottom: 14px; padding: 0; border: 0; background: none; box-shadow: none; }
+.sbviewdd { display: inline-flex; align-items: center; height: 32px; min-height: 32px; padding: 0 14px; background: #fff; color: var(--ink-day, var(--ink)); border: 1px solid var(--rail); font: 600 14px/1 var(--body); white-space: nowrap; box-shadow: var(--lift); }
+.sbviewdd.ddon, .sbviewdd[aria-expanded="true"] { background: color-mix(in srgb, var(--accent-2) 18%, #fff); color: var(--ink-day, var(--ink)); border-color: var(--rail); }
+:root[data-flat] .sbviews, :root[data-flat] .sbviewdd { border-color: transparent; }
+:root[data-flat] .sbviewdd { color: var(--flat-ink); }
+/* the percentiles title: "2026 ▾ WR Percentiles" centred, the year a word over four light-blue dots (no dots with one season) */
+.pcthd { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 0 10px; margin: 40px 0 10px; text-align: center; font: 700 26px var(--display); color: var(--ink); letter-spacing: .01em; }
+.pcthd .tsl { height: auto; min-height: 0; margin: 0; padding: 0 0 7px; border: 0; background: radial-gradient(circle, var(--accent-2) 1.6px, transparent 1.8px) left bottom / 9px 4px repeat-x; background-repeat: space no-repeat; font: 700 26px/1.2 var(--display); color: var(--ink); letter-spacing: .01em; cursor: pointer; box-shadow: none; }
+.pcthd .dd.solo .tsl { background: none; cursor: default; opacity: 1; }
+:root[data-view="mobile"] .pcthd { margin-top: 28px; font-size: 22px; }
+:root[data-view="mobile"] .pcthd .tsl { font-size: 22px; }
+.pctnote { text-align: center; margin: 0 auto; }
+/* the charts: an 860px box centred, two 406px columns 48px apart (a phone one column, 12px in); Savant's drawing from fb.js's pctSvg */
+.ppage { width: min(100%, var(--pbox-w)); margin: 12px auto 0; }
+:root[data-view="mobile"] .ppage { width: 100%; padding: 0 12px; }
+.pctcols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 48px; align-items: start; }
+:root[data-view="mobile"] .pctcols { grid-template-columns: minmax(0, 1fr); }
+.svchart { position: relative; width: 100%; }
+.svpct { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--body); }
+.svpct text { font-size: 13px; dominant-baseline: middle; }
+.svpct .svsecname { font: 700 15px var(--body); letter-spacing: 0; text-transform: none; fill: var(--ink); dominant-baseline: auto; }
+.svpct .svsecrule { fill: var(--hair); }
+.svpct .svline { fill: var(--pctrack); rx: 2.5px; }
+.svpct rect[fill] { rx: 3px; }                                                    /* the fill: rounded ends over the flat track */
+.svpct .svtick, .svpct .svdash, .svpct .svscale { display: none; }               /* the warm pass's look: no ticks, no dashed rules, no Poor / Average / Great */
+.svpct .svlbl { font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+.svpct .svsub { fill: var(--ink-2); font-size: 11px; }
+.svpct .svrow { cursor: pointer; }
+.svpct .svbulb { stroke: var(--surface); stroke-width: 2.5; }
+.svpct .svnum { font-family: "Roboto Condensed", var(--body); font-size: 12px; font-weight: 700; fill: #fff; text-anchor: middle; }
+.svpct .svnum.c3 { font-size: 10px; }
+/* the tap note under a row */
+.statpop { position: absolute; left: 16px; right: 16px; z-index: 5; padding: 8px 10px; background: var(--surface); border: 1px solid var(--rule); font-size: 12.5px; line-height: 1.4; color: var(--ink); }
+.statpop .sphd { display: flex; gap: 10px; align-items: baseline; }
+.statpop .sphd b { font: 500 17px var(--display); }
+.statpop p { margin: 4px 0; color: var(--ink-2); }
+.statpop p.spfacts { color: var(--muted); font-size: 12px; }
+/* the skills note under the charts sits with them */
+.ppage + .note { margin: 10px auto 0; max-width: var(--pbox-w); padding: 0 20px; }
+:root[data-view="mobile"] .ppage + .note { padding: 0 12px; }
+/* under the bars: the red rule, the tab strip (band-filled buttons 14px apart, the picked one the deep ink; white in dark mode), the open
+   tab's white box; the section bleeds to the screen's edges like the band and runs to the page's foot */
+.pbelow2 { margin: 16px calc(-1 * min(6vw, 96px)) 0; padding: 14px min(6vw, 96px) 48px; border-top: 3px solid var(--stripe-line); background: transparent; }
+.btabs { display: flex; justify-content: center; gap: 14px; padding: 6px 0 2px; }
+.btabs .btab { display: inline-flex; align-items: center; justify-content: center; height: 40px; min-height: 36px; padding: 0 14px; border: 1px solid transparent; background: var(--band2); color: #fff; font: 700 18px/1 var(--display); letter-spacing: 0; text-transform: none; white-space: nowrap; box-shadow: var(--lift); }
+@media (hover: hover) { .btabs .btab:not(.on):hover { background: color-mix(in srgb, var(--band2) 86%, #000); } }
+.btabs .btab.on { background: var(--ink-day, var(--ink)); color: #fff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btabs .btab.on { background: #fff; color: var(--ink-day, var(--ink)); } }
+:root[data-theme="dark"] .btabs .btab.on { background: #fff; color: var(--ink-day, var(--ink)); }
+.btabbody { max-width: var(--pbox-w); margin: 14px auto 0; padding: 14px 16px; background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; overflow: hidden; }   /* the one rounded box on the page */
+.btabbody .secttl { margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--hair); font-size: 24px; }   /* the box's heading row (the baseball's .rollhd): the title type over a hairline */
+.btabbody .note { max-width: none; }
+:root[data-view="mobile"] .pbelow2 { margin: 16px 0 0; padding: 10px 12px calc(24px + env(safe-area-inset-bottom, 0px)); }
+:root[data-view="mobile"] .btabs { flex-wrap: nowrap; justify-content: flex-start; gap: 14px; margin: 0 -12px -8px; padding: 6px 12px 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; mask: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+:root[data-view="mobile"] .btabs::-webkit-scrollbar { display: none; }
+:root[data-view="mobile"] .btabs::after { content: ""; flex: none; width: 16px; }     /* the last tab can scroll clear of the fade */
+:root[data-view="mobile"] .btabs.fits { justify-content: center; mask: none; margin-bottom: 0; }
+:root[data-view="mobile"] .btabs.fits::after { display: none; }
+:root[data-view="mobile"] .btabs .btab { flex: none; height: 36px; padding: 0 7px; font-size: 14px; }
+:root[data-view="mobile"] .btabbody { padding: 12px 12px; }
+:root[data-view="mobile"] .btabbody .secttl { font-size: 21px; }
+:root[data-flat] .pgfix .segbtn, :root[data-flat] .btabs .btab, :root[data-flat] .btabbody { border-color: transparent; }
+:root[data-flat] .pgfix .segbtn { color: var(--flat-ink); }
 .split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 :root[data-view="mobile"] .split { grid-template-columns: 1fr; }
 .split > div { min-width: 0; }   /* a wide table scrolls in its own box; a grid item's auto minimum had pushed the page sideways on a 320px phone */
@@ -463,6 +568,6 @@ body[data-page="settings"] main { background: var(--surface); border: 1px solid 
 /* the how-to prose: a paragraph a page, a <b> darker, not bolder */
 #pboard .prose { display: grid; gap: 12px; margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); }
 #pboard .prose b { color: var(--ink); font-weight: 500; }
-#pboard .prose .scale { display: inline-flex; gap: 3px; vertical-align: middle; margin-inline: 4px; grid-template-columns: none; font-size: inherit; }
+#pboard .prose .scale { display: inline-flex; gap: 3px; vertical-align: middle; margin-inline: 4px; }
 #pboard .prose .scale i { display: inline-block; width: 14px; height: 10px; }
 #pboard .sstamp { margin: 24px 0 4px; padding-top: 10px; border-top: 1px solid var(--hair); font-size: 12.5px; color: var(--muted); }

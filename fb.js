@@ -571,62 +571,310 @@
   SKILL_NOTE.WR += " Weighted opportunity share is his carries + 2.5 × targets over his team's, in his games: his slice of the offense, as good as xFP/G at next season's points (r .68 for receivers, .71 for tight ends) and a touch steadier year to year than his targets per game. For receivers, weighting targets by depth doesn't beat plain targets — a target is a target. The red-zone and end-zone shares are his part of his team's scoring chances; they move more from year to year (r .52 / .50 for receivers, .53 / .44 for tight ends).";
   SKILL_NOTE.TE = SKILL_NOTE.WR;
 
+  // ---------- the player page (Sean, 23 Oct 2026: "make the site look and function exactly like the baseball one") ----------
+  // The baseball page, piece for piece, from the top: a bar that sticks under the site header (the round headshot, his name, the bio line
+  // in words with a dot before each item, the season as a boxy white "2026 ▾" button at the right — the football page has no filters,
+  // so no Filters ▾), the band holding only the Summary (the season shown and his career, FP/G and xFP/G as pills in their percentile
+  // colour), the Bio box, the season-by-season table with its view switch, the centred "2026 WR Percentiles" title (the year a picker),
+  // Savant's charts drawn by the baseball's own pctSvg, the skills note, and the tab strip over a white box. bleedBar() runs the bar out
+  // to the screen's edges, stickSync() shows its red rule once the band has scrolled under it, and footSync() paints a phone's html canvas
+  // the colour of the end it is bouncing at.
+  const TEAM_FULL = { ARI: "Arizona Cardinals", ATL: "Atlanta Falcons", BAL: "Baltimore Ravens", BUF: "Buffalo Bills", CAR: "Carolina Panthers", CHI: "Chicago Bears", CIN: "Cincinnati Bengals",
+    CLE: "Cleveland Browns", DAL: "Dallas Cowboys", DEN: "Denver Broncos", DET: "Detroit Lions", GB: "Green Bay Packers", HOU: "Houston Texans", IND: "Indianapolis Colts", JAX: "Jacksonville Jaguars",
+    KC: "Kansas City Chiefs", LA: "Los Angeles Rams", LAC: "Los Angeles Chargers", LV: "Las Vegas Raiders", MIA: "Miami Dolphins", MIN: "Minnesota Vikings", NE: "New England Patriots",
+    NO: "New Orleans Saints", NYG: "New York Giants", NYJ: "New York Jets", PHI: "Philadelphia Eagles", PIT: "Pittsburgh Steelers", SEA: "Seattle Seahawks", SF: "San Francisco 49ers",
+    TB: "Tampa Bay Buccaneers", TEN: "Tennessee Titans", WAS: "Washington Commanders" };
+  const POS_FULL = { WR: "Wide Receiver", TE: "Tight End", RB: "Running Back", FB: "Fullback", QB: "Quarterback" };
+  const draftLine = (e) => (e.dr ? `${e.dr[0]} R${e.dr[1]} #${e.dr[2]}` : "UDFA");
+
   async function player(main, id) {
     const e = IDX[id]; if (!e) { main.textContent = ""; main.append(el("p", "load", "No player with that id.")); return; }
     const seasons = [...e.s].sort((a, b) => a - b);
-    let y = S.pseason && S.pseason[id] && seasons.includes(S.pseason[id]) ? S.pseason[id] : seasons[seasons.length - 1];
+    const y = S.pseason && S.pseason[id] && seasons.includes(S.pseason[id]) ? S.pseason[id] : seasons[seasons.length - 1];
     const [D] = await Promise.all([ensure(y), loadScript("data/career.js").catch(() => null)]), p = D.players.find((q) => q.id === id);
-    if (!p) { main.textContent = ""; main.append(el("p", "load", "No line for that season.")); return; }
+    if (!p) { main.textContent = ""; main.style.minHeight = ""; main.append(el("p", "load", "No line for that season.")); return; }
     const pos = posGroup(p.pos), m = M(p), meta = D.meta;
+    const yearOpts = [...seasons].reverse().map((s) => [s, String(s)]);
+    const pickYear = (v) => { S.pseason = Object.assign({}, S.pseason, { [id]: +v }); save(); route(); };   // route() keeps the page where it was (the same hash)
     main.textContent = "";
-    // band
-    const band = el("section", "band"), r1 = el("div", "row1"), mug = el("div", "mug"); if (e.img) mug.style.backgroundImage = `url("${e.img}")`;
-    const who = el("div", "who"); who.append(el("h1", null, e.n));
-    const bio = el("div", "bio"), age = p.age != null ? Math.floor(p.age) : null;
-    for (const s of [p.pos, p.tms && p.tms.length > 1 ? p.tms.join(" / ") : p.tm, age != null ? "Age " + age : null, e.ht ? `${htFmt(e.ht)} · ${e.wt}` : null, e.col, e.dr ? `${e.dr[0]} R${e.dr[1]} #${e.dr[2]}` : null]) if (s) bio.append(el("span", null, s));
-    who.append(bio);
-    const ctl = el("div", "ctl"), sel = el("select"); sel.setAttribute("aria-label", "Season");
-    for (const s of [...seasons].reverse()) { const o = el("option", null, String(s)); o.value = s; if (s === y) o.selected = true; sel.append(o); }
-    sel.addEventListener("change", () => { S.pseason = Object.assign({}, S.pseason, { [id]: +sel.value }); save(); route(); });
-    ctl.append(sel); r1.append(mug, who, ctl);
-    const facts = el("div", "facts");
-    const fact = (lab, val, pcv) => { const d = el("div"), b = el("b"); if (pcv != null) { const s = el("span", "chip", val); paint(s, pcv); s.classList.remove("heat"); b.append(s); } else b.textContent = val; d.append(b, el("small", null, lab)); facts.append(d); };
-    fact("G", String(p.g));
-    if (pos === "QB") { fact("Pass Yds", String(p.pyd)); fact("Pass TD", String(p.ptd)); fact("INT", String(p.int_)); fact("Rush Yds", String(p.ruyd)); }
-    else if (pos === "RB") { fact("Car", String(p.car)); fact("Rush Yds", String(p.ruyd)); fact("TD", String(p.rutd + p.rtd)); fact("Rec", String(p.rec)); }
-    else { fact("Tgt", String(p.tgt)); fact("Rec", String(p.rec)); fact("Yds", String(p.ryd)); fact("TD", String(p.rtd)); }
-    fact("FP/G", num(m.fpg), pctOf(y, pos, "fpg", m.fpg)); fact("xFP/G", num(m.xfpg), pctOf(y, pos, "xfpg", m.xfpg)); fact("FPOE/G", sgn(m.fpoeg), pctOf(y, pos, "fpoeg", m.fpoeg));
-    band.append(r1, facts); main.append(band);
-    // percentile bars
-    const q = qualifies(p, meta);
-    main.append(el("h2", "pcthd", `${y} ${pos} Percentiles`));
-    if (!q) main.append(el("p", "note", `Under the ${pos} minimum this season, so he's placed among the qualified ${pos}s rather than counted in them.`));
-    const cols = el("div", "pcols");
+    main.append(playerBar(e, p, y, yearOpts, pickYear));
+    // the band under the bar: the blue plate with the Summary alone (the bio rides in the bar), the 3px stripe and its 2px shadow under it
+    const top = el("div", "cardtop phead pagehead"), plate = el("div", "mplate pbio pbone"); plate.append(summaryBlock(id, p, y, pos)); top.append(plate);
+    main.append(top, bioBox(e, p, y), seasonBlock(id, y, pos));
+    // "2026 ▾ WR Percentiles", centred: the year is where the season is picked, over four light-blue dots (a plain word with one season)
+    const pt = el("h3", "pcthd"), yw = el("span", "dd tsel"), yb = el("button", "tsl", String(y)); yb.type = "button"; yb.setAttribute("aria-label", "Season: " + y); yw.append(yb);
+    if (yearOpts.length < 2) { yw.classList.add("solo"); yb.disabled = true; }
+    else { yb.setAttribute("aria-haspopup", "listbox"); yb.setAttribute("aria-expanded", "false"); yb.addEventListener("click", (ev) => { ev.stopPropagation(); ddOpenOn(yb, yearOpts, y, pickYear); }); }
+    pt.append(yw, " ", el("span", "pclv", pos), " Percentiles"); main.append(pt);
+    if (!qualifies(p, meta)) main.append(el("p", "note pctnote", `Under the ${pos} minimum this season, so he's placed among the qualified ${pos}s rather than counted in them.`));
+    // the charts: two columns of sections on a desktop, one on a phone, each an SVG drawn at its column's real width
+    const pg = el("div", "ppage pageflow"), cols = el("div", "pctcols"), n = pool(y, pos).ref.length;
+    pctROs.forEach((ro) => ro.disconnect()); pctROs = [];
     BARS[pos].forEach((col, ci) => {
-      const c = el("div");
-      const sc = el("div", "scale"), mid = el("div"); mid.append(el("span", null, "Poor"), el("span", null, "Average"), el("span", null, "Great")); sc.append(el("span"), mid, el("span")); if (ci === 0) c.append(sc); else { sc.classList.add("desk"); c.append(sc); }
+      const groups = [];
       for (const [name, keys] of col) {
-        const s = el("div", "psec"); s.append(el("h4", null, name));
+        const rows = [];
         for (const k of keys) {
-          const v = m[k], pv = pctOf(y, pos, k, v), r = el("div", "prow" + (pv == null ? " none" : "")), trk = el("div", "trk");
-          for (const x of [10, 50, 90]) { const tk = el("div", "tick"); tk.style.left = x + "%"; trk.append(tk); }
-          if (pv != null) { const P = Math.round(pv), h = heat(P), fill = el("div", "fill"), bub = el("div", "bub", String(P)); fill.style.width = P + "%"; fill.style.background = h.bg; bub.style.left = P + "%"; bub.style.background = h.bg; trk.append(fill, bub); r.title = `${LABEL[k] || k}: ${fmtM(k, v)}, ${ord(P)} percentile among ${pool(y, pos).ref.length} qualified ${pos}s`; }
-          r.append(el("div", "lb", LABEL[k] || METRIC[k].h), trk, el("div", "val", fmtM(k, v))); s.append(r);
+          const v = m[k]; if (v == null || !isFinite(v)) continue;   // a row with no value is skipped, as the baseball's are
+          const pv = pctOf(y, pos, k, v), label = LABEL[k] || METRIC[k].h, value = fmtM(k, v), hib = !(METRIC[k] && METRIC[k].hib === 0), s = pool(y, pos).sorted[k];
+          rows.push({ k, label, value, hib, pct: pv == null ? null : Math.round(pv), gloss: METRIC[k] && METRIC[k].t, lg: s && s.length ? fmtM(k, s[Math.floor(s.length / 2)]) : null,
+                      tip: `${label}: ${value}${pv != null ? ` · ${ord(Math.round(pv))} pctl among ${n} qualified ${pos}s` : ""}${hib ? "" : " (lower is better)"}` });
         }
-        c.append(s);
+        if (rows.length) groups.push({ title: name, rows });
       }
-      cols.append(c);
+      if (groups.length) cols.append(pctChart(groups, ci));
     });
-    main.append(cols);
+    pg.append(cols); main.append(pg);
     if (SKILL_NOTE[pos]) main.append(el("p", "note", SKILL_NOTE[pos] + (m.sep == null && (pos === "WR" || pos === "TE") ? " Next Gen Stats carries no season row for him (under its target minimum)." : "") + (y < 2022 && (pos === "WR" || pos === "TE") ? " FTN's contested-target charting starts in 2022." : "")));
-    // tabs
-    const tabs = el("div", "tabs"), body = el("div");
+    main.append(renderBelow(p, y, pos, meta));
+    main.style.minHeight = "";   // route() held the page's height through the redraw
+    requestAnimationFrame(() => { bleedBar(); stickSync(); footSync(); });
+  }
+
+  // the sticky bar: the headshot at the far left, the name over the bio line, the season button at the right (the baseball's .pgbar.pgbar3)
+  function playerBar(e, p, y, yearOpts, pickYear) {
+    const bar = el("div", "pgbar pgbar3"), mug = el("div", "pgbmug");
+    if (e.img) { const img = el("img", "mug"); img.alt = ""; img.loading = "lazy"; img.src = e.img; img.addEventListener("error", () => img.replaceWith(el("div", "mug initials"))); mug.append(img); }
+    else mug.append(el("div", "mug initials"));   // no photo: the empty circle
+    const txt = el("div", "pgbtxt"), nrow = el("div", "pgbnrow"), nm = el("h2", "pgbname", e.n); nm.id = "modal-title"; nrow.append(nm);
+    const row1 = el("div", "pbrow1"); row1.append(bioStrip(e, p, y)); txt.append(nrow, row1);
+    const fx = el("div", "pgfix"), seg = el("div", "seg phfiltseg"), yb = el("button", "segbtn small phfilt", yearOpts.length > 1 ? `${y} ▾` : String(y)); yb.type = "button"; yb.setAttribute("aria-label", "Season: " + y);
+    if (yearOpts.length > 1) { yb.setAttribute("aria-haspopup", "listbox"); yb.setAttribute("aria-expanded", "false"); yb.addEventListener("click", (ev) => { ev.stopPropagation(); ddOpenOn(yb, yearOpts, y, pickYear); }); }
+    else yb.disabled = true;
+    seg.append(yb); fx.append(seg); bar.append(mug, txt, fx);
+    return bar;
+  }
+  // the one-line bio under his name: position, team (a link to its backfield that season), age, height and weight, college, the draft; a phone
+  // reads the codes. Each item carries its own dot and the line is pulled left by a dot's width under the column's clip, so whichever item
+  // starts a line loses its dot — a bio that wraps never shows a dot at either end of a line (the baseball's way)
+  function bioStrip(e, p, y) {
+    const d = el("div", "pbline"), mob = isMobile();
+    const add = (t) => { const w = el("span", "pbit"); w.append(el("span", "pbdot", "·"), typeof t === "string" ? el("span", null, t) : t); d.append(w); };
+    add(mob ? p.pos : (POS_FULL[p.pos] || p.pos));
+    const tms = p.tms && p.tms.length > 1 ? p.tms : p.tm ? [p.tm] : [];
+    if (tms.length) {
+      const t = el("span", "pbteam", tms.map((c) => (mob ? c : TEAM_FULL[c] || c)).join(" / ")), tm = tms[tms.length - 1];
+      t.title = `${TEAM_FULL[tm] || tm}: the backfield that season`; t.setAttribute("role", "link"); t.tabIndex = 0;
+      t.addEventListener("click", () => { location.hash = `#team/${tm}/${y}`; }); t.addEventListener("keydown", (ev) => { if (ev.key === "Enter") t.click(); });
+      add(t);
+    }
+    if (p.age != null) add("Age " + Math.floor(p.age));
+    if (e.ht) add(htFmt(e.ht) + (e.wt ? `, ${Math.round(e.wt)}` : ""));
+    if (e.col) add(e.col);
+    add(draftLine(e));
+    return d;
+  }
+  // the bar out to both edges of the screen: negative margins as wide as the page's side gaps, the same as padding (plus a phone's 13px),
+  // so its contents stay in line with the page and nothing scrolls sideways (the screen's width without the scrollbar)
+  function bleedBar() {
+    const bar = $("main .pgbar"); if (!bar) return;
+    bar.style.marginLeft = bar.style.marginRight = bar.style.paddingLeft = bar.style.paddingRight = "";
+    const r = bar.getBoundingClientRect(), W = document.documentElement.clientWidth, L = Math.max(0, Math.round(r.left)), Rt = Math.max(0, Math.round(W - r.right)), pad = isMobile() ? 13 : 0;
+    bar.style.marginLeft = -L + "px"; bar.style.marginRight = -Rt + "px"; bar.style.paddingLeft = L + pad + "px"; bar.style.paddingRight = Rt + pad + "px";
+  }
+  // the bar and the band read as one header: the bar's red rule shows only once the band has scrolled up under it (class stuck)
+  function stickSync() {
+    const bar = $("main .pgbar"), band = $("main .pagehead"); if (!bar || !band) return;
+    bar.classList.toggle("stuck", band.getBoundingClientRect().bottom <= bar.getBoundingClientRect().bottom + 2);
+  }
+  // what a phone shows past the page's ends as it bounces (the html canvas) follows the end you're at: the band's colour at the top, where it
+  // meets the header, and the page's white past the foot — the lower half of a player page sets pgfoot
+  function footSync() {
+    const r = document.documentElement, max = r.scrollHeight - innerHeight;
+    r.classList.toggle("pgfoot", document.body.dataset.page === "player" && max > 0 && window.scrollY > max / 2);
+  }
+  window.addEventListener("scroll", () => requestAnimationFrame(() => { stickSync(); footSync(); }), { passive: true });
+  window.addEventListener("resize", () => requestAnimationFrame(bleedBar));
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener("loadingdone", () => requestAnimationFrame(bleedBar));   // the name's width once its face has loaded
+
+  // the Summary at the band's foot (the baseball's .pbsum): the season shown and his career — G, the receiving and rushing counts (a QB's
+  // passing line), FP/G and xFP/G as pills painted by their percentile among the season's qualified players (the career placed in the same
+  // pool), FPOE/G; the columns a phone can't fit are hidden there (.pbx)
+  function summaryBlock(id, p, y, pos) {
+    const box = el("div", "pbsum"), QB = pos === "QB";
+    const groups = QB ? [["FP/G", "xFP/G"], ["G", "Att", "Cmp%", "Pass Yds", "TD", "INT"], ["Rush Yds", "Rush TD"], ["FPOE/G"]]
+                      : [["FP/G", "xFP/G"], ["G", "Tgt", "Rec", "Yds", "TD"], ["Car", "Rush Yds", "Rush TD"], ["FPOE/G"]];
+    const narrow = new Set(QB ? ["Att", "Cmp%", "Rush TD"] : pos === "RB" ? ["Tgt", "Rec", "Rush TD"] : ["Tgt", "Car", "Rush TD"]);
+    const keys = groups.flat(); box.style.setProperty("--n", keys.length);
+    const sep = (k) => groups.some((g) => g[0] === k && g !== groups[0]);
+    const head = el("div", "pbsrow pbshead"); head.append(el("span", "pbsl", "Summary"));
+    for (const k of keys) { const c = el("span", "pbsh" + (narrow.has(k) ? " pbx" : "") + (sep(k) ? " sep" : ""), k); head.append(c); }
+    box.append(head);
+    const lineOf = (r) => {
+      const g = Math.max(r.g || 0, 1), xfp = (r.xr || 0) + (r.xu || 0) + (QB ? passFP(r) : 0), fpg = (r.fp || 0) / g, xfpg = xfp / g;
+      const v = { "FP/G": num(fpg), "xFP/G": num(xfpg), G: String(r.g || 0), "FPOE/G": sgn(fpg - xfpg), "Rush Yds": String(r.ruyd || 0), "Rush TD": String(r.rutd || 0) };
+      if (QB) Object.assign(v, { Att: String(r.att || 0), "Cmp%": r.att ? pc(100 * (r.cmp || 0) / r.att) : "–", "Pass Yds": String(r.pyd || 0), TD: String(r.ptd || 0), INT: String(r.int_ || 0) });
+      else Object.assign(v, { Tgt: String(r.tgt || 0), Rec: String(r.rec || 0), Yds: String(r.ryd || 0), TD: String(r.rtd || 0), Car: String(r.car || 0) });
+      return { v, fpg, xfpg };
+    };
+    const rowOf = (label, L, cls) => {
+      const row = el("div", "pbsrow" + (cls ? " " + cls : "")); row.append(el("span", "pbsl", label));
+      for (const k of keys) {
+        const c = el("span", "pbsv" + (narrow.has(k) ? " pbx" : "") + (sep(k) ? " sep" : "")), text = L ? L.v[k] : "–";
+        const pv = L && (k === "FP/G" || k === "xFP/G") ? pctOf(y, pos, k === "FP/G" ? "fpg" : "xfpg", k === "FP/G" ? L.fpg : L.xfpg) : null;
+        if (pv != null) { const chip = el("span", "uchip pbchip", text), h = heat(Math.round(pv)); chip.style.background = h.bg; chip.title = ord(Math.round(pv)) + " percentile"; c.append(chip); }
+        else c.textContent = text;
+        row.append(c);
+      }
+      return row;
+    };
+    box.append(rowOf(String(y), lineOf(p), "cur"));
+    const C = (window.FB_CAREER || {})[id];
+    if (C) {   // his career: every season's counts summed
+      const T = {}; for (const yr in C) for (const k of ["g", "fp", "xr", "xu", "tgt", "rec", "ryd", "rtd", "car", "ruyd", "rutd", "att", "cmp", "pyd", "ptd", "int_"]) T[k] = (T[k] || 0) + (C[yr][k] || 0);
+      box.append(rowOf("Career", lineOf(T)));
+    } else if (window.FB_CAREER) box.append(rowOf("Career", null));
+    return box;
+  }
+  // B-Ref's bio box in the white space between the band and the season table: the full name, position, size, college, draft, born, team
+  function bioBox(e, p, y) {
+    const box = el("section", "pbinfo"); box.append(el("div", "pbinfohd", "Bio"));
+    const body = el("div", "pbinfobd"); box.append(body);
+    const line = (k, v) => { const d = el("div", "pbil"); d.append(el("b", null, k + ":"), " " + v); body.append(d); };
+    body.append(el("div", "pbil pbfull", e.n));
+    line("Position", POS_FULL[p.pos] || p.pos);
+    if (e.ht) line("Height / weight", `${htFmt(e.ht)}${e.wt ? `, ${Math.round(e.wt)} lb` : ""} (${Math.round(e.ht * 2.54)} cm${e.wt ? `, ${Math.round(e.wt * 0.4536)} kg` : ""})`);
+    if (e.col) line("College", e.col);
+    line("Draft", e.dr ? `${ord(e.dr[1])} round, #${e.dr[2]} overall, ${e.dr[0]} NFL Draft` : "Undrafted free agent");
+    if (e.bd) { const bd = new Date(e.bd + "T12:00:00Z"); if (!isNaN(bd)) { const now = new Date(); let age = now.getUTCFullYear() - bd.getUTCFullYear(); if (now.getUTCMonth() < bd.getUTCMonth() || (now.getUTCMonth() === bd.getUTCMonth() && now.getUTCDate() < bd.getUTCDate())) age--;
+      line("Born", `${bd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" })} (Age ${age})`); } }
+    const tms = p.tms && p.tms.length > 1 ? p.tms : p.tm ? [p.tm] : [];
+    if (tms.length) line("Team", tms.map((c) => TEAM_FULL[c] || c).join(" / ") + (y === CUR ? "" : ` (${y})`));
+    return box;
+  }
+
+  // ---------- the percentile charts: the baseball's pctSvg, verbatim but for its inputs (23 Oct 2026) ----------
+  // Savant's percentile chart, drawn the way its own code draws it (one SVG, D3's numbers). The drawing is as wide as its box and 20 in
+  // from each side. Each section is a bold name on a 2px rule 34 down; a row every 23, the bar 85 in from the labels and as wide as what's
+  // left after the labels (40 + 85) and the values, running from 10 (0th) to its full width (100th) over a 5-tall line; a 10-radius circle
+  // with a 2.5px ring centred on the bar's end; the ticks, dashed rules and the Poor / Average / Great row are drawn but hidden by the
+  // stylesheet (the warm pass's look). The colours are heat()'s — Savant's scale in Lab — the bubble a fifth darker than the fill
+  const SVG_NS = "http://www.w3.org/2000/svg";
+  let pctROs = [];                                   // one per chart on the page; let go of at each redraw
+  // a chart isn't on the page yet when it's first drawn, so it starts at the size its column had last time: drawn at a guess and resized a
+  // moment later, everything under it would shift — and near the foot of the page the browser would pull the window up to fit
+  const pctLast = [];
+  const bubOf = (bg) => "rgb(" + bg.match(/\d+/g).map((c) => Math.round(c * 0.9311)).join(",") + ")";   // each channel × 0.7^0.2
+  function pctChart(groups, slot = 0, scale = false) {
+    const host = el("div", "svchart");
+    const draw = () => {
+      const bw = host.getBoundingClientRect().width;
+      const W = Math.max(300, Math.round(bw) || 400);   // drawn at its real size (Savant shrinks under 400)
+      if (host.dataset.w === String(W) && host.firstChild) return;
+      host.dataset.w = String(W); pctLast[slot] = W;
+      host.replaceChildren(pctSvg(groups, W, scale));
+    };
+    const W0 = pctLast[slot] || (isMobile() ? 364 : 406);
+    host.dataset.w = String(W0);
+    host.append(pctSvg(groups, W0, scale));
+    if (window.ResizeObserver) { const ro = new ResizeObserver(draw); ro.observe(host); pctROs.push(ro); }
+    return host;
+  }
+  // tap a percentile row: what the stat is, his value and percentile, the league's middle (the baseball's tap note)
+  function statPop(row, r) {
+    const host = row.closest(".svchart"); if (!host) return;
+    const old = host.querySelector(".statpop"), same = old && old.dataset.k === r.k; if (old) old.remove(); if (same) return;
+    const d = el("div", "statpop"); d.dataset.k = r.k;
+    const top = el("div", "sphd"); top.append(el("b", null, r.label), el("span", null, `${r.value}${r.pct != null ? " · " + ord(r.pct) + " percentile" : ""}`)); d.append(top);
+    if (r.gloss) d.append(el("p", null, r.gloss));
+    const facts = [r.lg != null ? `League middle: ${r.lg}` : "", r.hib === false ? "Lower is better" : ""].filter(Boolean);
+    if (facts.length) d.append(el("p", "spfacts", facts.join(" · ")));
+    const hr = host.getBoundingClientRect(), rr = row.getBoundingClientRect();
+    d.style.top = Math.round(rr.bottom - hr.top + 4) + "px";
+    host.append(d);
+    const away = (ev) => { if (!d.contains(ev.target)) { d.remove(); document.removeEventListener("click", away, true); } };
+    setTimeout(() => document.addEventListener("click", away, true), 0);
+  }
+  let lblCtx = null;
+  function pctLabelW(groups) {                         // the widest row label at the chart's 12px type
+    if (!lblCtx) { try { lblCtx = document.createElement("canvas").getContext("2d"); } catch (e) { lblCtx = null; } }
+    if (!lblCtx) return 80;
+    lblCtx.font = `12px ${getComputedStyle(document.body).fontFamily}`;
+    let w = 0; for (const g of groups) for (const r of g.rows) w = Math.max(w, lblCtx.measureText(r.label).width);
+    return Math.min(120, Math.ceil(w));
+  }
+  function pctSvg(groups, W, scale = true) {
+    const mk = (t, at, txt) => { const n = document.createElementNS(SVG_NS, t); for (const k in at) n.setAttribute(k, at[k]); if (txt != null) n.textContent = txt; return n; };
+    const r6 = W - 40, VW = W < 420 ? 41 : 45, bar = r6 - 40 - 85 - VW;
+    // the rows' block (the label column through the value) sits 40 in from each side of the section rule; a label wider than its 80 column
+    // keeps the room it needs. Section names and rules stay put
+    const IND = Math.max(20, pctLabelW(groups) - 80 + 4);
+    const x = (p) => 10 + (bar - 10) * Math.max(0, Math.min(100, p)) / 100;
+    const top = -2;                                            // the first heading starts right under what's above it
+    const root = mk("g", { transform: `translate(20,${top})` });
+    let y = 0;
+    groups.forEach((g, gi) => {
+      const first = gi === 0 && scale, G = mk("g", { class: "svgrp", transform: `translate(0,${y})` });
+      G.append(mk("rect", { class: "svsecrule", x: 0, y: 34, width: r6, height: 2 }));
+      G.append(mk("text", { class: "svsecname", x: 0, y: 28 }, g.title));
+      if (first) {                                               // Poor / Average / Great, each arrow over its tick (the page passes scale = false)
+        const Sg = mk("g", { transform: `translate(${IND + 85},54)` });
+        const tri = (cx) => `M${cx},2L${cx - 3},8L${cx + 3},8Z`;
+        const c0 = heat(0).bg, c50 = heat(50).bg, c100 = heat(100).bg;
+        Sg.append(mk("path", { d: tri(12), fill: c0 }), mk("path", { d: tri(x(50)), fill: c50 }), mk("path", { d: tri(bar - 12), fill: c100 }));
+        Sg.append(mk("text", { class: "svscale", fill: c0 }, "Poor"), mk("text", { class: "svscale", x: x(50), "text-anchor": "middle", fill: c50 }, "Average"), mk("text", { class: "svscale", x: x(100), "text-anchor": "end", fill: c100 }, "Great"));
+        G.append(Sg);
+      }
+      const R = mk("g", { transform: `translate(${IND},${44 + (first ? 20 : 0)})` });
+      let ry = 0, i = 0;
+      g.rows.forEach((r) => {
+        if (r.gap) { ry += 12; return; }   // a line break between rows
+        const Mg = mk("g", { class: "svrow", transform: `translate(0,${ry})` }); ry += 23; const first_ = i === 0; i++;
+        Mg.append(mk("title", {}, r.tip));
+        const on = r.pct != null, s = on ? heat(r.pct) : null;
+        const B = mk("g", { transform: "translate(85,0)", opacity: on ? 1 : 0.35 });
+        B.append(mk("rect", { class: "svline", width: bar, height: 5, y: 7.5 }));
+        if (on) B.append(mk("rect", { width: x(r.pct), height: 20, y: 0, fill: s.bg }));
+        for (const tx of [x(50) - 1, 11, bar - 13]) B.append(mk("rect", { class: "svtick", width: 2, height: 20, x: tx }));
+        Mg.append(B);
+        Mg.append(mk("text", { class: "svlbl" + (r.sub ? " svsub" : ""), x: 80, y: 10, "text-anchor": "end" }, r.label));
+        Mg.append(mk("text", { class: "svlbl svvl", x: 85 + bar + VW, y: 10, "text-anchor": "end" }, r.value));   // svvl: the value, so a look can weight it apart from the label
+        Mg.addEventListener("click", (ev) => { ev.stopPropagation(); statPop(Mg, r); });
+        if (!first_) Mg.append(mk("path", { class: "svdash", d: "M80,-1.5L0,-1.5" }), mk("path", { class: "svdash", d: `M${85 + bar + 5},-1.5L${85 + bar + VW},-1.5` }));
+        if (on) {
+          const Cg = mk("g", { transform: `translate(${85 + x(r.pct)},10)` });
+          Cg.append(mk("circle", { class: "svbulb", r: 10, fill: bubOf(s.bg) }));
+          Cg.append(mk("text", { class: "svnum" + (r.pct >= 100 ? " c3" : ""), y: 1 }, r.pct));   // Savant's bubble
+          Mg.append(Cg);
+        }
+        R.append(Mg);
+      });
+      G.append(R);
+      root.append(G);
+      y += g.rows.reduce((a, r) => a + (r.gap ? 12 : 23), 0) + 34 + 10 + (first ? 20 : 0);
+    });
+    const H = y + 20 + top - 10;
+    const svg = mk("svg", { class: "svpct", viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img", "aria-label": "Percentile rankings" });
+    svg.append(root);
+    return svg;
+  }
+
+  // ---------- the strip under the bars and the open tab's box (the baseball's .pbelow2) ----------
+  // the tabs are band-filled buttons 14px apart, the picked one filled the deep ink (white in dark mode); tapping the picked one closes it;
+  // the open tab's content sits in the white 860px box under the strip. The strip keeps its place on the screen across the redraw (anchorTabs)
+  let tabY0 = null;
+  function renderBelow(p, y, pos, meta) {
+    const sec = el("section", "pbelow2"), bar = el("div", "btabs"); bar.setAttribute("role", "tablist");
     const TABS = [["build", "xFP build-up"], ["log", "Game log"]]; if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);
-    const pick = TABS.some((t) => t[0] === S.ptab) ? S.ptab : "build";
-    for (const [k, lab] of TABS) { const b = el("button", null, lab); b.type = "button"; b.setAttribute("aria-pressed", k === pick); b.addEventListener("click", () => { if (k === "bf") { location.hash = `#team/${p.tm}/${y}`; return; } S.ptab = k; save(); route(); }); tabs.append(b); }
-    main.append(tabs, body);
-    if (pick === "log") gameLog(body, p, meta); else buildUp(body, p, y, pos);
-    seasonTable(main, id, e, y, pos);
+    const pick = S.ptab === "none" ? null : TABS.some((t) => t[0] === S.ptab) ? S.ptab : "build";
+    for (const [k, lab] of TABS) {
+      const b = el("button", "btab" + (k === pick ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(k === pick));
+      b.addEventListener("click", () => { if (k === "bf") { location.hash = `#team/${p.tm}/${y}`; return; } tabY0 = bar.getBoundingClientRect().top; S.ptab = k === pick ? "none" : k; save(); route(); });
+      bar.append(b);
+    }
+    sec.append(bar);
+    if (pick) { const body = el("div", "btabbody"); if (pick === "log") gameLog(body, p, meta); else buildUp(body, p, y, pos); sec.append(body); }
+    requestAnimationFrame(() => {
+      // a phone's strip slides sideways with a fade at its right edge unless every tab fits, when it is centred like a desktop's
+      const fits = [...bar.children].reduce((w, b) => w + b.offsetWidth, 0) + 14 * (bar.children.length - 1) + 24 <= bar.clientWidth;
+      bar.classList.toggle("fits", fits); const on = bar.querySelector(".btab.on"); if (!fits && on) bar.scrollLeft = Math.max(0, on.offsetLeft - 12);
+      if (tabY0 == null) return;
+      const d = bar.getBoundingClientRect().top - tabY0; tabY0 = null; if (Math.abs(d) < 1) return;
+      const max = document.documentElement.scrollHeight - innerHeight, want = window.scrollY + d;
+      if (pick && want > max) sec.style.minHeight = Math.ceil(sec.offsetHeight + want - max) + "px";   // room under the strip so it holds still; closing a tab keeps none
+      window.scrollTo(0, Math.max(0, pick ? want : Math.min(want, max)));
+    });
+    return sec;
   }
 
   function buildUp(host, p, y, pos) {
@@ -706,34 +954,72 @@
   }
 
   function staffOf(y, tm) { const r = (TEAMS[y] || []).find((x) => x.tm === tm); return r || {}; }
-  function seasonTable(host, id, e, cy, pos) {
-    const C = (window.FB_CAREER || {})[id] || {}, ys = Object.keys(C).map(Number).sort((a, b) => a - b); if (!ys.length) return;
-    host.append(el("h3", "secttl", "Season by season"));
-    const recv = pos !== "QB", groups = [{ cols: [{ h: "Season", cls: "fz" }, { h: "Age" }, { h: "Tm" }, { h: "Head coach", cls: "l" }, { h: "Off. coordinator", cls: "l" }], end: 1 }, { cols: [{ h: "G" }], end: 1 }];
-    if (pos === "QB") groups.push({ name: "Passing", end: 1, cols: [{ h: "Cmp" }, { h: "Att" }, { h: "Yds" }, { h: "TD" }, { h: "INT" }, { h: "EPA/db" }] });
-    groups.push({ name: "Receiving", end: 1, cols: [{ h: "Tgt" }, { h: "Rec" }, { h: "Yds" }, { h: "TD" }, { h: "Tgt%" }] });
-    groups.push({ name: "Rushing", end: 1, cols: [{ h: "Car" }, { h: "Yds" }, { h: "TD" }, { h: "Car%" }] });
-    groups.push({ name: "Fantasy", end: 1, cols: [...(recv ? [{ h: "WO%", t: METRIC.wos.t }] : []), { h: "xFP/G" }, { h: "FP/G" }, { h: "FPOE/G" }, { h: "Rank" }] });
-    const t = table(groups), wo = (r) => (r.car || 0) + WO_K * (r.tgt || 0), tmwo = (r) => (r.tmc || 0) + WO_K * (r.tmt || 0);   // weighted opportunity share, as the Leaders' WO%
-    let G = 0, fpS = 0, xS = 0, woS = 0, tmwoS = 0; const tot = { tgt: 0, rec: 0, ryd: 0, rtd: 0, car: 0, ruyd: 0, rutd: 0, cmp: 0, att: 0, pyd: 0, ptd: 0, int_: 0 };
-    for (const y of ys) {
-      const r = C[y], g = Math.max(r.g || 0, 1), xfp = (r.xr || 0) + (r.xu || 0) + (pos === "QB" ? passFP(r) : 0), st = staffOf(y, r.tm);
-      G += r.g || 0; fpS += r.fp || 0; xS += xfp; woS += wo(r); tmwoS += tmwo(r); for (const k in tot) tot[k] += r[k] || 0;
-      const coachCell = (n) => { const c = td(null, "l"); if (n) for (const [i, nm] of n.split(" / ").entries()) { if (i) c.append(" / "); c.append(link(nm, "#coach/" + encodeURIComponent(nm))); } else c.textContent = "–"; return c; };
-      const cells = [td(String(y), "fz"), td(r.age != null ? String(Math.floor(r.age)) : ""), td(r.tms && r.tms.length > 1 ? r.tms.join("/") : r.tm), coachCell(st.hc), coachCell(st.oc || (st.pc ? st.pc + " (HC)" : null)), td(String(r.g))];
-      if (pos === "QB") cells.push(td(String(r.cmp || 0)), td(String(r.att || 0)), td(String(r.pyd || 0)), td(String(r.ptd || 0)), td(String(r.int_ || 0)), td(r.db ? sgn(r.epa / r.db, 2) : "–"));
-      cells.push(td(String(r.tgt || 0)), td(String(r.rec || 0)), td(String(r.ryd || 0)), td(String(r.rtd || 0)), td(r.tmt ? pc(100 * r.tgt / r.tmt) : "–"));
-      cells.push(td(String(r.car || 0)), td(String(r.ruyd || 0)), td(String(r.rutd || 0)), td(r.tmc ? pc(100 * r.car / r.tmc) : "–"));
-      const xc = td(num(xfp / g)); paint(xc, Math.min(99, Math.max(1, 100 - 100 * ((r.xrk || 60) - 1) / 60)));
-      if (recv) cells.push(td(tmwo(r) ? pc(100 * wo(r) / tmwo(r)) : "–"));
-      cells.push(xc, td(num((r.fp || 0) / g)), td(sgn(((r.fp || 0) - xfp) / g)), td(r.rk ? pos + r.rk : "–"));
-      const tr = t.addRow(cells, y === cy ? "cur" : ""); tr.querySelector("td").title = y === cy ? "The season shown above" : "";
+  // the season-by-season table in the baseball's season block (23 Oct 2026): a view switch over it (Standard · Usage · Efficiency · Fantasy —
+  // a desktop's row of buttons, a phone's one "Standard ▾" dropdown), the title, the table in the B-Ref dress with Season and Tm frozen (Age
+  // slides under them and fades, as B-Ref's does), the N Yrs totals on the band, the note under it. Standard is the whole table as it was
+  // (the coaches, the counts, the fantasy line); the other views are what career.js carries, per game and per chance
+  const SB_VIEWS = [["std", "Standard"], ["use", "Usage"], ["eff", "Efficiency"], ["fan", "Fantasy"]];
+  function seasonBlock(id, cy, pos) {
+    const sec = el("section", "sblock"), C = (window.FB_CAREER || {})[id] || {}, ys = Object.keys(C).map(Number).sort((a, b) => a - b);
+    if (!ys.length) { sec.append(el("p", "note", window.FB_CAREER ? "No season lines for him yet." : "Couldn't load his seasons. Reload to try again.")); return sec; }
+    const QB = pos === "QB", recv = !QB, mob = isMobile();
+    const view = SB_VIEWS.some(([k]) => k === S.sbview) ? S.sbview : "std", vlab = SB_VIEWS.find(([k]) => k === view)[1];
+    const setView = (k) => { S.sbview = k; save(); sec.replaceWith(seasonBlock(id, cy, pos)); };   // redrawn in place, so the page keeps its scroll
+    if (mob) { const dd = el("div", "sbviews sbviewsdd"), b = el("button", "btn btn-quiet tbtn sbviewdd", vlab + " ▾"); b.type = "button"; b.setAttribute("aria-haspopup", "listbox"); b.setAttribute("aria-expanded", "false");
+      b.addEventListener("click", (ev) => { ev.stopPropagation(); ddOpenOn(b, SB_VIEWS, view, setView); }); dd.append(b); sec.append(dd); }
+    else { const vs = el("div", "sbviews"); for (const [k, lab] of SB_VIEWS) { const b = el("button", "sbview" + (k === view ? " on" : ""), lab); b.type = "button"; b.addEventListener("click", () => { if (k !== view) setView(k); }); vs.append(b); } sec.append(vs); }
+    const hd = el("div", "sbhead"); hd.append(el("h3", "sbtitle", "Season by season")); sec.append(hd);
+    // a column is a header and a cell function of the line (a season's, or the summed totals with _tot set); the totals' cells read the sums
+    const S0 = (v) => String(Math.round(v || 0)), P = (a, b, d = 1) => (b ? pc(100 * (a || 0) / b, d) : "–"), R = (a, b, d = 1) => (b ? num((a || 0) / b, d) : "–"), G1 = (r) => Math.max(r.g || 0, 1);
+    const xfpOf = (r) => (r.xr || 0) + (r.xu || 0) + (QB ? passFP(r) : 0), rkHeat = (rk) => Math.min(99, Math.max(1, 100 - 100 * ((rk || 60) - 1) / 60));
+    const heatRk = (txt, rk, r) => { const c = td(txt); if (!r._tot) paint(c, rkHeat(rk)); return c; };
+    const wo = (r) => (r.car || 0) + WO_K * (r.tgt || 0), tmwo = (r) => (r.tmc || 0) + WO_K * (r.tmt || 0), opp = (r) => (r.car || 0) + (r.tgt || 0);
+    const base = { end: 1, cols: [{ h: "Season", cls: "fz", f: (r) => (r._tot ? `${ys.length} Yrs` : String(r.y)) }, { h: "Age", cls: "age", f: (r) => (r._tot || r.age == null ? "" : String(Math.floor(r.age))) },
+                               { h: "Tm", cls: "fz2 c", f: (r) => (r._tot ? "" : r.tms && r.tms.length > 1 ? r.tms.join("/") : r.tm || "") }] };
+    const G = { end: 1, cols: [{ h: "G", f: (r) => S0(r.g) }] };
+    const fant = { name: "Fantasy", end: 1, cols: [...(recv ? [{ h: "WO%", t: METRIC.wos.t, f: (r) => P(wo(r), tmwo(r)) }] : []),
+      { h: "xFP/G", f: (r) => heatRk(num(xfpOf(r) / G1(r)), r.xrk, r) }, { h: "FP/G", f: (r) => heatRk(num((r.fp || 0) / G1(r)), r.rk, r) }, { h: "FPOE/G", f: (r) => sgn(((r.fp || 0) - xfpOf(r)) / G1(r)) }, { h: "Rank", f: (r) => (r._tot || !r.rk ? (r._tot ? "" : "–") : pos + r.rk) }] };
+    let groups;
+    if (view === "std") {
+      base.cols.push({ h: "Head coach", cls: "l", f: (r) => (r._tot ? "" : coachCell(staffOf(r.y, r.tm).hc)) }, { h: "Off. coordinator", cls: "l", f: (r) => { if (r._tot) return ""; const st = staffOf(r.y, r.tm); return coachCell(st.oc || (st.pc ? st.pc + " (HC)" : null)); } });
+      groups = [base, G, ...(QB ? [{ name: "Passing", end: 1, cols: [{ h: "Cmp", f: (r) => S0(r.cmp) }, { h: "Att", f: (r) => S0(r.att) }, { h: "Yds", f: (r) => S0(r.pyd) }, { h: "TD", f: (r) => S0(r.ptd) }, { h: "INT", f: (r) => S0(r.int_) }, { h: "EPA/db", f: (r) => (r.db ? sgn(r.epa / r.db, 2) : "–") }] }] : []),
+        { name: "Receiving", end: 1, cols: [{ h: "Tgt", f: (r) => S0(r.tgt) }, { h: "Rec", f: (r) => S0(r.rec) }, { h: "Yds", f: (r) => S0(r.ryd) }, { h: "TD", f: (r) => S0(r.rtd) }, { h: "Tgt%", f: (r) => P(r.tgt, r.tmt) }] },
+        { name: "Rushing", end: 1, cols: [{ h: "Car", f: (r) => S0(r.car) }, { h: "Yds", f: (r) => S0(r.ruyd) }, { h: "TD", f: (r) => S0(r.rutd) }, { h: "Car%", f: (r) => P(r.car, r.tmc) }] }, fant];
+    } else if (view === "use") {
+      groups = QB ? [base, G, { name: "Passing", end: 1, cols: [{ h: "Att", f: (r) => S0(r.att) }, { h: "Att/G", f: (r) => R(r.att, G1(r)) }, { h: "Dropbacks", f: (r) => S0(r.db) }, { h: "Db/G", f: (r) => R(r.db, G1(r)) }] },
+                         { name: "Rushing", end: 1, cols: [{ h: "Car", f: (r) => S0(r.car) }, { h: "Car/G", f: (r) => R(r.car, G1(r)) }] }]
+                  : [base, G, { name: "Snaps and routes", end: 1, cols: [{ h: "Snap%", f: (r) => (r.snpct == null ? "–" : pc(r.snpct)) }, { h: "Rts", f: (r) => S0(r.rts) }, { h: "Route%", f: (r) => P(r.rts, r.tmdb) }] },
+                         { name: "Targets", end: 1, cols: [{ h: "Tgt", f: (r) => S0(r.tgt) }, { h: "Tgt/G", f: (r) => R(r.tgt, G1(r)) }, { h: "Tgt%", f: (r) => P(r.tgt, r.tmt) }, { h: "aDOT", f: (r) => R(r.ay, r.tgt) }] },
+                         { name: "Carries", end: 1, cols: [{ h: "Car", f: (r) => S0(r.car) }, { h: "Car/G", f: (r) => R(r.car, G1(r)) }, { h: "Car%", f: (r) => P(r.car, r.tmc) }] },
+                         { name: "Opportunity", end: 1, cols: [{ h: "Opp/G", f: (r) => R(opp(r), G1(r)) }, { h: "WO/G", t: METRIC.wog.t, f: (r) => R(wo(r), G1(r)) }, { h: "WO%", t: METRIC.wos.t, f: (r) => P(wo(r), tmwo(r)) }] }];
+    } else if (view === "eff") {
+      groups = QB ? [base, G, { name: "Passing", end: 1, cols: [{ h: "Cmp%", f: (r) => P(r.cmp, r.att) }, { h: "Y/A", f: (r) => R(r.pyd, r.att) }, { h: "TD%", f: (r) => P(r.ptd, r.att) }, { h: "INT%", f: (r) => P(r.int_, r.att) }, { h: "EPA/db", f: (r) => (r.db ? sgn(r.epa / r.db, 2) : "–") }, { h: "CPOE", f: (r) => (r.db && r.cpoe != null ? sgn(r.cpoe) : "–") }] },
+                         { name: "Rushing", end: 1, cols: [{ h: "YPC", f: (r) => R(r.ruyd, r.car) }] }]
+                  : [base, G, { name: "Receiving", end: 1, cols: [{ h: "TPRR", f: (r) => P(r.tgt, r.rts) }, { h: "YPRR", f: (r) => R(r.ryd, r.rts, 2) }, { h: "Y/R", f: (r) => R(r.ryd, r.rec) }, { h: "Catch%", f: (r) => P(r.rec, r.tgt) }, { h: "CROE", t: METRIC.croe.t, f: (r) => (r.xcn ? sgn(100 * ((r.cc || 0) - (r.xc || 0)) / r.xcn) : "–") }] },
+                         { name: "Rushing", end: 1, cols: [{ h: "YPC", f: (r) => R(r.ruyd, r.car) }] },
+                         { name: "Per opportunity", end: 1, cols: [{ h: "FP/Opp", f: (r) => R(r.fp, opp(r), 2) }, { h: "xFP/Opp", f: (r) => R(xfpOf(r), opp(r), 2) }, { h: "FPOE/Opp", f: (r) => (opp(r) ? sgn(((r.fp || 0) - xfpOf(r)) / opp(r), 2) : "–") }] }];
+    } else {
+      groups = [base, G, { name: "Points", end: 1, cols: [{ h: "FP", f: (r) => num(r.fp) }, { h: "FP/G", f: (r) => heatRk(num((r.fp || 0) / G1(r)), r.rk, r) }, { h: "xFP", f: (r) => num(xfpOf(r)) }, { h: "xFP/G", f: (r) => heatRk(num(xfpOf(r) / G1(r)), r.xrk, r) }, { h: "FPOE/G", f: (r) => sgn(((r.fp || 0) - xfpOf(r)) / G1(r)) }] },
+        { name: "Touchdowns", end: 1, cols: [...(QB ? [{ h: "Pass TD", f: (r) => S0(r.ptd) }] : []), { h: QB ? "Rush TD" : "TD", f: (r) => S0((r.rtd || 0) + (r.rutd || 0)) }, { h: "xTD", f: (r) => num((r.xtr || 0) + (r.xtu || 0)) }, { h: "TDOE", f: (r) => sgn((r.rtd || 0) + (r.rutd || 0) - (r.xtr || 0) - (r.xtu || 0)) }] },
+        { name: "Rank", end: 1, cols: [{ h: "Rank", f: (r) => (r._tot || !r.rk ? (r._tot ? "" : "–") : pos + r.rk) }, { h: "xRank", f: (r) => (r._tot || !r.xrk ? (r._tot ? "" : "–") : pos + r.xrk) }] }];
     }
-    const g = Math.max(G, 1), cells = [td(`${ys.length} Yrs`, "fz"), td(""), td(""), td(""), td(""), td(String(G))];
-    if (pos === "QB") cells.push(td(String(tot.cmp)), td(String(tot.att)), td(String(tot.pyd)), td(String(tot.ptd)), td(String(tot.int_)), td(""));
-    cells.push(td(String(tot.tgt)), td(String(tot.rec)), td(String(tot.ryd)), td(String(tot.rtd)), td(""), td(String(tot.car)), td(String(tot.ruyd)), td(String(tot.rutd)), td(""), ...(recv ? [td(tmwoS ? pc(100 * woS / tmwoS) : "")] : []), td(num(xS / g)), td(num(fpS / g)), td(sgn((fpS - xS) / g)), td(""));
-    t.addRow(cells, "tot first"); host.append(t.box);
-    host.append(el("p", "note", "Coaches are the team's head coach and offensive coordinator that season (a traded player shows his main team's). xFP/G is coloured by his rank at the position that season by expected points."));
+    const t = table(groups.map((g) => ({ name: g.name, end: g.end, cols: g.cols.map((c) => ({ h: c.h, t: c.t, cls: c.cls })) })));
+    const cellOf = (c, r) => { const v = c.f(r); if (v instanceof Node) { if (c.cls) v.className += " " + c.cls; return v; } return td(v, c.cls); };
+    const T = { _tot: true }; for (const k of ["g", "rts", "tgt", "rec", "ryd", "rtd", "ay", "car", "ruyd", "rutd", "tmt", "tmc", "tmdb", "fp", "xr", "xu", "xtr", "xtu", "att", "cmp", "pyd", "ptd", "int_", "epa", "db", "xc", "xcn", "cc"]) T[k] = 0;
+    let snpG = 0, snpS = 0, cpoeS = 0, cpoeD = 0;
+    for (const y of ys) {
+      const r = Object.assign({ y }, C[y]);
+      for (const k in T) if (k !== "_tot") T[k] += r[k] || 0;
+      if (r.snpct != null && r.g) { snpS += r.snpct * r.g; snpG += r.g; } if (r.cpoe != null && r.db) { cpoeS += r.cpoe * r.db; cpoeD += r.db; }
+      const tr = t.addRow(groups.flatMap((g) => g.cols.map((c) => cellOf(c, r))), y === cy ? "cur" : ""); tr.querySelector("td").title = y === cy ? "The season shown above" : "";
+    }
+    T.snpct = snpG ? snpS / snpG : null; T.cpoe = cpoeD ? cpoeS / cpoeD : null;
+    t.addRow(groups.flatMap((g) => g.cols.map((c) => cellOf(c, T))), "tot first");
+    const box = t.box; box.classList.add("sbscroll"); sec.append(box); freeze(t);
+    // Age slides under the frozen Season and fades as it goes (B-Ref's), so Tm ends up against Season
+    box.addEventListener("scroll", () => { const ag = t.querySelector("thead th.age"), w = ag ? ag.offsetWidth : 0; t.style.setProperty("--sbage", w ? Math.max(0, 1 - box.scrollLeft / w).toFixed(2) : "1"); }, { passive: true });
+    sec.append(el("p", "note", "Coaches are the team's head coach and offensive coordinator that season (a traded player shows his main team's). FP/G and xFP/G are coloured by his rank at the position that season, by points scored and by expected points."));
+    return sec;
   }
 
   // ---------- Backfields ----------
@@ -1315,9 +1601,11 @@
     document.body.dataset.page = page; document.body.classList.toggle("lst", LIST_PAGES.has(page));   // a list page stands: main is the screen's height and only the box scrolls
     document.title = PAGE_TITLE[page] ? "Sean's Football · " + PAGE_TITLE[page] : "Sean's Football Site";
     const bs = $("#bscroll"); LB.keep = bs ? { key: bs.dataset.key, top: bs.scrollTop, left: bs.scrollLeft } : null;   // the Leaders box's place, put back by a redraw of the same page
-    const main = $("main"); main.innerHTML = '<p class="load">Loading…</p>';
+    const main = $("main"), same = S.lastPage === h;
+    if (page === "player" && same) main.style.minHeight = main.offsetHeight + "px"; else main.style.minHeight = "";   // a player's page redrawn in place (a season, a tab) keeps its height through the Loading… line, so the page stays where it was
+    main.innerHTML = '<p class="load">Loading…</p>';
     const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
-    Promise.resolve(go).catch((err) => { main.textContent = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
+    Promise.resolve(go).catch((err) => { main.textContent = ""; main.style.minHeight = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
   document.body.prepend(header());
