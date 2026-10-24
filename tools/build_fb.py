@@ -90,7 +90,7 @@ def load_ftn(cache, y, fresh):
     if y < FTN_FROM:
         return None
     f = fetch(f"{R}/ftn_charting/ftn_charting_{y}.parquet", f"{cache}/ftn_{y}.parquet", fresh)
-    return pd.read_parquet(f, columns=["nflverse_game_id", "nflverse_play_id", "is_contested_ball", "is_screen_pass"]) if f else None
+    return pd.read_parquet(f, columns=["nflverse_game_id", "nflverse_play_id", "is_contested_ball", "is_screen_pass", "is_catchable_ball"]) if f else None
 
 
 # ---------- play tables ----------
@@ -212,7 +212,7 @@ def contested(t, ftn):
         return {}
     f = ftn.rename(columns={"nflverse_game_id": "game_id", "nflverse_play_id": "play_id"}).drop_duplicates(["game_id", "play_id"])
     f = f.assign(play_id=f.play_id.astype("int64"))
-    m = t[["game_id", "play_id", "pid", "air_yards", "pos"]].assign(play_id=t.play_id.astype("int64")).merge(f, on=["game_id", "play_id"], how="inner")
+    m = t[["game_id", "play_id", "pid", "air_yards", "pos", "y"]].assign(play_id=t.play_id.astype("int64")).merge(f, on=["game_id", "play_id"], how="inner")
     if not len(m):
         return {}
     b = pd.cut(m.air_yards, CONT_BANDS, labels=False)
@@ -222,8 +222,21 @@ def contested(t, ftn):
     gb = m.groupby(["grp", "band"]).con.agg(["sum", "size"]).reset_index()
     gb["rate"] = (gb["sum"] + 30 * gb.band.map(al)) / (gb["size"] + 30)
     m = m.merge(gb[["grp", "band", "rate"]], on=["grp", "band"], how="left").rename(columns={"rate": "xcon"})
-    g = m.groupby("pid").agg(ftgt=("con", "size"), cnt=("con", "sum"), xcnt=("xcon", "sum"))
-    return {pid: dict(ftgt=int(r.ftgt), cnt=int(r.cnt), xcnt=round(float(r.xcnt), 1)) for pid, r in g.iterrows()}
+    # catchable targets (24 Oct 2026; Sean: a receiver "good in isolation but ... a terrible offense"): FTN's is_catchable_ball, the catchable
+    # targets his depths would draw at his position's season rate (each band shrunk to every position's with 30 targets, as above), and
+    # the PPR points a catchable target at each of his depths is worth (the same bands and shrinkage) — the app's neutral FP/G prices
+    # the catchable balls his QB didn't give him with them
+    m = m.assign(cat=m.is_catchable_ball.fillna(False).astype(int))
+    ac = m.groupby("band").cat.mean(); av = m[m.cat == 1].groupby("band").y.mean()
+    gc = m.groupby(["grp", "band"]).cat.agg(["sum", "size"]).reset_index()
+    gv = m[m.cat == 1].groupby(["grp", "band"]).y.agg(["sum", "size"]).reset_index().rename(columns={"sum": "vs", "size": "vn"})
+    gc = gc.merge(gv, on=["grp", "band"], how="left").fillna({"vs": 0, "vn": 0})
+    gc["xc"] = (gc["sum"] + 30 * gc.band.map(ac)) / (gc["size"] + 30)
+    gc["xv"] = (gc["vs"] + 30 * gc.band.map(av).fillna(av.mean())) / (gc["vn"] + 30)
+    m = m.merge(gc[["grp", "band", "xc", "xv"]], on=["grp", "band"], how="left")
+    g = m.groupby("pid").agg(ftgt=("con", "size"), cnt=("con", "sum"), xcnt=("xcon", "sum"), fcat=("cat", "sum"), xcat=("xc", "sum"), vcat=("xv", "sum"))
+    return {pid: dict(ftgt=int(r.ftgt), cnt=int(r.cnt), xcnt=round(float(r.xcnt), 1), fcat=int(r.fcat), xcat=round(float(r.xcat), 1),
+                      vcat=round(float(r.vcat), 1)) for pid, r in g.iterrows()}
 
 
 def skills(y, d, P):
