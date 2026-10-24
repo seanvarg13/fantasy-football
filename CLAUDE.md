@@ -764,3 +764,15 @@ nFP/G = (his target share × the league's team targets per game) × (xFP per tar
 * k 200 was the best balance of 50-400.
 
 Michael Wilson 2026: 11.9 FP/G → 14.0 nFP/G. Arizona's pass volume takes 1.8 off at a neutral offense, his QB's catchable rate (64% vs 70%) gives back 1.4, and his poor conversion over six games regresses +2.5.
+
+**Per route** (Sean, 24 Oct 2026: "this exact stat but on a per route basis too"): **nFP/RR** (`nfprr` in `M()`).
+* **Formula**: his targets per route × his neutral points per target (`neutralOf(p).npt`: his QB's misses given back, regressed by targets / (targets + 200)). Receiving only, so team volume drops out.
+* **Where it shows**: Leaders' Fantasy group and the WR / TE core after nFP/G, a "Neutral FP / route" bar, and a Per route table in the Neutral FP/G tab (Targets / route % (his), FP / route, Neutral FP / route, his against the qualifiers' average).
+* **The test** (scratch `osep/nrr.py`, the same pairs):
+
+| | Repeats | Next FP / route | Next FP / route, movers |
+|---|---|---|---|
+| nFP/RR | .66 | .60 | .60 |
+| Receiving FP / route | .58 | .58 | .54 |
+
+  It is level with TPRR and xFP / route. Tight ends are weaker throughout: .46 repeat, .40 next.

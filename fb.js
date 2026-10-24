@@ -134,7 +134,7 @@
     const hasQ = p.ftgt > 0 && p.fcat != null, qa = hasQ ? (p.xcat - p.fcat) * (p.vcat / p.ftgt) / t : 0, rest = ((p.fp || 0) - (p.frt || 0)) / G;
     const fin = xppt + (ppt + qa - xppt) * w, dVol = (tpgN - tpgA) * ppt, dQb = tpgN * qa, dLuck = tpgN * (fin - (ppt + qa));
     return { y, lg, teamTpg: p.tmt / G, ts: t / p.tmt, tpgA, tpgN, ppt, xppt, qa, w, rest, hasQ, catA: hasQ ? p.fcat / p.ftgt : null, catX: hasQ ? p.xcat / p.ftgt : null,
-             dVol, dQb, dLuck, nfpg: tpgN * fin + rest };
+             dVol, dQb, dLuck, npt: fin, nfpg: tpgN * fin + rest };
   }
   function M(p) {
     if (memo.has(p)) return memo.get(p);
@@ -163,6 +163,10 @@
       oppg: opp / g, fppo: opp ? ((p.frt || 0) + (p.fru || 0)) / opp : null, fppt: touch ? p.fp / touch : null,
       xppo: opp ? ((p.xr || 0) + (p.xu || 0)) / opp : null,
       fpg: p.fp / g, xfpg: xfp / g, fpoeg: (p.fp - xfp) / g, nfpg: (neutralOf(p) || {}).nfpg ?? null,
+      // per route (24 Oct 2026; Sean: "this exact stat but on a per route basis too"): his targets per route x his neutral points per target —
+      // team volume drops out per route; receiving only. Every WR season with 40+ targets 2022-24 against the next: repeats at r .66
+      // (receiving FP / route .58), next season's FP / route .60 (.58), for receivers who changed teams .60 (.54); level with TPRR and xFP / route
+      nfprr: (() => { const n = neutralOf(p); return n && p.rts >= 1 ? (p.tgt / p.rts) * n.npt : null; })(),
       tdoe: ((p.rtd || 0) + (p.rutd || 0)) - ((p.xtr || 0) + (p.xtu || 0)),
       epadb: p.db ? p.epa / p.db : null, cpoe: p.cpoe, sackp: p.db ? 100 * p.sk / p.db : null,
       ruxg: (p.xu || 0) / g, carg: (p.car || 0) / g,
@@ -229,6 +233,7 @@
     fpg: { h: "FP/G", d: 1, hib: 1, t: "PPR points per game" },
     xfpg: { h: "xFP/G", d: 1, hib: 1, t: "Expected PPR points per game: each target and carry priced by depth, field position, down and distance" },
     fpoeg: { h: "FPOE/G", d: 1, s: 1, hib: 1, t: "PPR points over expected, per game" },
+    nfprr: { h: "nFP/RR", d: 2, hib: 1, t: "Neutral FP per route run: his targets per route × his points per target with his QB's missed catchable balls given back, pulled toward what his targets are worth by targets / (targets + 200) — receiving only, so his team's pass volume drops out. Repeats year to year at r .66 against .58 for his actual receiving FP per route" },
     nfpg: { h: "nFP/G", d: 1, hib: 1, t: "Neutral FP / game: his points in a league-average offense. His target share stays his; his team's pass volume becomes the league's, the catchable balls his QB missed are given back (FTN's catchable-ball charting, 2022 on), and his points per target are pulled toward what his targets are worth by targets / (targets + 200). For receivers who changed teams it reads next season's FP / G better than FP / G (r .69 vs .62)" },
     tdoe: { h: "TDOE", d: 1, s: 1, hib: 1, t: "Touchdowns over expected" },
     epadb: { h: "EPA/db", d: 2, s: 1, hib: 1, t: "Expected points added per dropback" }, cpoe: { h: "CPOE", d: 1, s: 1, hib: 1, t: "Completion % over expected" },
@@ -271,7 +276,7 @@
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe", "nyoe"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe", "nyoe"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "nfprr", "fpoeg", "tdoe"]]],
     RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo", "expl", "ybca"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
@@ -576,7 +581,7 @@
   // high-value touches and goal-line work. Quarterbacks: passing volume and touchdowns, efficiency, and rushing (Rush xFP/G). Every other
   // column is still in Filters ▸ Stats (the All set, or each group).
   const CORE = {
-    WR: ["fpg", "nfpg", "g", "rte", "tprr", "tgtsh", "wopr", "awopr", "rzt", "wos", "yprr", "syprr"],
+    WR: ["fpg", "nfpg", "nfprr", "g", "rte", "tprr", "tgtsh", "wopr", "awopr", "rzt", "wos", "yprr", "syprr"],
     RB: ["fpg", "g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos", "hvtg", "gls", "rzs"],
     QB: ["g", "att", "pyd", "ptd", "int", "epadb", "car", "ruxg", "xfpg"],
   };
@@ -721,13 +726,13 @@
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "nyoe", "ypr"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "nfprr", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "nyoe", "ypr"]]]],
     RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "expl", "ybca", "fppo"]], ["Receiving", ["tprr", "yprr", "syprr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
   const LABEL = { rte: "Route %", tgtsh: "Target share", tprr: "Targets / route", aysh: "Air-yard share", rzt: "Red-zone targets", xfpg: "xFP / game", fpg: "FP / game", fpoeg: "Points over exp. / G",
-                  tdoe: "TD over expected", nfpg: "Neutral FP / game", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", awopr: "Adjusted WOPR", snp: "Snap %",
+                  tdoe: "TD over expected", nfpg: "Neutral FP / game", nfprr: "Neutral FP / route", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", awopr: "Adjusted WOPR", snp: "Snap %",
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
                   sep: "Separation", sepoe: "Separation over exp.", cont: "Contested target %", contoe: "Contested over exp.", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
@@ -1167,6 +1172,16 @@
     const fin = row("Points per target, regressed", num(n.ppt + n.qa, 2), num(n.xppt, 2), n.dLuck, `What he did with each target (${num(n.ppt + n.qa, 2)} points, QB misses given back) against what his targets are worth (${num(n.xppt, 2)}), kept at ${Math.round(100 * n.w)}% — targets / (targets + ${NK}): over one season it is mostly luck`, null, "kexp");
     fin[4].dataset.exp = "Neutral FP/G"; fin[4].title = "Neutral FP / game: what he would score in a league-average offense"; t.addRow(fin);
     t.box.classList.add("kbox"); c.append(t.box);
+    if (p.rts >= 1) {   // per route: team volume drops out, so it is his targets per route x his neutral points per target
+      const avg = (f) => { const v = ref.map(f).filter((x) => x != null && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+      const fr = (q) => (q.rts >= 1 ? (q.frt || 0) / q.rts : null), tr = (q) => (q.rts >= 1 ? q.tgt / q.rts : null), nr = (q) => M(q).nfprr;
+      const t3 = table([{ cols: [{ h: "Per route", cls: "l fz" }], end: 1 }, { cols: [{ h: "His" }, { h: "Lg" }] }], { front: false });
+      const r3 = (lab, f, d, tip) => { const L = td(lab, "l fz"); L.title = tip; const h = td(num(f(p), d)); const pc0 = rk(f); if (pc0 != null) paint(h, pc0); t3.addRow([L, h, td(num(avg(f), d))]); };
+      r3("Targets / route % (his)", (q) => (tr(q) == null ? null : 100 * tr(q)), 1, "How often he's thrown to when he runs a route — his own skill, so it stays");
+      r3("FP / route", fr, 2, "His receiving points per route run, as scored");
+      r3("Neutral FP / route", nr, 2, "His targets per route × his neutral points per target (his QB's misses given back, regressed): per route his team's pass volume drops out");
+      t3.box.classList.add("kbox"); c.append(t3.box);
+    }
     const off = n.dVol + n.dQb;
     c.append(el("p", "note", `${off <= -0.05 ? `His offense adds ${num(-off)} points a game` : off >= 0.05 ? `His offense costs him ${num(off)} points a game` : "His offense is about average for him"} (pass volume ${sgn(n.dVol)}, QB ${n.hasQ ? sgn(n.dQb) : "–"}). His target share is his and stays in. ${n.hasQ ? "" : "FTN's catchable-ball charting starts in 2022, so this season has no QB step. "}Rushing points count as scored. Tested on every receiver season with 40+ targets 2022-24: for players who changed teams, neutral FP / G read next season's points better than FP / G (r .69 against .62).`));
     host.append(c);
