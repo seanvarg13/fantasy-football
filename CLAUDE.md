@@ -700,3 +700,29 @@ The block at the end of `fb.css`:
   * The fix: `.tbox:not(.lbbox)` blocks only its sideways bounce (`overscroll-behavior-y: auto`). The standing lists' box (`.lbbox`), the one vertical scroller on its page, keeps `none` both ways.
   * Checked headless with the wheel on a phone view (scratch `tbl/swipe3.cjs` / `pop2.cjs`): the page and the popup scroll over the season table, and the table still slides sideways. Synthesised touch gestures don't scroll anything in the headless browser, so they can't test this.
 * `footSync`'s colouring of a phone's page canvas stays. It's harmless now that the page doesn't bounce.
+
+## Free separation stand-ins, tested and left out (Sean, 24 Oct 2026: Fantasy Points' "Separation Market Share" chart, then "Do we have the ability to create our own separation metric?", "try and build the first two")
+
+Fantasy Points' route win rate is paid hand charting of every route; nothing free measures openness on every route. Three free stand-ins were built and tested (scratch `osep/build.py` / `study.py` in the baseball session's scratchpad). The data was every WR / TE season with 40+ targets 2022-25 (389 WR, 147 TE), joined to the site's own season lines. Each candidate was scored on year-to-year r, r with this season's FP / G, r with next season's FP / G, and what it adds to next season's FP / G beyond target share + TPRR (partial r).
+
+| | Repeats | This FP/G | Next FP/G | Beyond Tgt% + TPRR |
+|---|---|---|---|---|
+| Target share (on the site) | .75 | .89 | .67 | — |
+| TPRR (on the site) | .68 | .78 | .61 | — |
+| Open-target share | .72 | .89 | .65 | −.05 |
+| Open rate | .26 | .04 | −.03 | −.09 |
+| First-read share | .75 | .83 | .64 | .03 |
+| TPRR vs man | .59 | .68 | .55 | .05 |
+| Man edge | .21 | .14 | .18 | .07 |
+
+The table shows WRs; TEs were the same or weaker.
+
+* **Open-target share**: his share of his team's targets FTN charted as not contested.
+  * The share is target share by another name, a shade worse.
+  * The open rate (his targets that were open) is noise.
+* **First-read share**: his share of the team's targets where he was the QB's first read (FTN `read_thrown`). It also restates target share; first-read targets per route and the first-read rate add nothing.
+* **Man vs zone**: TPRR and YPRR against man and against zone coverage (participation's `defense_man_zone_type`, about half of pass plays, 2022-25 only — the current season's participation isn't published until the offseason).
+  * TPRR vs man repeats less than his overall TPRR.
+  * The edge (TPRR vs man − vs zone) is noise.
+
+Nothing went on the site. Don't re-run these unasked. If Sean subscribes to Fantasy Points, their route win rate would be a private paste-in, as the Separation entry says.
