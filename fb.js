@@ -116,6 +116,26 @@
     const lg = lgTv(y, posGroup(p.pos)); if (!lg) return null;
     return (w[0] * p.tgt / p.tmt + w[1] * p.ay / p.tmay) * Math.sqrt((p.tmt / p.g) / lg);
   }
+  // neutral FP / game (Sean, 24 Oct 2026: "a way to quantify someone like Michael Wilson ... good in isolation but they play for a terrible
+  // offense", and "his ability to draw targets aka his target share would be part of himself"): a receiver's points in a league-average
+  // offense. His target share stays his; his team's targets per game in his games become the league's (lgTv); the catchable balls his QB
+  // didn't give him — FTN's catchable targets against what his position draws at his depths (fcat / xcat), each priced at what a catchable
+  // target at that depth is worth (vcat), 2022 on — are given back; and his points per target are pulled toward what his targets are worth
+  // (xFP per target) by targets / (targets + NK), since what he does with a target is mostly luck over one season. Rushing and the rest as
+  // scored. The study (scratch osep/ntest2.py in the baseball session's scratchpad; every WR / TE season with 40+ targets 2022-24 against
+  // the next, 251 WR / 94 TE pairs): for receivers who changed teams it reads next season's FP / G at r .69 (FP/G .62, xFP/G .69); every
+  // receiver .68 (.69 / .69); tight ends .61 (.60 / .57). NK 200 was the best of 50-400 and of no conversion credit at all.
+  const NK = 200;
+  function neutralOf(p) {
+    const y = SEASON_OF.get(p), pg = posGroup(p.pos);
+    if (!y || (pg !== "WR" && pg !== "TE") || !(p.tgt >= 1) || !p.tmt || !(p.g > 0)) return null;
+    const lg = lgTv(y, pg); if (!lg) return null;
+    const t = p.tgt, G = p.g, tpgA = t / G, tpgN = (t / p.tmt) * lg, ppt = (p.frt || 0) / t, xppt = (p.xr || 0) / t, w = t / (t + NK);
+    const hasQ = p.ftgt > 0 && p.fcat != null, qa = hasQ ? (p.xcat - p.fcat) * (p.vcat / p.ftgt) / t : 0, rest = ((p.fp || 0) - (p.frt || 0)) / G;
+    const fin = xppt + (ppt + qa - xppt) * w, dVol = (tpgN - tpgA) * ppt, dQb = tpgN * qa, dLuck = tpgN * (fin - (ppt + qa));
+    return { y, lg, teamTpg: p.tmt / G, ts: t / p.tmt, tpgA, tpgN, ppt, xppt, qa, w, rest, hasQ, catA: hasQ ? p.fcat / p.ftgt : null, catX: hasQ ? p.xcat / p.ftgt : null,
+             dVol, dQb, dLuck, nfpg: tpgN * fin + rest };
+  }
   function M(p) {
     if (memo.has(p)) return memo.get(p);
     const g = Math.max(p.g || 0, 1), opp = (p.car || 0) + (p.tgt || 0), touch = (p.car || 0) + (p.rec || 0);
@@ -142,7 +162,7 @@
       ryoe: p.ngsatt ? p.ryoe / p.ngsatt : null,
       oppg: opp / g, fppo: opp ? ((p.frt || 0) + (p.fru || 0)) / opp : null, fppt: touch ? p.fp / touch : null,
       xppo: opp ? ((p.xr || 0) + (p.xu || 0)) / opp : null,
-      fpg: p.fp / g, xfpg: xfp / g, fpoeg: (p.fp - xfp) / g,
+      fpg: p.fp / g, xfpg: xfp / g, fpoeg: (p.fp - xfp) / g, nfpg: (neutralOf(p) || {}).nfpg ?? null,
       tdoe: ((p.rtd || 0) + (p.rutd || 0)) - ((p.xtr || 0) + (p.xtu || 0)),
       epadb: p.db ? p.epa / p.db : null, cpoe: p.cpoe, sackp: p.db ? 100 * p.sk / p.db : null,
       ruxg: (p.xu || 0) / g, carg: (p.car || 0) / g,
@@ -209,6 +229,7 @@
     fpg: { h: "FP/G", d: 1, hib: 1, t: "PPR points per game" },
     xfpg: { h: "xFP/G", d: 1, hib: 1, t: "Expected PPR points per game: each target and carry priced by depth, field position, down and distance" },
     fpoeg: { h: "FPOE/G", d: 1, s: 1, hib: 1, t: "PPR points over expected, per game" },
+    nfpg: { h: "nFP/G", d: 1, hib: 1, t: "Neutral FP / game: his points in a league-average offense. His target share stays his; his team's pass volume becomes the league's, the catchable balls his QB missed are given back (FTN's catchable-ball charting, 2022 on), and his points per target are pulled toward what his targets are worth by targets / (targets + 200). For receivers who changed teams it reads next season's FP / G better than FP / G (r .69 vs .62)" },
     tdoe: { h: "TDOE", d: 1, s: 1, hib: 1, t: "Touchdowns over expected" },
     epadb: { h: "EPA/db", d: 2, s: 1, hib: 1, t: "Expected points added per dropback" }, cpoe: { h: "CPOE", d: 1, s: 1, hib: 1, t: "Completion % over expected" },
     sackp: { h: "Sack%", d: 1, p: 1, hib: 0 }, ruxg: { h: "Rush xFP/G", d: 1, hib: 1 }, carg: { h: "Car/G", d: 1, hib: 1 },
@@ -250,7 +271,7 @@
   };
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
-    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe", "nyoe"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe", "nyoe"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]]],
     RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo", "expl", "ybca"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
@@ -555,7 +576,7 @@
   // high-value touches and goal-line work. Quarterbacks: passing volume and touchdowns, efficiency, and rushing (Rush xFP/G). Every other
   // column is still in Filters ▸ Stats (the All set, or each group).
   const CORE = {
-    WR: ["fpg", "g", "rte", "tprr", "tgtsh", "wopr", "awopr", "rzt", "wos", "yprr", "syprr"],
+    WR: ["fpg", "nfpg", "g", "rte", "tprr", "tgtsh", "wopr", "awopr", "rzt", "wos", "yprr", "syprr"],
     RB: ["fpg", "g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos", "hvtg", "gls", "rzs"],
     QB: ["g", "att", "pyd", "ptd", "int", "epadb", "car", "ruxg", "xfpg"],
   };
@@ -700,13 +721,13 @@
 
   // ---------- Player page ----------
   const BARS = {
-    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "nyoe", "ypr"]]]],
+    WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "nyoe", "ypr"]]]],
     RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "expl", "ybca", "fppo"]], ["Receiving", ["tprr", "yprr", "syprr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
   const LABEL = { rte: "Route %", tgtsh: "Target share", tprr: "Targets / route", aysh: "Air-yard share", rzt: "Red-zone targets", xfpg: "xFP / game", fpg: "FP / game", fpoeg: "Points over exp. / G",
-                  tdoe: "TD over expected", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", awopr: "Adjusted WOPR", snp: "Snap %",
+                  tdoe: "TD over expected", nfpg: "Neutral FP / game", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", awopr: "Adjusted WOPR", snp: "Snap %",
                   carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
                   sep: "Separation", sepoe: "Separation over exp.", cont: "Contested target %", contoe: "Contested over exp.", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
@@ -1041,7 +1062,7 @@
   let tabY0 = null;
   function renderBelow(p, y, pos, meta) {
     const sec = el("section", "pbelow2"), bar = el("div", "btabs"); bar.setAttribute("role", "tablist");
-    const TABS = [["build", "xFP build-up"], ["log", "Game log"]]; if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);
+    const TABS = [["build", "xFP build-up"]]; if ((pos === "WR" || pos === "TE") && neutralOf(p)) TABS.push(["neut", "Neutral FP/G"]); TABS.push(["log", "Game log"]); if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);
     const pick = TABS.some((t) => t[0] === S.ptab) ? S.ptab : null;   // the strip opens closed (the baseball's); a tab stays picked across pages until it's tapped again
     for (const [k, lab] of TABS) {
       const b = el("button", "btab" + (k === pick ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(k === pick));
@@ -1049,7 +1070,7 @@
       bar.append(b);
     }
     sec.append(bar);
-    if (pick) { const body = el("div", "btabbody"); if (pick === "log") gameLog(body, p, meta); else buildUp(body, p, y, pos); sec.append(body); }
+    if (pick) { const body = el("div", "btabbody"); if (pick === "log") gameLog(body, p, meta); else if (pick === "neut") neutralTab(body, p, y, pos); else buildUp(body, p, y, pos); sec.append(body); }
     requestAnimationFrame(() => {
       // a phone's strip slides sideways with a fade at its right edge unless every tab fits, when it is centred like a desktop's
       const fits = [...bar.children].reduce((w, b) => w + b.offsetWidth, 0) + 14 * (bar.children.length - 1) + 24 <= bar.clientWidth;
@@ -1124,6 +1145,31 @@
     t2.addRow([td("FP / game", "l fz"), td(num(m.xfpg)), td(num(m.fpg)), td(sgn(m.fpoeg)), td(tot >= 0.1 ? "100%" : "")], "tot first");
     right.append(t2.box, el("p", "note", "Each piece's part of the gap between his expected and actual points; the shares add to 100%. Touchdown luck is the part least likely to carry into next season."));
     split.append(left, right); host.append(split);
+  }
+
+  // the neutral FP / game build-up (24 Oct 2026): from what he scored, take his offense out piece by piece — his team's pass volume, his
+  // QB's catchable rate — then the luck in what he did with each target, landing on what he'd score in a league-average offense
+  function neutralTab(host, p, y, pos) {
+    const n = neutralOf(p); if (!n) return;
+    const P = pool(y, pos), ref = P.ref, rk = (f) => ranker(ref.map(f))(f(p));
+    const tsOf = (q) => (q.tmt ? q.tgt / q.tmt : null), volOf = (q) => (q.g ? q.tmt / q.g : null), catOf = (q) => (q.ftgt > 0 && q.fcat != null ? q.fcat / q.ftgt - q.xcat / q.ftgt : null);
+    const lgTs = ref.length ? ref.reduce((a, q) => a + (tsOf(q) || 0), 0) / ref.length : null;
+    const c = card("Neutral fantasy points", "what he scored, with his offense taken out", "kcard");
+    const t = table([{ cols: [{ h: "Step", cls: "l fz" }], end: 1 }, { cols: [{ h: "His" }, { h: "Lg" }], end: 1 }, { cols: [{ h: "± FP/G" }, { h: "FP/G" }] }], { front: false });
+    let run = M(p).fpg;
+    const row = (lab, his, lg, d, t2, pct, cls) => { const L = td(lab, "l fz"); if (t2) L.title = t2; const h = td(his); if (pct != null) paint(h, pct);
+      const dc = td(d == null ? "" : sgn(d)); if (d != null) { paint(dc, 50 + 14 * d); run += d; } return [L, h, td(lg), dc, td(num(run), cls || "")]; };
+    t.addRow(row("FP / game", "", "", null, "What he scored"));
+    t.addRow(row("Target share (his)", pc(100 * n.ts), lgTs != null ? pc(100 * lgTs) : "", null, "How much of his offense's passing comes his way, in his games — his own skill, so it stays as it is", rk(tsOf)));
+    t.addRow(row("Team pass volume", num(n.teamTpg), num(n.lg), n.dVol, `His team throws ${num(n.teamTpg)} targets a game in his games against the league's ${num(n.lg)}: at his target share, a league-average offense gives him ${num(n.tpgN)} targets a game, not ${num(n.tpgA)}`, rk(volOf)));
+    if (n.hasQ) t.addRow(row("QB accuracy", pc(100 * n.catA), pc(100 * n.catX), n.dQb, "How many of his targets were catchable (FTN's charting) against what his position draws at the same depths; the catchable balls his QB missed are given back at what a catchable target at that depth is worth", rk(catOf)));
+    else t.addRow([td("QB accuracy", "l fz"), td("–"), td("–"), td(""), td(num(run))]);
+    const fin = row("Points per target, regressed", num(n.ppt + n.qa, 2), num(n.xppt, 2), n.dLuck, `What he did with each target (${num(n.ppt + n.qa, 2)} points, QB misses given back) against what his targets are worth (${num(n.xppt, 2)}), kept at ${Math.round(100 * n.w)}% — targets / (targets + ${NK}): over one season it is mostly luck`, null, "kexp");
+    fin[4].dataset.exp = "Neutral FP/G"; fin[4].title = "Neutral FP / game: what he would score in a league-average offense"; t.addRow(fin);
+    t.box.classList.add("kbox"); c.append(t.box);
+    const off = n.dVol + n.dQb;
+    c.append(el("p", "note", `${off <= -0.05 ? `His offense adds ${num(-off)} points a game` : off >= 0.05 ? `His offense costs him ${num(off)} points a game` : "His offense is about average for him"} (pass volume ${sgn(n.dVol)}, QB ${n.hasQ ? sgn(n.dQb) : "–"}). His target share is his and stays in. ${n.hasQ ? "" : "FTN's catchable-ball charting starts in 2022, so this season has no QB step. "}Rushing points count as scored. Tested on every receiver season with 40+ targets 2022-24: for players who changed teams, neutral FP / G read next season's points better than FP / G (r .69 against .62).`));
+    host.append(c);
   }
 
   function gameLog(host, p, meta) {

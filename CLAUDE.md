@@ -726,3 +726,41 @@ The table shows WRs; TEs were the same or weaker.
   * The edge (TPRR vs man − vs zone) is noise.
 
 Nothing went on the site. Don't re-run these unasked. If Sean subscribes to Fantasy Points, their route win rate would be a private paste-in, as the Separation entry says.
+
+## Neutral FP / game (Sean, 24 Oct 2026: "a way to quantify someone like Michael Wilson ... good in isolation but they play for a terrible offense", then "his ability to draw targets aka his target share would be part of himself ... run the test and build it")
+
+**nFP/G** (`nfpg` in `M()`, `neutralOf` / `NK` in `fb.js`) is a WR's or TE's points in a league-average offense:
+
+nFP/G = (his target share × the league's team targets per game) × (xFP per target + (his points per target with his QB's misses given back − xFP per target) × targets / (targets + 200)) + his rushing and other points as scored
+
+* **What stays his**: his target share, and his points per target.
+* **What becomes the league's**:
+  * His team's targets per game in his games become the league's (`lgTv`, the same 40+ target pool as aWOPR).
+  * His QB's catchable rate: the catchable targets his QB missed are given back. "Missed" is FTN's `is_catchable_ball` against what his position draws at his depths (`xcat`); each is priced at what a catchable target at that depth is worth (`vcat / ftgt`).
+* **Why per-target points are pulled toward expected**: what he does with a target is mostly luck over a season, so it moves toward xFP per target by targets / (targets + 200).
+* **Seasons before 2022** have no catchability charting, so they have no QB step.
+
+**Data**: `contested()` in `tools/build_fb.py` also writes `fcat` (catchable targets), `xcat` and `vcat`, using the same air-yard bands and 30-target shrinkage as `xcnt`. `load_ftn` reads `is_catchable_ball`. `data/fb-2022…2026.js` were patched with `--patch-skills` the same day. Only those three fields were added; nothing else moved.
+
+**Where it shows**:
+* Leaders' Fantasy group after FP/G, and the WR / TE fantasy core after FP/G.
+* A "Neutral FP / game" bar in the player page's Fantasy section.
+* A **Neutral FP/G** tab on a WR / TE page (`neutralTab`), a build-up from FP / game:
+  * Target share (his) — a display row, it stays.
+  * Team pass volume ±, then QB accuracy ±.
+  * Points per target, regressed ± → the yellow "Neutral FP/G".
+  * A note saying what his offense adds or costs.
+
+**The test** (scratch `osep/neut.py` / `ntest2.py` in the baseball session's scratchpad: every WR / TE season with 40+ targets 2022-24 against the next, 251 WR / 94 TE pairs). Read next season's FP / G:
+
+| | FP/G | xFP/G | nFP/G |
+|---|---|---|---|
+| WRs who changed teams | .62 | .69 | .69 |
+| All WRs | .69 | .69 | .68 |
+| All TEs | .60 | .57 | .61 |
+
+* With full conversion credit it read .66 for WRs who changed teams.
+* With no conversion credit: .70 for movers, but .67 overall.
+* k 200 was the best balance of 50-400.
+
+Michael Wilson 2026: 11.9 FP/G → 14.0 nFP/G. Arizona's pass volume takes 1.8 off at a neutral offense, his QB's catchable rate (64% vs 70%) gives back 1.4, and his poor conversion over six games regresses +2.5.
