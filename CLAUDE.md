@@ -776,3 +776,29 @@ Michael Wilson 2026: 11.9 FP/G → 14.0 nFP/G. Arizona's pass volume takes 1.8 o
 | Receiving FP / route | .58 | .58 | .54 |
 
   It is level with TPRR and xFP / route. Tight ends are weaker throughout: .46 repeat, .40 next.
+
+## Running backs: EPA and neutral FP / G (Sean, 24 Oct 2026, of a chart of backs' total EPA against touches: "an rb stat like this, and something like this that can in a similar fashion isolate the rb from the offense (like offensive talent around him, OL, coaching, etc) and then also like a +/- or on/off split type thing too")
+
+**EPA** (an **EPA** group on Leaders' RB table, after Efficiency, and on the RB player page's bars): **EPA** (`tepa`, total on his carries and
+targets — a target's EPA whether it was caught or not, as the chart counts it), **EPA/Tch** (`epatch`, over carries + catches, the chart's
+per-touch) and **EPA/Car** (`epac`). Build: `epa_of` / `epa_all` in `tools/build_fb.py` write `epar` / `epat` per player-season (nflverse's
+`epa` summed over the build's own carries and targets); `--patch-skills` now reads every season's play-by-play and writes them too (how
+2016-2026 got them on 24 Oct 2026 — only those two fields changed).
+
+**Neutral FP / G for backs** (`neutralRb` / `lgRbVol` / `NRK` in `fb.js`; the RB Fantasy group, the bars, the RB core after FP/G, and the
+player page's **Neutral FP/G** tab, `neutralRbTab`): his carry share and target share stay his; his team's carries and targets a game in his
+games become the league's (the season's backs with 90+ carries + targets, pro-rated); his rushing per carry becomes xFP per carry + 0.1 ×
+his NGS rush yards over expected per carry × carries / (carries + 200) — the touchdowns and yards his line and play-calling handed him drop
+out; his receiving per target is regressed as a receiver's (k 200). The tab steps from his FP/G through team run volume, team pass volume,
+rushing and receiving to the marked neutral number, with an EPA table and a note under it.
+
+**What the study found** (scratch `rbiso/` in the baseball session's scratchpad; every back with 100+ carries 2016-25, and 90+ carries +
+targets for the neutral number, 421 next-season pairs, 97 who changed teams):
+* EPA per touch describes the season (r .72 with FP per opportunity, .34 with next season's FP/G) but repeats at .28 and for movers at .04;
+  rush EPA per carry .19 / .02. Every attempt to isolate the back's EPA — situation-expected EPA, opponent-adjusted, teammate-relative, a
+  ridge model of rusher + offense + defense — repeated at .11-.18 and followed nothing to a new team (≤ .01). NGS RYOE per carry travelled
+  (.33 for movers), and rush FPOE per carry a little (.17).
+* Neutral FP/G for backs reads next season's FP/G at r .47 for movers (FP/G .47, xFP/G .45) and .60 overall (FP/G .65): a tie for movers,
+  behind overall. It shows the offense's effect on his points, not a better forecast; the tooltip and the tab's note say so.
+* **On / off** (his team's offensive EPA per play with him on the field against off it, from participation, 2016-25): repeats at r .14 and
+  for movers .17; rush EPA on − off .04. Noise — not on the site; Sean can have it anyway if he asks.

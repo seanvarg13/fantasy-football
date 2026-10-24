@@ -204,6 +204,18 @@ def sep_oe(rows):
 CONT_BANDS = [-1000, -1, 4, 9, 14, 19, 29, 1000]   # air yards: behind the line, 0-4, 5-9, 10-14, 15-19, 20-29, 30+
 
 
+def epa_of(ti, ci):
+    """EPA on his carries and his targets (24 Oct 2026; Sean, of a chart of backs' total EPA against touches: "an rb stat like this"):
+    nflverse's expected points added, credited to the ball carrier or the receiver the way the chart does — a target's EPA whether it
+    was caught or not."""
+    return dict(epar=r1(ci.epa.fillna(0).sum()) if len(ci) else 0.0, epat=r1(ti.epa.fillna(0).sum()) if len(ti) else 0.0)
+
+
+def epa_all(t, c):
+    tg, cg = dict(tuple(t.groupby("pid"))), dict(tuple(c.groupby("pid")))
+    return {i: epa_of(tg.get(i, t.iloc[0:0]), cg.get(i, c.iloc[0:0])) for i in set(tg) | set(cg)}
+
+
 def contested(t, ftn):
     """FTN's contested targets per receiver (21 Oct 2026): his charted targets, the contested ones, and how many his target depths would
     draw at the season's rate for each air-yard band (screens and a missing depth their own bands) among his position's targets — wide
@@ -430,6 +442,7 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
             ryoe=r1(ng.rush_yards_over_expected) if ng is not None else None, ngsatt=int(ng.rush_attempts) if ng is not None else None,
             w=wrows,
         )
+        rec.update(epa_of(ti, ci))
         rec.update(sk.get(i, {}))
         rec.update(ct.get(i, {}))
         if len(qi) or ps == "QB":
@@ -532,7 +545,7 @@ def main():
     ap.add_argument("--seasons", default="2016-2026")
     ap.add_argument("--current", type=int, default=2026)
     ap.add_argument("--write", default=None, help="only write these seasons (comma list); the model still trains on all")
-    ap.add_argument("--patch-skills", action="store_true", help="only put the skill stats on the built data/fb-<y>.js files (no play-by-play)")
+    ap.add_argument("--patch-skills", action="store_true", help="only put the skill stats, FTN counts and EPA sums on the built data/fb-<y>.js files")
     a = ap.parse_args()
     lo, hi = map(int, a.seasons.split("-"))
     seasons = list(range(lo, hi + 1))
@@ -546,18 +559,21 @@ def main():
                 continue
             s = open(path).read(); body = json.loads(s[s.index("={") + 1:].rstrip().rstrip(";"))
             sk = skills(y, d, d["players"]); n = 0
-            ct, fq = {}, load_ftn(a.cache, y, y == a.current)
-            if fq is not None:
-                pb = fetch(f"{R}/pbp/play_by_play_{y}.parquet", f"{a.cache}/pbp_{y}.parquet", y == a.current)
-                if pb:
-                    p = reg(pd.read_parquet(pb)); p = p[p.week <= min(18, body["meta"].get("through") or 18)]
-                    ct = contested(targets(p, pos), fq)
+            ct, ep, fq = {}, {}, load_ftn(a.cache, y, y == a.current)
+            pb = fetch(f"{R}/pbp/play_by_play_{y}.parquet", f"{a.cache}/pbp_{y}.parquet", y == a.current)
+            if pb:
+                p = reg(pd.read_parquet(pb)); p = p[p.week <= min(18, body["meta"].get("through") or 18)]
+                t_ = targets(p, pos)
+                ep = epa_all(t_, carries(p, pos))
+                if fq is not None:
+                    ct = contested(t_, fq)
             for pl in body["players"]:
-                f, f2 = sk.get(pl["id"]), ct.get(pl["id"])
+                f, f2, f3 = sk.get(pl["id"]), ct.get(pl["id"]), ep.get(pl["id"], dict(epar=0.0, epat=0.0))
                 if f:
                     pl.update(f)
                 if f2:
                     pl.update(f2)
+                pl.update(f3)
                 if f or f2:
                     n += 1
             with open(path, "w") as f:
