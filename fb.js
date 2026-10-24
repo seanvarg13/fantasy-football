@@ -126,8 +126,36 @@
   // the next, 251 WR / 94 TE pairs): for receivers who changed teams it reads next season's FP / G at r .69 (FP/G .62, xFP/G .69); every
   // receiver .68 (.69 / .69); tight ends .61 (.60 / .57). NK 200 was the best of 50-400 and of no conversion credit at all.
   const NK = 200;
+  // the running back's version (24 Oct 2026; Sean: "something like this that can in a similar fashion isolate the rb from the offense (like
+  // offensive talent around him, OL, coaching, etc)"): his carry share and target share stay his; his team's carries and targets a game in his
+  // games become the league's (the season's backs with 90+ carries + targets, pro-rated — lgRbVol); his rushing points per carry become what
+  // his carries are worth (xFP per carry) plus his own rush yards over expected at a tenth of a point a yard, pulled in by NGS carries /
+  // (carries + NRK) — the touchdowns his line and play-calling handed him drop out; his receiving points per target are regressed as a
+  // receiver's are. Every back with 90+ carries + targets 2016-24 against the next season (421 pairs, 97 changed teams; scratch rbiso/nrb.py):
+  // for backs who moved it reads next season's FP / G at r .47 against FP / G's .47 and xFP / G's .45 — a tie; every back .60 against .65.
+  // It is the offense's effect on him laid out, not a better forecast. Every isolation of EPA tried the same day (opponent, teammates, a
+  // ridge model of rusher + offense + defense) followed nothing to a new team (r ≤ .02); NGS rush yards over expected did (.33).
+  const NRK = 200, lgRbMemo = {};
+  function lgRbVol(y) {
+    if (y in lgRbMemo) return lgRbMemo[y];
+    const D = window.FB[y]; let c = 0, t = 0, n = 0;
+    if (D) for (const q of D.players) if (posGroup(q.pos) === "RB" && (q.car || 0) + (q.tgt || 0) >= 90 * frac(D.meta) && q.g > 0 && q.tmc && q.tmt) { c += q.tmc / q.g; t += q.tmt / q.g; n++; }
+    return (lgRbMemo[y] = n ? { c: c / n, t: t / n } : null);
+  }
+  function neutralRb(p, y) {
+    if (!p.tmc || !p.tmt || !(p.g > 0) || !((p.car || 0) + (p.tgt || 0) >= 1)) return null;
+    const lg = lgRbVol(y); if (!lg) return null;
+    const G = p.g, car = p.car || 0, t = p.tgt || 0;
+    const cpgA = car / G, cpgN = (car / p.tmc) * lg.c, tpgA = t / G, tpgN = (t / p.tmt) * lg.t;
+    const rpc = car ? (p.fru || 0) / car : 0, xpc = car ? (p.xu || 0) / car : 0, ry = p.ngsatt ? (p.ryoe || 0) / p.ngsatt : 0, wr = p.ngsatt ? p.ngsatt / (p.ngsatt + NRK) : 0;
+    const rush = xpc + 0.1 * ry * wr, ppt = t ? (p.frt || 0) / t : 0, xppt = t ? (p.xr || 0) / t : 0, w = t / (t + NK), recv = xppt + (ppt - xppt) * w;
+    const rest = ((p.fp || 0) - (p.frt || 0) - (p.fru || 0)) / G;
+    return { rb: 1, y, lg, teamCpg: p.tmc / G, teamTpg: p.tmt / G, cs: car / p.tmc, ts: t / p.tmt, cpgA, cpgN, tpgA, tpgN, rpc, xpc, ry, wr, rush, ppt, xppt, w, recv, rest,
+             dCvol: (cpgN - cpgA) * rpc, dTvol: (tpgN - tpgA) * ppt, dRush: cpgN * (rush - rpc), dRecv: tpgN * (recv - ppt), nfpg: cpgN * rush + tpgN * recv + rest };
+  }
   function neutralOf(p) {
     const y = SEASON_OF.get(p), pg = posGroup(p.pos);
+    if (y && pg === "RB") return neutralRb(p, y);
     if (!y || (pg !== "WR" && pg !== "TE") || !(p.tgt >= 1) || !p.tmt || !(p.g > 0)) return null;
     const lg = lgTv(y, pg); if (!lg) return null;
     const t = p.tgt, G = p.g, tpgA = t / G, tpgN = (t / p.tmt) * lg, ppt = (p.frt || 0) / t, xppt = (p.xr || 0) / t, w = t / (t + NK);
@@ -166,7 +194,13 @@
       // per route (24 Oct 2026; Sean: "this exact stat but on a per route basis too"): his targets per route x his neutral points per target —
       // team volume drops out per route; receiving only. Every WR season with 40+ targets 2022-24 against the next: repeats at r .66
       // (receiving FP / route .58), next season's FP / route .60 (.58), for receivers who changed teams .60 (.54); level with TPRR and xFP / route
-      nfprr: (() => { const n = neutralOf(p); return n && p.rts >= 1 ? (p.tgt / p.rts) * n.npt : null; })(),
+      nfprr: (() => { const n = neutralOf(p); return n && !n.rb && p.rts >= 1 ? (p.tgt / p.rts) * n.npt : null; })(),
+      // EPA on his touches (24 Oct 2026; Sean, of a chart of backs' total EPA against touches: "an rb stat like this"): nflverse's expected
+      // points added on his carries and on his targets (caught or not), in total and per carry + catch as the chart has it. Every back with
+      // 100+ carries 2016-25 (scratch rbiso/): EPA per touch tracks this season's FP per opportunity at r .72 and next season's FP / G at .34,
+      // but repeats year to year at .28 and for backs who changed teams at .04 — it is his offense's season as much as his
+      tepa: p.epar != null ? p.epar + (p.epat || 0) : null, epatch: p.epar != null && touch ? (p.epar + (p.epat || 0)) / touch : null,
+      epac: p.epar != null && p.car ? p.epar / p.car : null,
       tdoe: ((p.rtd || 0) + (p.rutd || 0)) - ((p.xtr || 0) + (p.xtu || 0)),
       epadb: p.db ? p.epa / p.db : null, cpoe: p.cpoe, sackp: p.db ? 100 * p.sk / p.db : null,
       ruxg: (p.xu || 0) / g, carg: (p.car || 0) / g,
@@ -234,7 +268,7 @@
     xfpg: { h: "xFP/G", d: 1, hib: 1, t: "Expected PPR points per game: each target and carry priced by depth, field position, down and distance" },
     fpoeg: { h: "FPOE/G", d: 1, s: 1, hib: 1, t: "PPR points over expected, per game" },
     nfprr: { h: "nFP/RR", d: 2, hib: 1, t: "Neutral FP per route run: his targets per route × his points per target with his QB's missed catchable balls given back, pulled toward what his targets are worth by targets / (targets + 200) — receiving only, so his team's pass volume drops out. Repeats year to year at r .66 against .58 for his actual receiving FP per route" },
-    nfpg: { h: "nFP/G", d: 1, hib: 1, t: "Neutral FP / game: his points in a league-average offense. His target share stays his; his team's pass volume becomes the league's, the catchable balls his QB missed are given back (FTN's catchable-ball charting, 2022 on), and his points per target are pulled toward what his targets are worth by targets / (targets + 200). For receivers who changed teams it reads next season's FP / G better than FP / G (r .69 vs .62)" },
+    nfpg: { h: "nFP/G", d: 1, hib: 1, t: "Neutral FP / game: his points in a league-average offense. A receiver: his target share stays his; his team's pass volume becomes the league's, the catchable balls his QB missed are given back (FTN's catchable-ball charting, 2022 on), and his points per target are pulled toward what his targets are worth by targets / (targets + 200); for receivers who changed teams it reads next season's FP / G better than FP / G (r .69 vs .62). A back: his carry and target shares stay his, his team's carries and targets a game become the league's, his rushing is what his carries are worth plus his own rush yards over expected (the touchdowns his line handed him drop out), his receiving regressed as a receiver's; for backs who changed teams it ties FP / G at next season's points (r .47 each) — it shows the offense's effect rather than forecasting better" },
     tdoe: { h: "TDOE", d: 1, s: 1, hib: 1, t: "Touchdowns over expected" },
     epadb: { h: "EPA/db", d: 2, s: 1, hib: 1, t: "Expected points added per dropback" }, cpoe: { h: "CPOE", d: 1, s: 1, hib: 1, t: "Completion % over expected" },
     sackp: { h: "Sack%", d: 1, p: 1, hib: 0 }, ruxg: { h: "Rush xFP/G", d: 1, hib: 1 }, carg: { h: "Car/G", d: 1, hib: 1 },
@@ -261,6 +295,9 @@
     // elusiveness (18 Oct 2026): every back's 100+ carry season, 2016-25 (PFR's charting from 2018), against this season's points per
     // opportunity and rushing points over expected per carry; year to year on 271 back-to-back pairs
     elus: { h: "Elusive", d: 1, hib: 1, t: "Elusive rating, PFF's formula on PFR's charting: broken tackles per touch (carries + catches) × yards after contact per carry × 100. PFR charts fewer broken tackles than PFF does missed tackles, so the scale runs lower than PFF's (a typical back ~15, the best ~30). +.32 with points per opportunity and +.37 with rushing points over expected this season; repeats at r .29" },
+    tepa: { h: "EPA", d: 1, s: 1, hib: 1, t: "Total expected points added on his carries and targets (nflverse's EPA; a target counts caught or not). It says how much his touches moved his offense this season, but EPA is mostly the offense's: for backs it repeats year to year at r .28 and doesn't follow a back to a new team (r .04)" },
+    epatch: { h: "EPA/Tch", d: 2, s: 1, hib: 1, t: "EPA per touch: his carry and target EPA over his carries + catches, as the chart Sean sent has it. Tracks this season's FP per opportunity at r .72 and next season's FP / G at .34, but repeats at only r .28, and for backs who changed teams at .04 — his line, play-calling and passing game ride along. RYOE/att is the part that's his (.33 for movers)" },
+    epac: { h: "EPA/Car", d: 2, s: 1, hib: 1, t: "EPA per carry. Repeats year to year at r .19, and for backs who changed teams at .02 — next to nothing of it travels with him" },
     expl: { h: "Expl%", d: 1, p: 1, hib: 1, t: "Explosive runs: carries of 10+ yards per carry. +.47 with points per opportunity and +.62 with rushing points over expected this season; repeats at r .27 — and with yards per carry the best of these at next season's rushing points over expected (+.24)" },
     bkwy: { h: "Breakaway%", d: 1, p: 1, hib: 1, t: "Breakaway %: share of his rushing yards gained on runs of 15+ yards — the big-play back as against the grinder. +.37 with points per opportunity and +.58 with rushing points over expected; repeats at r .30" },
     // weighted opportunity (20 Oct 2026): every qualified 2016-25 season against that season's FP / G, the same stat the next season and
@@ -277,7 +314,7 @@
   const fmtM = (k, v) => { const d = METRIC[k] || { d: 1 }; return d.s ? sgn(v, d.d) : d.p ? pc(v, d.d) : num(v, d.d); };
   const COLS = {
     WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe", "nyoe"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "nfprr", "fpoeg", "tdoe"]]],
-    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo", "expl", "ybca"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]],
+    RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo", "expl", "ybca"]], ["EPA", ["tepa", "epatch", "epac"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]]],
     QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
   COLS.TE = COLS.WR;
@@ -582,7 +619,7 @@
   // column is still in Filters ▸ Stats (the All set, or each group).
   const CORE = {
     WR: ["fpg", "nfpg", "nfprr", "g", "rte", "tprr", "tgtsh", "wopr", "awopr", "rzt", "wos", "yprr", "syprr"],
-    RB: ["fpg", "g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos", "hvtg", "gls", "rzs"],
+    RB: ["fpg", "nfpg", "g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos", "hvtg", "gls", "rzs"],
     QB: ["g", "att", "pyd", "ptd", "int", "epadb", "car", "ruxg", "xfpg"],
   };
   CORE.TE = CORE.WR;
@@ -727,13 +764,13 @@
   // ---------- Player page ----------
   const BARS = {
     WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "nfprr", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "nyoe", "ypr"]]]],
-    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "expl", "ybca", "fppo"]], ["Receiving", ["tprr", "yprr", "syprr"]]]],
+    RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "expl", "ybca", "fppo"]], ["EPA", ["tepa", "epatch", "epac"]], ["Receiving", ["tprr", "yprr", "syprr"]]]],
     QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
   const LABEL = { rte: "Route %", tgtsh: "Target share", tprr: "Targets / route", aysh: "Air-yard share", rzt: "Red-zone targets", xfpg: "xFP / game", fpg: "FP / game", fpoeg: "Points over exp. / G",
                   tdoe: "TD over expected", nfpg: "Neutral FP / game", nfprr: "Neutral FP / route", yprr: "Yards / route", syprr: "Stable YPRR", croe: "Catch rate over exp.", yacoe: "YAC over exp.", ypr: "Yards / catch", adot: "aDOT", wopr: "WOPR", awopr: "Adjusted WOPR", snp: "Snap %",
-                  carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", fppo: "FP / opportunity",
+                  carsh: "Carry share", oppg: "Opportunities / G", glc: "Goal-line carries", ypc: "Yards / carry", ryoe: "Rush yds over exp.", tepa: "Total EPA", epatch: "EPA / touch", epac: "EPA / carry", fppo: "FP / opportunity",
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
                   sep: "Separation", sepoe: "Separation over exp.", cont: "Contested target %", contoe: "Contested over exp.", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
                   elus: "Elusive rating", expl: "Explosive run %", bkwy: "Breakaway %", stuff: "Stuffed %",
@@ -746,6 +783,7 @@
   };
   // weighted opportunity (20 Oct 2026): what the bars of that name are, and which of them carry into next season
   SKILL_NOTE.RB += " Weighted opportunity counts a target as 2.5 carries — what a back's target is worth over his carry by expected points — and per game it is the best volume measure of next season's points (r .63 with next season's FP/G, xFP/G .62, plain carries + targets .59). High-value touches are catches plus carries inside the 10; the high-value share says what kind of back he is (it repeats at r .73) more than how much he scores. The red-zone and goal-line shares are his slice of his team's chances there and move more from year to year (r .59 / .47).";
+  SKILL_NOTE.RB += " EPA on his touches (total, per touch, per carry) is how much they moved his offense this season — it tracks his points per opportunity (r .72) but repeats at only .28 and doesn't follow a back to a new team (.04): his line, play-calling and passing game ride in it. Neutral FP / G takes his team's volume and his touchdown luck out and keeps his own rush yards over expected.";
   SKILL_NOTE.WR += " Weighted opportunity share is his carries + 2.5 × targets over his team's, in his games: his slice of the offense, as good as xFP/G at next season's points (r .68 for receivers, .71 for tight ends) and a touch steadier year to year than his targets per game. For receivers, weighting targets by depth doesn't beat plain targets — a target is a target. The red-zone and end-zone shares are his part of his team's scoring chances; they move more from year to year (r .52 / .50 for receivers, .53 / .44 for tight ends).";
   SKILL_NOTE.TE = SKILL_NOTE.WR;
 
@@ -1067,7 +1105,7 @@
   let tabY0 = null;
   function renderBelow(p, y, pos, meta) {
     const sec = el("section", "pbelow2"), bar = el("div", "btabs"); bar.setAttribute("role", "tablist");
-    const TABS = [["build", "xFP build-up"]]; if ((pos === "WR" || pos === "TE") && neutralOf(p)) TABS.push(["neut", "Neutral FP/G"]); TABS.push(["log", "Game log"]); if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);
+    const TABS = [["build", "xFP build-up"]]; if (pos !== "QB" && neutralOf(p)) TABS.push(["neut", "Neutral FP/G"]); TABS.push(["log", "Game log"]); if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);
     const pick = TABS.some((t) => t[0] === S.ptab) ? S.ptab : null;   // the strip opens closed (the baseball's); a tab stays picked across pages until it's tapped again
     for (const [k, lab] of TABS) {
       const b = el("button", "btab" + (k === pick ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(k === pick));
@@ -1156,6 +1194,7 @@
   // QB's catchable rate — then the luck in what he did with each target, landing on what he'd score in a league-average offense
   function neutralTab(host, p, y, pos) {
     const n = neutralOf(p); if (!n) return;
+    if (n.rb) return neutralRbTab(host, p, y, pos, n);
     const P = pool(y, pos), ref = P.ref, rk = (f) => ranker(ref.map(f))(f(p));
     const tsOf = (q) => (q.tmt ? q.tgt / q.tmt : null), volOf = (q) => (q.g ? q.tmt / q.g : null), catOf = (q) => (q.ftgt > 0 && q.fcat != null ? q.fcat / q.ftgt - q.xcat / q.ftgt : null);
     const lgTs = ref.length ? ref.reduce((a, q) => a + (tsOf(q) || 0), 0) / ref.length : null;
@@ -1184,6 +1223,41 @@
     }
     const off = n.dVol + n.dQb;
     c.append(el("p", "note", `${off <= -0.05 ? `His offense adds ${num(-off)} points a game` : off >= 0.05 ? `His offense costs him ${num(off)} points a game` : "His offense is about average for him"} (pass volume ${sgn(n.dVol)}, QB ${n.hasQ ? sgn(n.dQb) : "–"}). His target share is his and stays in. ${n.hasQ ? "" : "FTN's catchable-ball charting starts in 2022, so this season has no QB step. "}Rushing points count as scored. Tested on every receiver season with 40+ targets 2022-24: for players who changed teams, neutral FP / G read next season's points better than FP / G (r .69 against .62).`));
+    host.append(c);
+  }
+
+  // the running back's build-up (24 Oct 2026): his carry and target shares stay; his team's carries and targets a game become the league's;
+  // his rushing points per carry become what his carries are worth plus his own rush yards over expected; his receiving is regressed
+  function neutralRbTab(host, p, y, pos, n) {
+    const P = pool(y, pos), ref = P.ref, rk = (f) => ranker(ref.map(f))(f(p));
+    const avg = (f) => { const v = ref.map(f).filter((x) => x != null && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const csOf = (q) => (q.tmc ? (q.car || 0) / q.tmc : null), tsOf = (q) => (q.tmt ? (q.tgt || 0) / q.tmt : null);
+    const cvOf = (q) => (q.g && q.tmc ? q.tmc / q.g : null), tvOf = (q) => (q.g && q.tmt ? q.tmt / q.g : null);
+    const rpcOf = (q) => (q.car ? (q.fru || 0) / q.car : null), pptOf = (q) => (q.tgt ? (q.frt || 0) / q.tgt : null);
+    const c = card("Neutral fantasy points", "what he scored, with his offense taken out", "kcard");
+    const t = table([{ cols: [{ h: "Step", cls: "l fz" }], end: 1 }, { cols: [{ h: "His" }, { h: "Lg" }], end: 1 }, { cols: [{ h: "± FP/G" }, { h: "FP/G" }] }], { front: false });
+    let run = M(p).fpg;
+    const row = (lab, his, lg, d, t2, pct, cls) => { const L = td(lab, "l fz"); if (t2) L.title = t2; const h = td(his); if (pct != null) paint(h, pct);
+      const dc = td(d == null ? "" : sgn(d)); if (d != null) { paint(dc, 50 + 14 * d); run += d; } return [L, h, td(lg), dc, td(num(run), cls || "")]; };
+    const A = (f, k) => { const v = avg(f); return v == null ? "" : k(v); };
+    t.addRow(row("FP / game", "", "", null, "What he scored"));
+    t.addRow(row("Carry share (his)", pc(100 * n.cs), A(csOf, (v) => pc(100 * v)), null, "His share of his team's carries, in his games — his own standing in the backfield, so it stays as it is", rk(csOf)));
+    t.addRow(row("Team run volume", num(n.teamCpg), num(n.lg.c), n.dCvol, `His team runs ${num(n.teamCpg)} times a game in his games against the league's ${num(n.lg.c)}: at his carry share, a league-average offense gives him ${num(n.cpgN)} carries a game, not ${num(n.cpgA)}`, rk(cvOf)));
+    t.addRow(row("Target share (his)", pc(100 * n.ts), A(tsOf, (v) => pc(100 * v)), null, "His share of his team's targets, in his games — his own, so it stays", rk(tsOf)));
+    t.addRow(row("Team pass volume", num(n.teamTpg), num(n.lg.t), n.dTvol, `His team throws ${num(n.teamTpg)} targets a game in his games against the league's ${num(n.lg.t)}: at his target share, a league-average offense gives him ${num(n.tpgN)} targets a game, not ${num(n.tpgA)}`, rk(tvOf)));
+    t.addRow(row("Rushing / carry", num(n.rpc, 2), num(n.xpc, 2), n.dRush, `What his carries scored (${num(n.rpc, 2)} points each) against what carries like his are worth (${num(n.xpc, 2)}, by down, distance, field position and gap). He keeps his own rush yards over expected — ${sgn(n.ry, 2)} a carry, at a tenth of a point a yard, ${Math.round(100 * n.wr)}% kept (carries / (carries + ${NRK})) — so ${num(n.rush, 2)} a carry; the touchdowns and yards his line and play-calling handed him drop out`, rk(rpcOf)));
+    const fin = row("Receiving / target, regressed", num(n.ppt, 2), num(n.xppt, 2), n.dRecv, `What he did with each target (${num(n.ppt, 2)} points) against what his targets are worth (${num(n.xppt, 2)}), kept at ${Math.round(100 * n.w)}% — targets / (targets + ${NK}): over one season it is mostly luck`, rk(pptOf), "kexp");
+    fin[4].dataset.exp = "Neutral FP/G"; fin[4].title = "Neutral FP / game: what he would score in a league-average offense"; t.addRow(fin);
+    t.box.classList.add("kbox"); c.append(t.box);
+    if (p.epar != null) {   // the chart's stats: EPA on his touches — his offense's season as much as his
+      const t3 = table([{ cols: [{ h: "EPA", cls: "l fz" }], end: 1 }, { cols: [{ h: "His" }, { h: "Lg" }] }], { front: false });
+      const r3 = (k, lab) => { const f = (q) => M(q)[k], L = td(lab, "l fz"); L.title = METRIC[k].t; const h = td(sgn(f(p), METRIC[k].d)); const pc0 = rk(f); if (pc0 != null) paint(h, pc0);
+        const lv = avg(f); t3.addRow([L, h, td(lv == null ? "" : sgn(lv, METRIC[k].d))]); };
+      r3("tepa", "Total EPA"); r3("epatch", "EPA / touch"); r3("epac", "EPA / carry");
+      t3.box.classList.add("kbox"); c.append(t3.box);
+    }
+    const vol = n.dCvol + n.dTvol;
+    c.append(el("p", "note", `${vol <= -0.05 ? `His offense's volume adds ${num(-vol)} points a game` : vol >= 0.05 ? `His offense's volume costs him ${num(vol)} points a game` : "His offense's volume is about average for him"} (runs ${sgn(n.dCvol)}, passes ${sgn(n.dTvol)}), and his rushing beyond what his carries are worth comes down to his rush yards over expected (${sgn(n.dRush)} in all). His carry and target shares are his and stay in; two-point plays and fumbles count as scored. EPA is shown as it is: it describes his touches this season but follows his offense — it repeats at r .28 and doesn't travel to a new team (r .04), where rush yards over expected does (.33). Tested on every back with 90+ carries + targets 2016-24: for backs who changed teams, neutral FP / G reads next season's points as well as FP / G (r .47 each), not better.`));
     host.append(c);
   }
 
