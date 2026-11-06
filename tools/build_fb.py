@@ -60,7 +60,7 @@ def load(cache, seasons, current):
             out["pbp"][y] = pd.read_parquet(p)
         q = fetch(f"{R}/pbp_participation/pbp_participation_{y}.parquet", f"{cache}/part_{y}.parquet", fresh)
         if q:
-            out["part"][y] = pd.read_parquet(q, columns=["nflverse_game_id", "play_id", "offense_players"])
+            out["part"][y] = pd.read_parquet(q, columns=["nflverse_game_id", "play_id", "offense_players", "defenders_in_box"])
         s = fetch(f"{R}/snap_counts/snap_counts_{y}.csv", f"{cache}/snaps_{y}.csv", fresh)
         if s:
             out["snaps"][y] = pd.read_csv(s)
@@ -90,7 +90,7 @@ def load_ftn(cache, y, fresh):
     if y < FTN_FROM:
         return None
     f = fetch(f"{R}/ftn_charting/ftn_charting_{y}.parquet", f"{cache}/ftn_{y}.parquet", fresh)
-    return pd.read_parquet(f, columns=["nflverse_game_id", "nflverse_play_id", "is_contested_ball", "is_screen_pass", "is_catchable_ball"]) if f else None
+    return pd.read_parquet(f, columns=["nflverse_game_id", "nflverse_play_id", "is_contested_ball", "is_screen_pass", "is_catchable_ball", "n_defense_box", "is_qb_fault_sack", "is_play_action"]) if f else None
 
 
 # ---------- play tables ----------
@@ -489,11 +489,48 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None, xa=None, ta=None, 
 # seconds to the next snap on the same drive (0-60, the neutral pace); drives, red-zone drives and red-zone touchdowns; sacks and QB hits
 # allowed (a sack counts as a hit); a back's designed carries with Football Outsiders' line yards (a loss at 120%, 0-4 yards whole, 5-10 at
 # half, past 10 nothing), stuffed carries; EPA; points scored and the Vegas implied total (the games list's total and spread)
-ENV_F = ["wk", "opp", "pl", "db", "np", "ndb", "noe", "noen", "nsec", "nsn", "dr", "rz", "rztd", "sk", "qh", "rbc", "aly", "rbs", "epa", "pts", "imp"]
+ENV_F = ["wk", "opp", "pl", "db", "np", "ndb", "noe", "noen", "nsec", "nsn", "dr", "rz", "rztd", "sk", "qh", "rbc", "aly", "rbs", "epa", "pts", "imp", "olsk", "qfsk", "fdb"]
 
 
-def team_env(y, pbp, games, pos):
+# the line's run blocking with the back, the defense and the box taken out (O-line models, 6 Nov 2026; Sean: "O line models too"): every RB
+# designed carry's line yards in a ridge with the offense's team-season, the defense's team-season and the rusher as effects and down,
+# distance, field position, shotgun and the defenders in the box as situation. Every season 2016-25 (scratch ol/): odd weeks against even
+# the adjusted line reads r .38 (raw line yards .37), and a team's second back's line yards follow the line fitted without him at r .17
+# (the team's raw line yards on everyone else's carries .15) — the line's part, a little cleaner than raw; it adds nothing to a back's own
+# numbers at his rest of season (second-half YPC r .282 own, .285 with the line)
+def ol_run_adjust(runs):
+    import scipy.sparse as sp
+    from sklearn.linear_model import Ridge
+    df = runs
+    cut = lambda v, b: np.digitize(np.nan_to_num(v.to_numpy(dtype=float), nan=-99), b)
+    cats = {"dn": df.down.fillna(1).astype(int).astype(str), "di": cut(df.ydstogo, [2, 4, 7, 11]).astype(str), "yl": cut(df.yardline_100, [6, 11, 21, 51]).astype(str),
+            "sg": df.shotgun.fillna(0).astype(int).astype(str), "bx": np.where(df.box.isna(), "na", cut(df.box, [6, 7, 8]).astype(str))}
+    fe = {"O": df.posteam, "D": df.defteam, "P": df.rusher_player_id}
+    blocks, names, sc = [], [], []
+    for k, v in list(cats.items()) + list(fe.items()):
+        u, inv = np.unique(np.asarray(v).astype(str), return_inverse=True)
+        blocks.append(sp.csr_matrix((np.ones(len(inv)), (np.arange(len(inv)), inv)), shape=(len(inv), len(u))))
+        names += [k + "|" + x for x in u]; sc += [1.0 if k in fe else 1 / np.sqrt(0.05)] * len(u)
+    sc = np.array(sc); X = sp.hstack(blocks).tocsr().multiply(sc).tocsr()
+    yv = df.aly.to_numpy(); m = Ridge(alpha=800).fit(X, yv - yv.mean()); c = m.coef_ * sc
+    lg = float(yv.mean())
+    return {n[2:]: round(lg + float(v), 3) for n, v in zip(names, c) if n.startswith("O|")}
+
+
+def team_env(y, pbp, games, pos, part=None, ftn=None):
     p = reg(pbp); p = p[(p.week <= 18) & p.play_type.isin(["pass", "run"]) & (p.two_point_attempt != 1) & p.posteam.notna()].copy()
+    # FTN's charting (2022 on): who a sack was on — the line's sacks (not the QB's fault) are the pass-block read: a team's rate with its
+    # starter carries to its other QB at r .47 (raw sack rate .17, sacks + hits .12; 60 team-seasons 2022-25), and repeats odd / even
+    # weeks at .45. An opponent-adjusted version was less steady (.32), so the rate ships as charted. The box count for the run model
+    if ftn is not None:
+        p = p.merge(ftn[["nflverse_game_id", "nflverse_play_id", "is_qb_fault_sack", "n_defense_box"]].rename(columns={"nflverse_game_id": "game_id", "nflverse_play_id": "play_id"}), on=["game_id", "play_id"], how="left")
+    else:
+        p["is_qb_fault_sack"] = np.nan; p["n_defense_box"] = np.nan
+    if part is not None and "defenders_in_box" in part:
+        p = p.merge(part[["nflverse_game_id", "play_id", "defenders_in_box"]].rename(columns={"nflverse_game_id": "game_id"}), on=["game_id", "play_id"], how="left")
+    else:
+        p["defenders_in_box"] = np.nan
+    p["box"] = p.defenders_in_box.fillna(p.n_defense_box)
     p = p[(p.qb_kneel != 1) & (p.qb_spike != 1)]
     p = p.sort_values(["game_id", "play_id"])
     nxt = p.groupby(["game_id", "fixed_drive"]).game_seconds_remaining.shift(-1)
@@ -519,7 +556,9 @@ def team_env(y, pbp, games, pos):
                         len(dv), int(dv.rz.sum()), int((dv.rz & (dv.res == "Touchdown")).sum()), int((q.sack == 1).sum()),
                         int(((q.qb_hit == 1) | (q.sack == 1)).sum()), int(q.rbrun.sum()), round(float(q.aly.sum()), 1),
                         int((q.rbrun & (q.rushing_yards.fillna(0) <= 0)).sum()), round(float(q.epa.sum()), 1), pts.get((tm, w)),
-                        round(imp[(tm, w)], 2) if (tm, w) in imp else None])
+                        round(imp[(tm, w)], 2) if (tm, w) in imp else None]
+                       + ([int(((q.sack == 1) & (q.is_qb_fault_sack != 1) & q.is_qb_fault_sack.notna()).sum()), int(((q.sack == 1) & (q.is_qb_fault_sack == 1)).sum()),
+                           int(((q.qb_dropback == 1) & q.is_qb_fault_sack.notna()).sum())] if ftn is not None else [None, None, None]))
     # the next game not yet played, with its line (the games list carries the coming week's)
     nx, rs = {}, {}
     for tm in out:
@@ -528,7 +567,11 @@ def team_env(y, pbp, games, pos):
         if up:
             w = up[0]; nx[tm] = [int(w), opp.get((tm, w)), round(imp[(tm, w)], 2) if (tm, w) in imp else None]
         rs[tm] = [[int(w), opp.get((tm, w))] for w in up]   # every game left, for the schedule and the rest-of-season projections
-    return {tm: {"w": sorted(v), "nx": nx.get(tm), "rs": rs.get(tm, [])} for tm, v in out.items()}
+    try:
+        adj = ol_run_adjust(p[p.rbrun & p.rusher_player_id.notna()])
+    except Exception as e:
+        print(f"  line model {y} failed: {e}", flush=True); adj = {}
+    return {tm: {"w": sorted(v), "nx": nx.get(tm), "rs": rs.get(tm, []), "alyx": adj.get(tm)} for tm, v in out.items()}
 
 
 # ---------- team-seasons: coaches and RB usage ----------
@@ -726,7 +769,7 @@ def main():
     env = {}
     for y in sorted(T):
         try:
-            env[str(y)] = team_env(y, d["pbp"][y], d["games"], pos)
+            env[str(y)] = team_env(y, d["pbp"][y], d["games"], pos, d["part"].get(y), d["ftn"].get(y))
         except Exception as e:
             print(f"  team environment {y} failed: {e}", flush=True)
     with open(os.path.join(a.out, "env.js"), "w") as f:

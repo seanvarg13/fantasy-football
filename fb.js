@@ -1551,6 +1551,10 @@
     qhp: ["Hit%", "Quarterback hits (sacks included) per dropback, the free stand-in for pressure. Repeats at r .44"],
     aly: ["Line yds", "Adjusted line yards per running-back carry, Football Outsiders' split of a run's yards: a loss at 120%, the first 4 yards whole, 5-10 at half, past 10 nothing — the part the line owns. Repeats at r .35"],
     stf: ["Stuff%", "Running-back carries stopped at or behind the line. Repeats at r .35"],
+    // the O-line models (6 Nov 2026; Sean: "O line models too"; scratch ol/ in the baseball session's scratchpad, every season 2016-25)
+    olsk: ["OL Sk%", "The line's sacks: sacks FTN's charting doesn't put on the quarterback, per charted dropback (2022 on). The pass-block number that's the line's: a team's rate with its starter carries over to its other QB at r .47 (raw sack rate .17, sacks + hits .12), and it repeats from odd to even weeks at .45. Pressure and sacks overall are mostly the quarterback's — behind the same line, a backup's sack + hit rate follows the starter's at only r .12. FTN Data via nflverse"],
+    qfsk: ["QB Sk%", "Sacks FTN's charting puts on the quarterback (held it, ran into it, no escape), per charted dropback: about 40% of all sacks. FTN Data via nflverse"],
+    alyx: ["Adj LY", "Adjusted line yards per running-back carry with the back, the defense and the box taken out: a ridge model on every RB designed carry with the offense, the defense and the rusher as effects and down, distance, field position, shotgun and defenders in the box as the situation — the line's run blocking. Season only. Odd vs even weeks r .38 (raw .37); a team's second back's line yards follow it at .17 (raw .15). Like every line number here, it adds nothing to a back's own stats at forecasting his rest of season"],
   };
   function teamsEnv(main, y, D, win) {
     const E = window.FB_ENV, S_ = E && E.s[String(y)];
@@ -1564,22 +1568,24 @@
         npr: S2("np") ? 100 * S2("ndb") / S2("np") : null, proe: S2("noen") ? S2("noe") / S2("noen") : null, spp: S2("nsn") ? S2("nsec") / S2("nsn") : null,
         rzg: n ? S2("rz") / n : null, rztd: S2("rz") ? 100 * S2("rztd") / S2("rz") : null, epa: S2("pl") ? S2("epa") / S2("pl") : null,
         skp: S2("db") ? 100 * S2("sk") / S2("db") : null, qhp: S2("db") ? 100 * S2("qh") / S2("db") : null,
-        aly: S2("rbc") ? S2("aly") / S2("rbc") : null, stf: S2("rbc") ? 100 * S2("rbs") / S2("rbc") : null };
+        aly: S2("rbc") ? S2("aly") / S2("rbc") : null, stf: S2("rbc") ? 100 * S2("rbs") / S2("rbc") : null,
+        olsk: ix.olsk != null && S2("fdb") ? 100 * S2("olsk") / S2("fdb") : null, qfsk: ix.qfsk != null && S2("fdb") ? 100 * S2("qfsk") / S2("fdb") : null,
+        alyx: S_[tm].alyx != null ? S_[tm].alyx : null };
       o.nxv = o.nx && o.nx[2] != null ? o.nx[2] : null; return o;
     });
-    const LOW = new Set(["spp", "skp", "qhp", "stf"]), D1 = new Set(["plg", "ptsg", "imp", "npr", "proe", "rzg", "rztd", "skp", "qhp", "stf"]);
-    const sortK = S.teSort || "imp", dir = S.teDir || -1, val = (r, k) => (k === "nxt" ? r.nxv : r[k]);
+    const LOW = new Set(["spp", "skp", "qhp", "stf", "olsk", "qfsk"]), D1 = new Set(["plg", "ptsg", "imp", "npr", "proe", "rzg", "rztd", "skp", "qhp", "stf", "olsk", "qfsk"]);
+    const sortK = ENV_T[S.teSort] ? S.teSort : "imp", dir = S.teDir || -1, val = (r, k) => (k === "nxt" ? r.nxv : r[k]);
     const sb = (k) => () => { if (S.teSort === k) S.teDir = -(S.teDir || -1); else { S.teSort = k; S.teDir = LOW.has(k) ? 1 : -1; } save(); route(); };
     rows.sort((a, b) => { const va = val(a, sortK), vb = val(b, sortK); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
-    const GR = [["Scoring", ["imp", "nxt", "ptsg", "epa", "rzg", "rztd"]], ["Volume and tendency", ["plg", "npr", "proe", "spp"]], ["Blocking", ["skp", "qhp", "aly", "stf"]]];
+    const GR = [["Scoring", ["imp", "nxt", "ptsg", "epa", "rzg", "rztd"]], ["Volume and tendency", ["plg", "npr", "proe", "spp"]], ["Pass blocking", ["olsk", "qfsk", "skp", "qhp"]], ["Run blocking", ["alyx", "aly", "stf"]]];
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Tm", cls: "l fz2" }, { h: "G" }], end: 1 }];
     for (const [nm, ks] of GR) groups.push({ name: nm, end: 1, cols: ks.map((k) => ({ h: ENV_T[k][0], t: ENV_T[k][1], onSort: sb(k), lit: sortK === k })) });
     const rk = {}; for (const [, ks] of GR) for (const k of ks) { const r_ = ranker(rows.map((r) => val(r, k))); rk[k] = LOW.has(k) ? (v) => 100 - r_(v) : r_; }
-    const fmtv = (k, v) => v == null ? "–" : k === "epa" ? sgn(v, 2) : k === "proe" ? sgn(v) : k === "aly" ? num(v, 2) : k === "spp" ? num(v, 1) : D1.has(k) ? num(v) : num(v);
+    const fmtv = (k, v) => v == null ? "–" : k === "epa" ? sgn(v, 2) : k === "proe" ? sgn(v) : k === "aly" || k === "alyx" ? num(v, 2) : k === "spp" ? num(v, 1) : D1.has(k) ? num(v) : num(v);
     const extra = (y !== CUR) + (win > 0) + 1;
     const board = listFrame(main, { page: "teams", title: "Teams", sub: `environment · by ${ENV_T[sortK][0]}`,
       ctl: [filtersBtn("Team filters", extra), count(`${rows.length} teams · ${y}${D.meta.through < 18 ? " · through week " + D.meta.through : ""}${win ? ` · last ${win} games` : ""}`, `${rows.length} teams`)],
-      about: "Each offense's environment: what Vegas expects it to score, how it has scored, how much it plays and passes, and how its line blocks — from the play-by-play and the games list's lines. Every cell is coloured by its rank among the 32 (red is better for fantasy: more scoring, more passing, faster, fewer sacks). Tested on every team-season 2016-25: the implied total is the steadiest of these and the best read on the points to come (a team's first-half implied total tracks its second-half skill-position FP / G at r .51, EPA / play the same, red-zone trips .43, neutral pass rate .26, pace .13). Pass rate and PROE use neutral plays only, so a team that trails all game doesn't read as pass-happy. Tap a column name to sort, a team for its backfield." });
+      about: "Each offense's environment: what Vegas expects it to score, how it has scored, how much it plays and passes, and how its line blocks (the O-line models: the line's own sacks from FTN's charting, 2022 on, and line yards with the back, the defense and the box taken out) — from the play-by-play and the games list's lines. Every cell is coloured by its rank among the 32 (red is better for fantasy: more scoring, more passing, faster, fewer sacks). Tested on every team-season 2016-25: the implied total is the steadiest of these and the best read on the points to come (a team's first-half implied total tracks its second-half skill-position FP / G at r .51, EPA / play the same, red-zone trips .43, neutral pass rate .26, pace .13). Pass rate and PROE use neutral plays only, so a team that trails all game doesn't read as pass-happy. Tap a column name to sort, a team for its backfield." });
     const t = table(groups), box = boxOf(t, ["te", y, win, sortK, dir].join(":")); box.classList.add("nonm");
     rows.forEach((r, i) => {
       const cells = [td(String(i + 1), "fz rk"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(r.n))];

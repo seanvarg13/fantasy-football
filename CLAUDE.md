@@ -876,3 +876,25 @@ held out of its own fit; 24,179 player-windows): rest-of-season mean miss model 
 measurable (r ±.003), nor did letting the weights change with games played. A defense's matchup factor to date tracks its own rest of season at r
 .21 (QB), .21 (RB), .17 (WR), .15 (TE) over 3,520 defense-windows a position, and the best shrink was 30+ games — so the Schedule page is honest
 that a matchup is mostly noise; every figure sits within a few percent.
+
+## O-line models (Sean, 6 Nov 2026: "O line models too")
+
+Teams ▸ Environment's blocking columns are two groups now. **Pass blocking**: **OL Sk%** (sacks FTN's charting doesn't put on the QB, per charted
+dropback, 2022 on — `olsk` / `fdb` in the env week rows), **QB Sk%** (`qfsk`, the QB-fault sacks, ~40% of all), Sack%, Hit%. **Run blocking**:
+**Adj LY** (`alyx` per team-season: `ol_run_adjust()` in `tools/build_fb.py`, a ridge on every RB designed carry's line yards with the offense,
+the defense and the rusher as effects and down / distance / field position / shotgun / defenders in the box — participation's `defenders_in_box`,
+else FTN's `n_defense_box` — as the situation; season only), Line yds, Stuff%. `ENV_F` gained `olsk qfsk fdb`; `load()` reads participation's
+`defenders_in_box` and FTN's `n_defense_box is_qb_fault_sack is_play_action`; `team_env(y, pbp, games, pos, part, ftn)`.
+
+**What the tests found** (scratch `ol/` in the baseball session's scratchpad, every season 2016-25):
+* **Pressure is mostly the quarterback's.** A three-way ridge (offense, passer, defense + situation, pass rushers, screens, play action) can't split
+  the line from a QB who takes every snap — the two effects are the same team-season — and behind the same line a team's second QB's sack + hit
+  rate follows the starter's at r .12 (raw sack rate .17); a QB who changes teams keeps his (sack + hit rate r .52 for movers, .64 for stayers).
+* **FTN's charting does split it**: the line's own sacks (not QB-fault) carry from a team's starter to its other QB at r .47 (60 team-seasons
+  2022-25) and repeat odd / even weeks at .45; opponent-adjusting them made them less steady (.32), so they ship raw.
+* **Run blocking**: adjusted line yards repeat odd / even at r .38 (raw .37) and a second back's line yards follow the line fitted without him at
+  .17 (raw .15) — a little cleaner than raw, never strong; run blocking is the noisier half (split-half sack + hit .60-.65).
+* **For fantasy, neither adds to the player's own numbers**: a back's second-half YPC from his first half r .282, with the adjusted line .285; a
+  QB's second-half sack rate .486 → .487, EPA / dropback .481 → .495. The line ratings are descriptive.
+* Not built: individual linemen (participation lists who was on the field, so an on / off plus-minus is possible for 2016-25, but this season's
+  participation isn't published until it ends), and pressure / time to throw for the season in progress (participation again).
