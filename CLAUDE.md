@@ -857,3 +857,22 @@ played, 18,067 windows), weight on Before / Last 3, r at the next four (Before a
 held: WR snap .18 / .65 (.70 / .80 / .81), route .17 / .66 (.71 / .81 / .82, 87% held), target .37 / .48 (.76 / .78 / .81, 52%); TE route .27 / .63
 (.83 / .87 / .88), target .47 / .46 (.81 / .82 / .85); RB snap .24 / .60, opportunity .32 / .58 (.81 / .85 / .87, 60%), carry .27 / .62, target
 .41 / .39. Playing time follows the last three games; target share is half signal, half noise.
+
+## Projections and Schedule (Sean, 6 Nov 2026: "Rest-of-season projections" and "Strength of schedule")
+
+**Schedule** (`#schedule`, `schedulePage()`): View **Remaining schedule** — each offense's games left and, per position, its remaining opponents'
+average matchup factor ("Rest") and the same over weeks 15-17 ("Wk 15-17"), +% softer; View **Defense vs position** — each defense's PPR points
+allowed a game to each position, Raw (allowed over what those offenses scored there in their other games, ratio of sums) and Factor (Raw shrunk
+toward 1 by n / (n + 30), `SOS_K`). `defFactors(y)` builds them from the season's week rows; `sosOf(y, tm, g, from, to)` averages a team's remaining
+opponents from `data/env.js`'s new **`rs`** list (every unplayed regular-season game, `[week, "@OPP" | "OPP"]`, from the games list). **Projections**
+(`#proj`, `projPage()` / `rosOf()`): everyone with 3+ games (5%+ snaps) and 4+ FP / G — To date (FP/G, xFP/G, Last 3), Inputs (last season's FP / G,
+his team's average implied total in his games, his SOS), Rest of season (Proj FP / G, Δ vs to date, games left, Total = Proj × games left, no
+injuries assumed). `ROS_B` holds the per-position linear fit (fpg, xfpg, last-3 fpg, last-3 xfpg, last season fpg or 0, has-last-season, implied,
+sos, constant). Both pages are in the header after Trends; Projections opens a name as the popup.
+
+**The tests** (scratch `qbx/ros2.py` – `ros4.py`, every 2016-25 player at weeks 4-14 with 3+ games before and after and 4+ FP / G, each season
+held out of its own fit; 24,179 player-windows): rest-of-season mean miss model / FP-to-date — QB 3.15 / 3.66, RB 3.26 / 3.54, WR 3.09 / 3.32, TE
+2.52 / 2.77 (r .49 / .68 / .69 / .65); adding xFP, the last three, last season each helped; the implied total and the schedule factor added nothing
+measurable (r ±.003), nor did letting the weights change with games played. A defense's matchup factor to date tracks its own rest of season at r
+.21 (QB), .21 (RB), .17 (WR), .15 (TE) over 3,520 defense-windows a position, and the best shrink was 30+ games — so the Schedule page is honest
+that a matchup is mostly noise; every figure sits within a few percent.
