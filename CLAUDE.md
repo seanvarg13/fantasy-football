@@ -824,3 +824,18 @@ took it from .79 / .65). **Unlike a receiver's, a QB's passing points over expec
 .38, xFP / attempt .34 — so the passing skill is real, and next season's FP / G follows this season's actual passing points (r .50) more than
 its xFP / G (.41); a fit of next season on both gives xFP no weight. So for QBs xFP is the opportunity read (how much and how deep he throws) and
 Pass FPOE is the skill, not luck.
+
+## Team environment (Sean, 6 Nov 2026: "Team environment", from a list of stats to add)
+
+Teams ▸ Filters ▸ **View: Environment** (`S.tmView`, `teamsEnv()` in `fb.js`) shows each offense's environment for the season or its last 4 / 8
+games: **Scoring** — Implied (the Vegas implied team total, (total ± spread) / 2, averaged over its games), Next (the coming game and its implied
+total — the games list carries the next week's line), Pts/G, EPA/play, RZ/G (drives reaching the 20), RZ TD%; **Volume and tendency** — Plays/G,
+Pass% (neutral: 1st / 2nd down, win probability 20-80%, outside the last two minutes of a half), PROE (nflverse's `pass_oe` over those plays),
+Sec/play (neutral pace, snap to snap on a drive, 0-60 s); **Blocking** — Sack%, Hit% (QB hits incl. sacks per dropback, the free stand-in for
+pressure), Line yds (Football Outsiders' adjusted line yards per RB designed carry), Stuff% (RB carries ≤ 0). Each cell coloured by rank among the
+32, lower-is-better turned over. **Data**: `team_env()` / `ENV_F` in `tools/build_fb.py` write `data/env.js` (`window.FB_ENV = {f, s: {season:
+{team: {w: [per-week sums by f], nx: [week, opp, implied]}}}}`, ~420 KB, loaded with this view only). **What they're worth** (scratch
+`qbx/envstudy.py`, every team-season 2016-25; year to year / with this season's team skill-position FP / G / first half's → second half's FP / G):
+implied total .60 / .86 / .51, EPA / play .39 / .83 / .51, red-zone trips .32 / .79 / .43, neutral pass rate .40 / .57 / .26, PROE .39 / .54 / .26,
+sack rate .34 / −.58 / −.32, line yards .35 / .34 / .19, plays / game .24 / .45 / .17, pace .43 / −.23 / −.13, RZ TD% .11 / .56 / .26. A week's
+implied total tracks that week's team skill FP at r .42 (5,278 team-weeks). OL pass / run block win rates (ESPN) and PFF grades aren't free.
