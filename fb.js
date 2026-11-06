@@ -1466,13 +1466,16 @@
   const TPOS = ["QB", "RB", "WR", "TE"];
   async function teamsPage(main) {
     const y = SEASONS.includes(+S.tmSeason) ? +S.tmSeason : CUR, D = await ensure(y), F = D.meta.wfields, ix = (k) => F.indexOf(k);
-    const win = [0, 4, 8].includes(+S.tmWin) ? +S.tmWin : 0;
+    const win = [0, 4, 8].includes(+S.tmWin) ? +S.tmWin : 0, view = S.tmView === "env" ? "env" : "fp";
+    if (view === "env") await loadScript("data/env.js").catch(() => {});
     main.textContent = "";
-    // the dropdown: the season and the window (the whole season or its last 4 / 8 games)
-    POP.spec = { page: "teams", tabs: [["season", "Season"], ["window", "Games"], TABLE_TAB], keys: ["tmSeason", "tmWin"], draw: (tab, h) => {
-      if (tab === "season") { const s = h.sec("Which season"); s.append(h.row(h.lbl("Season"), seasonPill(y, (v) => { S.tmSeason = v; save(); route(); }))); h.note(s, D.meta.through < 18 ? `${y} is through week ${D.meta.through}.` : `${y}, the full season.`); if (y !== CUR) h.clear(() => { S.tmSeason = CUR; save(); route(); }); }
+    // the dropdown: what the table shows (fantasy points by position, or the team's environment), the season and the window
+    POP.spec = { page: "teams", tabs: [["view", "View"], ["season", "Season"], ["window", "Games"], TABLE_TAB], keys: ["tmView", "tmSeason", "tmWin"], draw: (tab, h) => {
+      if (tab === "view") { const s = h.sec("What the table shows"); s.append(h.seg([["fp", "Fantasy by position"], ["env", "Environment"]], view, (v) => { S.tmView = v; save(); route(); })); h.note(s, "Environment: how much each offense plays, how often it passes, how it scores, what Vegas expects of it and how its line blocks."); if (view !== "fp") h.clear(() => { S.tmView = "fp"; save(); route(); }); }
+      else if (tab === "season") { const s = h.sec("Which season"); s.append(h.row(h.lbl("Season"), seasonPill(y, (v) => { S.tmSeason = v; save(); route(); }))); h.note(s, D.meta.through < 18 ? `${y} is through week ${D.meta.through}.` : `${y}, the full season.`); if (y !== CUR) h.clear(() => { S.tmSeason = CUR; save(); route(); }); }
       else { const s = h.sec("Which games"); s.append(h.seg([[0, "Season"], [4, "Last 4"], [8, "Last 8"]], win, (v) => { S.tmWin = v; save(); route(); })); h.note(s, "Per team game over the whole season or its last 4 or 8 games — a team's games are the weeks any of its players has a row."); if (win) h.clear(() => { S.tmWin = 0; save(); route(); }); }
     } };
+    if (view === "env") return teamsEnv(main, y, D, win);
     // team → week → position → [fp, xfp]
     const acc = {};
     for (const p of D.players) {
@@ -1511,7 +1514,7 @@
     const extra = (y !== CUR) + (win > 0), SK = { xfp: "xFP/G", fp: "FP/G", d: "+/−" };
     const board = listFrame(main, { page: "teams", title: "Teams", sub: `by ${NAME[sg]} ${SK[sk]}`,
       ctl: [filtersBtn("Team filters", extra), count(`${rows.length} teams · ${y}${D.meta.through < 18 ? " · through week " + D.meta.through : ""} · PPR${win ? ` · last ${win} games` : ""}`, `${rows.length} teams`)],
-      about: "Each offense's PPR points a game by position, and the expected points (xFP) its targets and carries were worth. xFP says how good the opportunities were; FP − xFP is what the players did with them. Every cell is coloured by where that team ranks among the 32 on it (red high); the sorted column is bold. Tap a column name to sort, a team for its backfield week by week. A QB's xFP prices his rushing only and counts his passing points as they were (as on Leaders), so the QB +/− is rushing over expected less fumbles. Fumbles lost and two-point conversions are in FP but not xFP." });
+      about: "Each offense's PPR points a game by position, and the expected points (xFP) its targets and carries were worth. xFP says how good the opportunities were; FP − xFP is what the players did with them. Every cell is coloured by where that team ranks among the 32 on it (red high); the sorted column is bold. Tap a column name to sort, a team for its backfield week by week. A QB's xFP prices his passing and rushing (each attempt and carry), so the QB +/− is what he did with his throws and runs. Fumbles lost and two-point conversions are in FP but not xFP." });
     const t = table(groups), box = boxOf(t, ["tm", y, win, sortK, dir].join(":")); box.classList.add("nonm");   // the second frozen column is the club's code, not a name: it keeps its own width
     rows.forEach((r, i) => {
       const cells = [td(String(i + 1), "fz rk"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(r.n))];
@@ -1523,6 +1526,72 @@
     const avg = (g, k) => { const v = rows.map((r) => r[g][k]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
     const ac = [td("", "fz"), td("League avg", "l fz2"), td("")];
     for (const g of TPOS.concat(["ALL"])) for (const k of ["xfp", "fp", "d"]) ac.push(td(k === "d" ? sgn(avg(g, k)) : num(avg(g, k))));
+    t.addRow(ac, "tot first");
+    board.append(box); keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
+  }
+
+  // the team environment (6 Nov 2026; Sean: "team environment"): data/env.js from team_env() in the build, per team-week sums the
+  // window adds up. Every team-season 2016-25 (scratch qbx/envstudy.py), year to year / this season's team skill FP / G / first half's ->
+  // second half's team FP / G: the Vegas implied total .60 / .86 / .51 (the steadiest and the best forward read; a week's implied total
+  // tracks that week's team skill FP at r .42), EPA / play .39 / .83 / .51, red-zone trips .32 / .79 / .43, neutral pass rate .40 / .57 /
+  // .26, PROE .39 / .54 / .26, sack rate .34 / −.58 / −.32, line yards .35 / .34 / .19, plays / game .24 / .45 / .17, pace .43 / −.23 / −.13
+  const ENV_T = {
+    plg: ["Plays/G", "Offensive plays a game (passes, runs, scrambles; no kneels or spikes). Repeats season to season at r .24; +.45 with the team's skill-position FP / G"],
+    ptsg: ["Pts/G", "Points scored a game"],
+    imp: ["Implied", "Vegas implied team total: (the game total ± the spread) / 2, averaged over its games — what the market expects it to score. The steadiest of these (first half to second half r .77) and the best read on a team's points to come: its first-half implied total tracks its second-half skill-position FP / G at r .51; a week's implied total tracks that week's at .42"],
+    nxt: ["Next", "The coming game and its implied team total, from the games list's line (it carries the next week's)"],
+    npr: ["Pass%", "Neutral pass rate: dropbacks on first and second down with the win probability 20-80%, outside the last two minutes of a half — the play-caller's choice before the score decides it. Repeats at r .40; +.57 with the team's FP / G"],
+    proe: ["PROE", "Pass rate over expected in those neutral plays, from nflverse's expected-pass model (down, distance, field position, score, clock): + passes more than a team in its spot would. Repeats at r .39"],
+    spp: ["Sec/play", "Neutral pace: seconds from one snap to the next on the same drive in neutral plays — lower is faster. Steady (r .43) but a weak tie to points (−.23)"],
+    rzg: ["RZ/G", "Red-zone trips a game: drives that reached the opponent's 20. +.79 with the team's FP / G; first half to second half .44"],
+    rztd: ["RZ TD%", "Share of red-zone trips that ended in a touchdown. Mostly noise (season to season r .11)"],
+    epa: ["EPA/play", "Expected points added per offensive play. +.83 with the team's FP / G; first half to second half .57"],
+    skp: ["Sack%", "Sacks per dropback — the line, the quarterback and the play-caller together. Repeats at r .34; −.58 with FP / G"],
+    qhp: ["Hit%", "Quarterback hits (sacks included) per dropback, the free stand-in for pressure. Repeats at r .44"],
+    aly: ["Line yds", "Adjusted line yards per running-back carry, Football Outsiders' split of a run's yards: a loss at 120%, the first 4 yards whole, 5-10 at half, past 10 nothing — the part the line owns. Repeats at r .35"],
+    stf: ["Stuff%", "Running-back carries stopped at or behind the line. Repeats at r .35"],
+  };
+  function teamsEnv(main, y, D, win) {
+    const E = window.FB_ENV, S_ = E && E.s[String(y)];
+    if (!S_) { const b = listFrame(main, { page: "teams", title: "Teams", sub: "environment", ctl: [filtersBtn("Team filters", 1)], about: "" }); b.append(el("p", "load", "No environment for that season yet.")); return; }
+    const ix = Object.fromEntries(E.f.map((k, i) => [k, i]));
+    const rows = Object.keys(S_).sort().map((tm) => {
+      let w = S_[tm].w; if (win) w = w.slice(-win);
+      const S2 = (k) => w.reduce((a, r) => a + (r[ix[k]] || 0), 0), n = w.length, im = w.map((r) => r[ix.imp]).filter((v) => v != null);
+      const o = { tm, n, nx: S_[tm].nx,
+        plg: n ? S2("pl") / n : null, ptsg: n ? S2("pts") / n : null, imp: im.length ? im.reduce((a, b) => a + b, 0) / im.length : null,
+        npr: S2("np") ? 100 * S2("ndb") / S2("np") : null, proe: S2("noen") ? S2("noe") / S2("noen") : null, spp: S2("nsn") ? S2("nsec") / S2("nsn") : null,
+        rzg: n ? S2("rz") / n : null, rztd: S2("rz") ? 100 * S2("rztd") / S2("rz") : null, epa: S2("pl") ? S2("epa") / S2("pl") : null,
+        skp: S2("db") ? 100 * S2("sk") / S2("db") : null, qhp: S2("db") ? 100 * S2("qh") / S2("db") : null,
+        aly: S2("rbc") ? S2("aly") / S2("rbc") : null, stf: S2("rbc") ? 100 * S2("rbs") / S2("rbc") : null };
+      o.nxv = o.nx && o.nx[2] != null ? o.nx[2] : null; return o;
+    });
+    const LOW = new Set(["spp", "skp", "qhp", "stf"]), D1 = new Set(["plg", "ptsg", "imp", "npr", "proe", "rzg", "rztd", "skp", "qhp", "stf"]);
+    const sortK = S.teSort || "imp", dir = S.teDir || -1, val = (r, k) => (k === "nxt" ? r.nxv : r[k]);
+    const sb = (k) => () => { if (S.teSort === k) S.teDir = -(S.teDir || -1); else { S.teSort = k; S.teDir = LOW.has(k) ? 1 : -1; } save(); route(); };
+    rows.sort((a, b) => { const va = val(a, sortK), vb = val(b, sortK); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
+    const GR = [["Scoring", ["imp", "nxt", "ptsg", "epa", "rzg", "rztd"]], ["Volume and tendency", ["plg", "npr", "proe", "spp"]], ["Blocking", ["skp", "qhp", "aly", "stf"]]];
+    const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Tm", cls: "l fz2" }, { h: "G" }], end: 1 }];
+    for (const [nm, ks] of GR) groups.push({ name: nm, end: 1, cols: ks.map((k) => ({ h: ENV_T[k][0], t: ENV_T[k][1], onSort: sb(k), lit: sortK === k })) });
+    const rk = {}; for (const [, ks] of GR) for (const k of ks) { const r_ = ranker(rows.map((r) => val(r, k))); rk[k] = LOW.has(k) ? (v) => 100 - r_(v) : r_; }
+    const fmtv = (k, v) => v == null ? "–" : k === "epa" ? sgn(v, 2) : k === "proe" ? sgn(v) : k === "aly" ? num(v, 2) : k === "spp" ? num(v, 1) : D1.has(k) ? num(v) : num(v);
+    const extra = (y !== CUR) + (win > 0) + 1;
+    const board = listFrame(main, { page: "teams", title: "Teams", sub: `environment · by ${ENV_T[sortK][0]}`,
+      ctl: [filtersBtn("Team filters", extra), count(`${rows.length} teams · ${y}${D.meta.through < 18 ? " · through week " + D.meta.through : ""}${win ? ` · last ${win} games` : ""}`, `${rows.length} teams`)],
+      about: "Each offense's environment: what Vegas expects it to score, how it has scored, how much it plays and passes, and how its line blocks — from the play-by-play and the games list's lines. Every cell is coloured by its rank among the 32 (red is better for fantasy: more scoring, more passing, faster, fewer sacks). Tested on every team-season 2016-25: the implied total is the steadiest of these and the best read on the points to come (a team's first-half implied total tracks its second-half skill-position FP / G at r .51, EPA / play the same, red-zone trips .43, neutral pass rate .26, pace .13). Pass rate and PROE use neutral plays only, so a team that trails all game doesn't read as pass-happy. Tap a column name to sort, a team for its backfield." });
+    const t = table(groups), box = boxOf(t, ["te", y, win, sortK, dir].join(":")); box.classList.add("nonm");
+    rows.forEach((r, i) => {
+      const cells = [td(String(i + 1), "fz rk"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(r.n))];
+      for (const [, ks] of GR) for (const k of ks) {
+        const v = val(r, k), c = td(k === "nxt" ? (r.nx ? `${r.nx[1] || ""} ${r.nxv != null ? num(r.nxv) : ""}`.trim() : "–") : fmtv(k, v));
+        if (k === "nxt" && r.nx) c.title = `Week ${r.nx[0]}`;
+        if (v != null) { paint(c, rk[k](v)); if (sortK !== k) c.classList.remove("heat"); } cells.push(c);
+      }
+      t.addRow(cells);
+    });
+    const avg = (k) => { const v = rows.map((r) => val(r, k)).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+    const ac = [td("", "fz"), td("League avg", "l fz2"), td("")]; for (const [, ks] of GR) for (const k of ks) ac.push(td(k === "nxt" ? "" : fmtv(k, avg(k))));
     t.addRow(ac, "tot first");
     board.append(box); keepBox(box); freeze(t);
     if (POP.open) { popBody(); placePop(); }

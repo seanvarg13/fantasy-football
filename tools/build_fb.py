@@ -483,6 +483,53 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None, xa=None, ta=None, 
     return out, t, c, plays, snaps
 
 
+# ---------- team environment (6 Nov 2026; Sean: "team environment" stats) ----------
+# per team-week, sums the app adds over any window: plays, dropbacks; the neutral plays (win probability 20-80%, first or second down,
+# outside the last two minutes of a half) with their dropbacks, nflverse's pass-over-expected sum (pass_oe, points of pass rate) and the
+# seconds to the next snap on the same drive (0-60, the neutral pace); drives, red-zone drives and red-zone touchdowns; sacks and QB hits
+# allowed (a sack counts as a hit); a back's designed carries with Football Outsiders' line yards (a loss at 120%, 0-4 yards whole, 5-10 at
+# half, past 10 nothing), stuffed carries; EPA; points scored and the Vegas implied total (the games list's total and spread)
+ENV_F = ["wk", "opp", "pl", "db", "np", "ndb", "noe", "noen", "nsec", "nsn", "dr", "rz", "rztd", "sk", "qh", "rbc", "aly", "rbs", "epa", "pts", "imp"]
+
+
+def team_env(y, pbp, games, pos):
+    p = reg(pbp); p = p[(p.week <= 18) & p.play_type.isin(["pass", "run"]) & (p.two_point_attempt != 1) & p.posteam.notna()].copy()
+    p = p[(p.qb_kneel != 1) & (p.qb_spike != 1)]
+    p = p.sort_values(["game_id", "play_id"])
+    nxt = p.groupby(["game_id", "fixed_drive"]).game_seconds_remaining.shift(-1)
+    p["gap"] = (p.game_seconds_remaining - nxt).where(lambda d: (d > 0) & (d <= 60))
+    p["neu"] = p.wp.between(0.2, 0.8) & p.down.isin([1, 2]) & (p.half_seconds_remaining > 120)
+    p["rbrun"] = (p.rush_attempt == 1) & (p.qb_scramble != 1) & p.rusher_player_id.map(lambda i: pos.get(i) in ("RB", "FB"))
+    yd = p.rushing_yards.fillna(0)
+    p["aly"] = np.where(yd < 0, 1.2 * yd, np.minimum(yd, 4) + 0.5 * np.clip(yd - 4, 0, 6)) * p.rbrun
+    g = games[(games.season == y) & (games.game_type == "REG")]
+    imp, pts, opp = {}, {}, {}
+    for r in g.itertuples():
+        h, a_ = OLD_CODES.get(r.home_team, r.home_team), OLD_CODES.get(r.away_team, r.away_team)
+        if r.total_line == r.total_line and r.spread_line == r.spread_line:
+            imp[(h, r.week)] = (r.total_line + r.spread_line) / 2; imp[(a_, r.week)] = (r.total_line - r.spread_line) / 2
+        if r.home_score == r.home_score:
+            pts[(h, r.week)] = int(r.home_score); pts[(a_, r.week)] = int(r.away_score)
+        opp[(h, r.week)] = a_; opp[(a_, r.week)] = "@" + h
+    out = defaultdict(list)
+    for (tm, w), q in p.groupby(["posteam", "week"]):
+        n = q[q.neu]; dv = q.groupby("fixed_drive").agg(rz=("yardline_100", lambda s: (s <= 20).any()), res=("fixed_drive_result", "first"))
+        out[tm].append([int(w), opp.get((tm, w)), len(q), int((q.qb_dropback == 1).sum()), len(n), int((n.qb_dropback == 1).sum()),
+                        round(float(n.pass_oe.sum()), 1), int(n.pass_oe.notna().sum()), round(float(n.gap.sum()), 0), int(n.gap.notna().sum()),
+                        len(dv), int(dv.rz.sum()), int((dv.rz & (dv.res == "Touchdown")).sum()), int((q.sack == 1).sum()),
+                        int(((q.qb_hit == 1) | (q.sack == 1)).sum()), int(q.rbrun.sum()), round(float(q.aly.sum()), 1),
+                        int((q.rbrun & (q.rushing_yards.fillna(0) <= 0)).sum()), round(float(q.epa.sum()), 1), pts.get((tm, w)),
+                        round(imp[(tm, w)], 2) if (tm, w) in imp else None])
+    # the next game not yet played, with its line (the games list carries the coming week's)
+    nx = {}
+    for tm in out:
+        played = {r[0] for r in out[tm]}
+        up = sorted(r.week for r in g.itertuples() if r.week not in played and r.home_score != r.home_score and tm in (OLD_CODES.get(r.home_team, r.home_team), OLD_CODES.get(r.away_team, r.away_team)))
+        if up:
+            w = up[0]; nx[tm] = [int(w), opp.get((tm, w)), round(imp[(tm, w)], 2) if (tm, w) in imp else None]
+    return {tm: {"w": sorted(v), "nx": nx.get(tm)} for tm, v in out.items()}
+
+
 # ---------- team-seasons: coaches and RB usage ----------
 HC_FIX = {"Klint Kubliak": "Klint Kubiak"}   # nfldata's games list misspells him; Wikipedia's staffs are the spelling the coaches join on
 PLAYCALLERS = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "playcallers.json"))) \
@@ -675,6 +722,14 @@ def main():
         f.write("window.FB_INDEX=" + jsdump(clean(index)) + ";\n")
     with open(os.path.join(a.out, "career.js"), "w") as f:
         f.write("window.FB_CAREER=" + jsdump(clean({i: {str(y): v for y, v in d_.items()} for i, d_ in career.items()})) + ";\n")
+    env = {}
+    for y in sorted(T):
+        try:
+            env[str(y)] = team_env(y, d["pbp"][y], d["games"], pos)
+        except Exception as e:
+            print(f"  team environment {y} failed: {e}", flush=True)
+    with open(os.path.join(a.out, "env.js"), "w") as f:
+        f.write("window.FB_ENV=" + jsdump(clean({"f": ENV_F, "s": env})) + ";\n")
     with open(os.path.join(a.out, "teams.js"), "w") as f:
         f.write("window.FB_TEAMS=" + jsdump(clean({str(k): v for k, v in teams_all.items()})) + ";\n")
     print(f"index {len(index)} players; teams {sum(len(v) for v in teams_all.values())} team-seasons")
