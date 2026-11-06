@@ -120,6 +120,21 @@ def carries(p, pos):
     return c
 
 
+# passing xFP (6 Nov 2026; Sean: "really want to create some accurate models"): every pass attempt (sacks, spikes off) priced by what a
+# throw like it scores in passing points - yards / 25, 4 a touchdown, -2 an interception - on its depth, field position, down and distance,
+# side of the field, shotgun, who it was thrown to (by position; a throwaway has none), and the game state (score, clock, no-huddle).
+# Every QB season with 200+ attempts 2016-25, leave one season out (scratch qbx/): xFP / attempt tracks FP / attempt at r .72 and xFP / G
+# FP / G at .82; unlike a receiver's, a QB's points over expected repeat year to year (r .32) — passing skill is real — so xFP / G is the
+# opportunity read (volume and depth), FPOE the skill, and next season's FP / G follows this season's FP / G (.50) more than xFP / G (.41)
+def passes(p, pos):
+    a = p[(p.pass_attempt == 1) & (p.play_type == "pass") & p.passer_player_id.notna() & (p.two_point_attempt != 1) & (p.sack != 1)].copy()
+    a["pos"] = a.receiver_player_id.map(pos).fillna("NONE")
+    a["y"] = a.passing_yards.fillna(0) / 25 + 4 * (a.pass_touchdown == 1) - 2 * (a.interception == 1)
+    a["td"] = (a.pass_touchdown == 1).astype(float)
+    a["int"] = (a.interception == 1).astype(float)
+    return a
+
+
 POS_CODE = {"WR": 0, "TE": 1, "RB": 2, "FB": 2, "QB": 3}
 LOC = {"left": 0, "middle": 1, "right": 2}
 GAP = {"end": 0, "tackle": 1, "guard": 2}
@@ -139,7 +154,15 @@ def cfeat(c):
     ])
 
 
-def fit_price(frames, featf, label, current, col="y"):
+def pfeat(a):
+    return np.column_stack([
+        a.air_yards.clip(-10, 60).fillna(0), a.yardline_100.fillna(50), a.down.fillna(1), a.ydstogo.clip(0, 30).fillna(10),
+        a.pass_location.map(LOC).fillna(3), a.shotgun.fillna(0), a.pos.map(POS_CODE).fillna(4), a.air_yards.isna().astype(int),
+        a.score_differential.clip(-28, 28).fillna(0), a.half_seconds_remaining.fillna(900), a.no_huddle.fillna(0),
+    ])
+
+
+def fit_price(frames, featf, label, current, col="y", lo=0):
     """Leave-one-season-out gradient boosting; returns {season: predicted y per row}, anchored per season."""
     from sklearn.ensemble import HistGradientBoostingRegressor
     seasons = sorted(frames)
@@ -151,7 +174,7 @@ def fit_price(frames, featf, label, current, col="y"):
         tr = [s for s in hist if s != y]
         m = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.06, max_leaf_nodes=31, min_samples_leaf=200, random_state=7)
         m.fit(np.vstack([X[s] for s in tr]), np.concatenate([Y[s] for s in tr]))
-        pred = np.clip(m.predict(X[y]), 0, None)
+        pred = np.clip(m.predict(X[y]), lo, None)
         k = Y[y].sum() / pred.sum() if pred.sum() else 1.0   # the season's own scoring level
         out[y] = pred * k
         print(f"  {label} {y}: {len(pred)} plays, anchor {k:.3f}", flush=True)
@@ -277,7 +300,7 @@ def skills(y, d, P):
     return sk
 
 
-def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
+def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None, xa=None, ta=None, ia=None):
     sk = skills(y, d, P)
     pbp = d["pbp"][y]
     p = reg(pbp)
@@ -285,6 +308,9 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
     t = targets(p, pos); t["x"] = xt; t["xtd"] = tt if tt is not None else 0.0
     c = carries(p, pos); c["x"] = xc; c["xtd"] = tc if tc is not None else 0.0
     ct = contested(t, d.get("ftn", {}).get(y))
+    a = passes(p, pos); a["x"] = xa if xa is not None else 0.0; a["xtd"] = ta if ta is not None else 0.0; a["xint"] = ia if ia is not None else 0.0
+    AG = {k: v for k, v in a.groupby("passer_player_id")}
+    AW = a.groupby(["passer_player_id", "week"]).x.sum().to_dict()
     # dropbacks and plays by team-week (for shares and the route estimate)
     plays = p[(p.play_type.isin(["pass", "run"])) & (p.two_point_attempt != 1)]
     db = plays[plays.qb_dropback == 1]
@@ -413,7 +439,8 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
             wrows.append([int(w), opp, round(s[1] * 100) if s else None, round(routes.get((i, w), 0), 1),
                           int(a_.n) if a_ else 0, int(a_.rec) if a_ else 0, int(a_.yd) if a_ else 0, int(a_.td) if a_ else 0,
                           int(b_.n) if b_ else 0, int(b_.yd) if b_ else 0, int(b_.td) if b_ else 0,
-                          round(fp.get((i, w), 0), 1), round(float((a_.x if a_ else 0) + (b_.x if b_ else 0)), 1), tmw.get(w)])
+                          round(fp.get((i, w), 0), 1), round(float((a_.x if a_ else 0) + (b_.x if b_ else 0)), 1), tmw.get(w),
+                          round(float(AW[(i, w)]), 1) if (i, w) in AW else 0])
         ng = ngs_s.loc[i] if ngs_s is not None and i in ngs_s.index else None
         if isinstance(ng, pd.DataFrame):
             ng = ng.iloc[0]
@@ -449,6 +476,9 @@ def build_season(y, d, P, pos, xt, xc, ngs, tt=None, tc=None):
             rec.update(db=len(qi), att=int(qi.pass_attempt.sum()), cmp=int(qi.complete_pass.sum()), pyd=int(qi.passing_yards.fillna(0).sum()),
                        ptd=int(qi.pass_touchdown.sum()), int_=int(qi.interception.sum()), sk=int(qi.sack.sum()),
                        epa=r1(qi.qb_epa.sum()), cpoe=r1(qi.cpoe.mean()) if qi.cpoe.notna().any() else None, scr=int(ci.qb_scramble.sum()) if len(ci) else 0)
+            ai = AG.get(i)
+            if ai is not None:   # passing xFP, and its expected touchdowns and interceptions (the build-up's luck split)
+                rec.update(xp=round(float(ai.x.sum()), 1), xtp=round(float(ai.xtd.sum()), 2), xip=round(float(ai.xint.sum()), 2), ay_p=int(ai.air_yards.fillna(0).sum()))
         out.append(rec)
     return out, t, c, plays, snaps
 
@@ -593,6 +623,8 @@ def main():
         p = reg(d["pbp"][y]); p = p[p.week <= 18]
         T[y] = targets(p, pos); C[y] = carries(p, pos)
     xt = fit_price(T, tfeat, "targets", a.current); xc = fit_price(C, cfeat, "carries", a.current)
+    A = {y: passes(reg(d["pbp"][y])[lambda q: q.week <= 18], pos) for y in T}
+    xa = fit_price(A, pfeat, "passes", a.current, lo=-2); ta = fit_price(A, pfeat, "pass TDs", a.current, "td"); ia = fit_price(A, pfeat, "interceptions", a.current, "int")
     # expected touchdowns, so the FPOE splits into touchdown luck and the rest
     tt = fit_price(T, tfeat, "target TDs", a.current, "td"); tc = fit_price(C, cfeat, "carry TDs", a.current, "td")
     write = set(map(int, a.write.split(","))) if a.write else set(T)
@@ -602,14 +634,14 @@ def main():
     teams_all = {}
     career = defaultdict(dict)
     for y in sorted(T):
-        players, t, c, plays, snaps = build_season(y, d, P, pos, xt[y], xc[y], d["ngs_rush"], tt[y], tc[y])
+        players, t, c, plays, snaps = build_season(y, d, P, pos, xt[y], xc[y], d["ngs_rush"], tt[y], tc[y], xa[y], ta[y], ia[y])
         tsea = team_seasons(y, d["games"], players, t, c, snaps, pos, staff, current=(y == a.current))
         teams_all[y] = tsea
         # position ranks by PPR points and by expected points, for the season table
         for key in ("fp", "xfp"):
             byp = defaultdict(list)
             for pl in players:
-                v = pl["fp"] if key == "fp" else pl["xr"] + pl["xu"] + (pl.get("pyd", 0) / 25 + 4 * pl.get("ptd", 0) - 2 * pl.get("int_", 0) if pl["pos"] == "QB" else 0)
+                v = pl["fp"] if key == "fp" else pl["xr"] + pl["xu"] + (pl.get("xp", 0) if pl["pos"] == "QB" else 0)
                 byp[pl["pos"]].append((v, pl["id"]))
             for ps, lst in byp.items():
                 for k, (v, i) in enumerate(sorted(lst, reverse=True)):
@@ -619,10 +651,10 @@ def main():
             e["s"].append(y); e["tm"] = pl["tm"]
             c_ = career[pl["id"]].setdefault(y, {})
             c_.update({k: pl.get(k) for k in ("tm", "tms", "age", "g", "snpct", "rts", "tgt", "rec", "ryd", "rtd", "ay", "car", "ruyd", "rutd", "tmt", "tmc", "tmdb",
-                                               "fp", "xr", "xu", "xtr", "xtu", "att", "cmp", "pyd", "ptd", "int_", "epa", "cpoe", "db", "xc", "xcn", "cc")})
+                                               "fp", "xr", "xu", "xtr", "xtu", "xp", "xtp", "xip", "att", "cmp", "pyd", "ptd", "int_", "epa", "cpoe", "db", "xc", "xcn", "cc")})
         if y in write:
             meta = dict(season=y, through=int(t.week.max()) if len(t) else None, built=time.strftime("%Y-%m-%d %H:%M"),
-                        wfields=["wk", "opp", "snp", "rts", "tgt", "rec", "ryd", "rtd", "car", "ruyd", "rutd", "fp", "xfp", "tm"],
+                        wfields=["wk", "opp", "snp", "rts", "tgt", "rec", "ryd", "rtd", "car", "ruyd", "rutd", "fp", "xfp", "tm", "xp"],
                         estRoutes=y not in d["part"])
             body = jsdump(clean({"meta": meta, "players": players}))
             with open(os.path.join(a.out, f"fb-{y}.js"), "w") as f:

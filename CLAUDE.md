@@ -802,3 +802,25 @@ targets for the neutral number, 421 next-season pairs, 97 who changed teams):
   behind overall. It shows the offense's effect on his points, not a better forecast; the tooltip and the tab's note say so.
 * **On / off** (his team's offensive EPA per play with him on the field against off it, from participation, 2016-25): repeats at r .14 and
   for movers .17; rush EPA on − off .04. Noise — not on the site; Sean can have it anyway if he asks.
+
+## Passing xFP (Sean, 6 Nov 2026: "Can we lock in on the fantasy football site. I really want to create some accurate models as well as just include very very useful stats")
+
+Every pass attempt is priced like a target or a carry: `passes()` / `pfeat()` in `tools/build_fb.py` — attempts only (sacks, spikes and two-point
+tries out), the label passing points (yards / 25, 4 a TD, −2 an INT), the features the throw's air yards (and a flag when missing), yard line,
+down, distance, side of the field (a throwaway's own code), shotgun, the target's position (none for a throwaway), score difference, seconds
+left in the half and no-huddle; `fit_price(..., lo=-2)` leave-one-season-out and anchored per season like the others, plus an expected-TD and an
+expected-INT model. A QB's season carries `xp` (passing xFP), `xtp` / `xip` (expected passing TDs / INTs), `ay_p` (air yards on his attempts);
+the week rows gained **`xp`** (appended to `meta.wfields`), and `career.js` rows carry `xp xtp xip`. In `fb.js` `passX(p)` (= `xp`, else his
+actual passing points on a file built before) is a QB's passing share of xFP everywhere: xFP/G, FPOE/G, the season table, the Teams page
+(the week's `xp`). New metrics (`M()`): **Pass xFP/G** `pxg`, **Pass FP/G** `pfpg`, **Pass FPOE/G** `poeg`, **xFP/Att** `xpa`, **FP/Att** `fppa`,
+**Pass TDOE** `ptdoe`, **aDOT** `adotp` — Leaders' QB table has a Passing xFP group (Pass xFP/G and Pass FPOE/G in the fantasy core) and the
+player page a Passing xFP section of bars. The QB **xFP build-up** is League QB → Attempts / game → xFP / attempt → Carries / game → xFP / carry
+(the yellow xFP / G), then Passing TDs over expected, Interceptions vs expected and Passing yards over expected, then the rushing TD and yards
+over expected; "Where the gap comes from" gets Passing TD / Interceptions / Passing yards rows.
+
+**What it's worth** (scratch `qbx/` in the baseball session's scratchpad: every QB season with 200+ attempts 2016-25, 345 seasons, 228
+back-to-back pairs): passing xFP / G tracks this season's passing FP / G at r .82 (xFP / attempt vs FP / attempt .72; the game-state features
+took it from .79 / .65). **Unlike a receiver's, a QB's passing points over expected repeat** — FPOE per attempt year to year r .32, FP / attempt
+.38, xFP / attempt .34 — so the passing skill is real, and next season's FP / G follows this season's actual passing points (r .50) more than
+its xFP / G (.41); a fit of next season on both gives xFP no weight. So for QBs xFP is the opportunity read (how much and how deep he throws) and
+Pass FPOE is the skill, not luck.
