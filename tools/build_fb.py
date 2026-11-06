@@ -521,13 +521,14 @@ def team_env(y, pbp, games, pos):
                         int((q.rbrun & (q.rushing_yards.fillna(0) <= 0)).sum()), round(float(q.epa.sum()), 1), pts.get((tm, w)),
                         round(imp[(tm, w)], 2) if (tm, w) in imp else None])
     # the next game not yet played, with its line (the games list carries the coming week's)
-    nx = {}
+    nx, rs = {}, {}
     for tm in out:
         played = {r[0] for r in out[tm]}
         up = sorted(r.week for r in g.itertuples() if r.week not in played and r.home_score != r.home_score and tm in (OLD_CODES.get(r.home_team, r.home_team), OLD_CODES.get(r.away_team, r.away_team)))
         if up:
             w = up[0]; nx[tm] = [int(w), opp.get((tm, w)), round(imp[(tm, w)], 2) if (tm, w) in imp else None]
-    return {tm: {"w": sorted(v), "nx": nx.get(tm)} for tm, v in out.items()}
+        rs[tm] = [[int(w), opp.get((tm, w))] for w in up]   # every game left, for the schedule and the rest-of-season projections
+    return {tm: {"w": sorted(v), "nx": nx.get(tm), "rs": rs.get(tm, [])} for tm, v in out.items()}
 
 
 # ---------- team-seasons: coaches and RB usage ----------

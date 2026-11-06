@@ -393,7 +393,7 @@
   // the baseball site's header (23 Oct 2026): the band with the red rule, every page a white boxy button in the condensed face — the
   // current one filled navy — and the search at the right; on a phone the search and a "☰ Menu" button share the one line and the
   // pages open under it as a grid of the same buttons (body.navopen), closing on a pick, a page change or a tap elsewhere
-  const PAGES = [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
+  const PAGES = [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#proj", "Projections"], ["#schedule", "Schedule"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
   const PO = { QB: 0, RB: 1, FB: 1, WR: 2, TE: 3 };
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
@@ -539,7 +539,7 @@
   // the count beside it), the title over the red rule with the sort beside it and a "More about these numbers" link that folds the page's
   // notes under the title (the baseball Movers' pattern; the table keeps the room), and the framed box, the one thing on the page that
   // scrolls (body.lst sizes main to the screen). Nothing sits under the table.
-  const LIST_PAGES = new Set(["leaders", "teams", "roles", "trends", "backfields", "coaches", "dynasty"]);
+  const LIST_PAGES = new Set(["leaders", "teams", "roles", "trends", "proj", "schedule", "backfields", "coaches", "dynasty"]);
   const ABOUT = {};   // the pages whose folded note is open this visit
   function filtersBtn(label, extra) {
     const tb = el("div", "tbtns");
@@ -826,7 +826,7 @@
   // scroller, the sticky bar at its top with a × in a strip above the name — so the list is exactly where it was when the popup closes:
   // nothing redraws it. ×, the backdrop, Escape or any hash change close it (a team link or the header search go to a page). A season or a
   // tab picked inside redraws the popup in place (repaint). Every other page goes to his page as before.
-  const XPOP_PAGES = new Set(["leaders", "roles", "trends", "dynasty", "backfields"]);
+  const XPOP_PAGES = new Set(["leaders", "roles", "trends", "proj", "dynasty", "backfields"]);
   let XP = null;   // { id } while a popup is up
   const pageHost = () => (XP ? $("#xboard") : $("main"));   // where the player page was last drawn
   function openPlayer(id, ev) {
@@ -1783,6 +1783,133 @@
     host.append(c);
   }
 
+  // ---------- Schedule and rest-of-season projections (6 Nov 2026; Sean: "Rest-of-season projections" and "Strength of schedule") ----------
+  // A defense's matchup factor at a position: the points it allowed to that position over what those offenses scored there in their other
+  // games (ratio of sums), shrunk toward 1 by its games n / (n + 30). Every 2016-25 season at weeks 4-14 (scratch qbx/ros2.py, 3,520 defense-
+  // windows a position): the factor to date tracks the same defense's rest of season at only r .21 (QB), .21 (RB), .17 (WR), .15 (TE), and
+  // the best shrink was 30 games or more — a defense's fantasy matchup is mostly noise, so every factor reads near ±10% at most.
+  const SOS_K = 30;
+  const defMemo = new Map();
+  function defFactors(y) {
+    if (defMemo.has(y)) return defMemo.get(y);
+    const D = window.FB[y], F = D.meta.wfields, ix = (k) => F.indexOf(k), xi = ix("xp"), off = {}, vs = {};
+    for (const p of D.players) {
+      const g = posGroup(p.pos); if (!["QB", "RB", "WR", "TE"].includes(g)) continue;
+      for (const r of p.w) { const tm = r[ix("tm")], o = r[ix("opp")], w = r[ix("wk")]; if (!tm || !o) continue; const k = tm + ":" + w; (off[g] = off[g] || {})[k] = (off[g][k] || 0) + (r[ix("fp")] || 0); vs[k] = String(o).replace(/^@/, ""); }
+    }
+    const out = {};
+    for (const g in off) {
+      const ot = {}, on = {}; for (const k in off[g]) { const tm = k.split(":")[0]; ot[tm] = (ot[tm] || 0) + off[g][k]; on[tm] = (on[tm] || 0) + 1; }
+      const A = {}; for (const k in off[g]) { const tm = k.split(":")[0], f = off[g][k], d = vs[k], e = on[tm] > 1 ? (ot[tm] - f) / (on[tm] - 1) : null; if (e == null) continue; const a = (A[d] = A[d] || { a: 0, e: 0, n: 0 }); a.a += f; a.e += e; a.n++; }
+      for (const d in A) { const x = A[d], raw = x.e > 0 ? x.a / x.e : 1; out[d + ":" + g] = { raw, n: x.n, ag: x.a / x.n, f: 1 + (raw - 1) * x.n / (x.n + SOS_K) }; }
+    }
+    defMemo.set(y, out); return out;
+  }
+  const facOf = (y, d, g) => { const x = defFactors(y)[String(d).replace(/^@/, "") + ":" + g]; return x ? x.f : 1; };
+  const sosOf = (y, tm, g, from, to) => { const E = window.FB_ENV && window.FB_ENV.s[String(y)], rs = (E && E[tm] && E[tm].rs || []).filter((r) => r[0] >= (from || 0) && r[0] <= (to || 99));
+    return rs.length ? { f: rs.reduce((a, r) => a + facOf(y, r[1], g), 0) / rs.length, n: rs.length, rs } : null; };
+  // rest-of-season FP / G (scratch qbx/ros3.py / ros4.py: every 2016-25 player at weeks 4-14 with 3+ games before and after, 4+ FP / G, each
+  // season held out of its fit; 24,179 player-windows): his FP / G and xFP / G to date and over his last three, last season's FP / G (4+ games)
+  // and whether he had one, his team's average Vegas implied total and his remaining schedule's matchup factor, a linear fit per position.
+  // Mean miss against what he scored the rest of the way, model / FP-to-date: QB 3.15 / 3.66, RB 3.26 / 3.54, WR 3.09 / 3.32, TE 2.52 / 2.77
+  // (r .49 / .68 / .69 / .65); xFP and last season carry the gain — the implied total and the schedule add nothing measurable (r ±.003)
+  const ROS_B = {   // fpg, xfpg, last-3 fpg, last-3 xfpg, last season fpg (0 if none), had a last season, implied, sos, constant
+    QB: [0.2209, 0.1301, 0.0527, 0.0597, 0.1312, -1.7971, 0.1581, 3.8345, 0.758],
+    RB: [0.277, 0.2298, 0.1216, 0.0548, 0.1937, -2.3546, 0.0749, 19.8415, -18.1899],
+    WR: [0.3718, 0.1699, 0.0809, 0.0445, 0.2533, -2.7317, 0.0153, 12.4328, -9.7936],
+    TE: [0.2774, 0.2338, 0.0662, 0.0749, 0.2767, -1.7694, -0.0543, 15.1743, -11.508],
+  };
+  function rosOf(p, y) {
+    const D = window.FB[y], F = D.meta.wfields, ix = (k) => F.indexOf(k), g = posGroup(p.pos); if (!ROS_B[g]) return null;
+    const a = p.w.filter((r) => r[ix("tm")] && (r[ix("snp")] || 0) >= 5); if (a.length < 3) return null;
+    const X = (r) => (r[ix("xfp")] || 0) + (g === "QB" && ix("xp") >= 0 ? r[ix("xp")] || 0 : 0), mean = (L, f) => L.reduce((s, r) => s + f(r), 0) / L.length;
+    const l3 = a.slice(-3), fpg = mean(a, (r) => r[ix("fp")] || 0), xg = mean(a, X), f3 = mean(l3, (r) => r[ix("fp")] || 0), x3 = mean(l3, X);
+    const P = window.FB[y - 1] && window.FB[y - 1].players.find((q) => q.id === p.id), ppg = P && P.g >= 4 ? P.fp / P.g : null;
+    const E = window.FB_ENV && window.FB_ENV.s[String(y)], ei = window.FB_ENV ? window.FB_ENV.f.indexOf("imp") : -1, im = [];
+    if (E) for (const r of a) { const q = E[r[ix("tm")]] && E[r[ix("tm")]].w.find((w) => w[0] === r[ix("wk")]); if (q && q[ei] != null) im.push(q[ei]); }
+    const imp = im.length ? im.reduce((s, v) => s + v, 0) / im.length : 22.5, tm = a[a.length - 1][ix("tm")], so = sosOf(y, tm, g), sos = so ? so.f : 1, b = ROS_B[g];
+    const proj = Math.max(0, b[0] * fpg + b[1] * xg + b[2] * f3 + b[3] * x3 + b[4] * (ppg || 0) + b[5] * (ppg != null ? 1 : 0) + b[6] * imp + b[7] * sos + b[8]);
+    return { g: a.length, fpg, xg, f3, x3, ppg, imp, sos, left: so ? so.n : 0, proj, tot: proj * (so ? so.n : 0), tm };
+  }
+  async function projPage(main) {
+    const y = CUR, pos = ["QB", "RB", "WR", "TE"].includes(S.prPos) ? S.prPos : "WR";
+    const [D] = await Promise.all([ensure(y), ensure(y - 1).catch(() => null), loadScript("data/env.js").catch(() => {})]);
+    main.textContent = "";
+    POP.spec = { page: "proj", tabs: [["position", "Position"], TABLE_TAB], keys: ["prPos"], draw: (tab, h) => {
+      const s = h.sec("Position"); s.append(h.seg(["QB", "RB", "WR", "TE"].map((x) => [x, x]), pos, (x) => { S.prPos = x; save(); route(); }));
+      h.note(s, "Everyone with 3+ games (5%+ of the snaps) and 4+ FP / G. Tight ends and receivers are their own fits; fullbacks count as backs.");
+    } };
+    let rows = D.players.filter((p) => posGroup(p.pos) === pos).map((p) => ({ p, r: rosOf(p, y) })).filter((x) => x.r && x.r.fpg >= 4);
+    const K = { proj: (x) => x.r.proj, tot: (x) => x.r.tot, fpg: (x) => x.r.fpg, xg: (x) => x.r.xg, f3: (x) => x.r.f3, ppg: (x) => x.r.ppg, imp: (x) => x.r.imp, sos: (x) => x.r.sos, left: (x) => x.r.left, d: (x) => x.r.proj - x.r.fpg };
+    const sortK = K[S.prSort] ? S.prSort : "proj", dir = S.prDir || -1;
+    rows.sort((a, b) => { const va = K[sortK](a), vb = K[sortK](b); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
+    const sb = (k) => () => { if (S.prSort === k) S.prDir = -(S.prDir || -1); else { S.prSort = k; S.prDir = -1; } save(); route(); };
+    const col = (h, k, t) => ({ h, t, onSort: sb(k), lit: sortK === k });
+    const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }, { h: "G", t: "Games he played 5%+ of the snaps" }], end: 1 },
+      { name: "To date", end: 1, cols: [col("FP/G", "fpg", "PPR points a game"), col("xFP/G", "xg", "Expected points a game"), col("Last 3", "f3", "PPR points a game over his last three")] },
+      { name: "Inputs", end: 1, cols: [col(`${y - 1}`, "ppg", `His ${y - 1} FP / G (4+ games)`), col("Implied", "imp", "His team's average Vegas implied total in his games"), col("SOS", "sos", "His remaining opponents' matchup factor at his position (Schedule page): +% = softer")] },
+      { name: "Rest of season", end: 1, cols: [col("Proj", "proj", "Projected PPR points a game for the rest of the season"), col("Δ", "d", "Projected less his FP / G to date"), col("Left", "left", "His team's games left"), col("Total", "tot", "Projected points a game × games left (no injuries assumed)")] }];
+    const board = listFrame(main, { page: "proj", title: "Projections", sub: `${POS_WORD[pos]}s · rest of season · by ${{ proj: "Proj", tot: "Total", fpg: "FP/G", xg: "xFP/G", f3: "Last 3", ppg: String(y - 1), imp: "Implied", sos: "SOS", left: "Left", d: "Δ" }[sortK]}`,
+      ctl: [filtersBtn(`${POS_WORD[pos]} filters`, 0), count(`${rows.length} ${pos}s · ${y} · through week ${D.meta.through}`, `${rows.length} ${pos}s`)],
+      about: `Each player's projected PPR points a game for the rest of the season, from his points and expected points so far and over his last three games, his ${y - 1} points a game, his team's Vegas implied total and his remaining schedule — weighted by a fit on every 2016-25 player at weeks 4-14, each season held out of its own fit (24,179 player-windows). It misses what a player actually scores the rest of the way by 2.5-3.3 points a game on average (QB 3.15, RB 3.26, WR 3.09, TE 2.52), 7-14% less than his FP / G to date does (QB 3.66, RB 3.54, WR 3.32, TE 2.77). The gain is expected points and last season; the implied total and the schedule added nothing measurable in the test, so they barely move it. Total assumes he plays every game left. Coloured among the rows; the sorted column is bold.` });
+    const t = table(groups), box = boxOf(t, ["pr", y, pos, sortK, dir].join(":"));
+    const rk = {}; for (const k of Object.keys(K)) rk[k] = ranker(rows.map(K[k]));
+    rows.forEach((x, i) => {
+      const r = x.r, nm = td(null, "l fz2"); nm.append(playerLink(x.p.n, x.p.id));
+      const v = { fpg: num(r.fpg), xg: num(r.xg), f3: num(r.f3), ppg: r.ppg == null ? "–" : num(r.ppg), imp: num(r.imp), sos: sgn(100 * (r.sos - 1)) + "%", proj: num(r.proj), d: sgn(r.proj - r.fpg), left: String(r.left), tot: num(r.tot, 0) };
+      const cells = [td(String(i + 1), "fz rk"), nm, td(r.tm || ""), td(String(r.g))];
+      for (const k of ["fpg", "xg", "f3", "ppg", "imp", "sos", "proj", "d", "left", "tot"]) {
+        const c = td(v[k]), val = K[k](x);
+        if (val != null && (k === sortK || k === "proj" || k === "d")) { paint(c, k === "d" ? 50 + 50 * Math.max(-1, Math.min(1, val / 4)) : rk[k](val)); if (k !== sortK) c.classList.remove("heat"); }
+        cells.push(c);
+      }
+      rowPop(t.addRow(cells), x.p.id);
+    });
+    board.append(box); keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
+  }
+  // the Schedule page: each team's remaining schedule by position (and the fantasy playoffs, weeks 15-17), or each defense's factor
+  async function schedulePage(main) {
+    const y = CUR, view = S.scView === "def" ? "def" : "rest";
+    const [D] = await Promise.all([ensure(y), loadScript("data/env.js").catch(() => {})]);
+    main.textContent = "";
+    POP.spec = { page: "schedule", tabs: [["view", "View"], TABLE_TAB], keys: ["scView"], draw: (tab, h) => {
+      const s = h.sec("What the table shows"); s.append(h.seg([["rest", "Remaining schedule"], ["def", "Defense vs position"]], view, (v) => { S.scView = v; save(); route(); }));
+      h.note(s, "Remaining schedule: each offense's games left, their opponents' average matchup factor by position, and the same for the fantasy playoffs (weeks 15-17). Defense vs position: each defense's points allowed a game by position and its factor.");
+    } };
+    const E = window.FB_ENV && window.FB_ENV.s[String(y)]; const PS = ["QB", "RB", "WR", "TE"], fac = defFactors(y);
+    const teams = Object.keys(E || {}).sort();
+    const sortK = S.scSort || (view === "rest" ? "WR:all" : "WR:f"), dir = S.scDir || -1;
+    const sb = (k) => () => { if (S.scSort === k) S.scDir = -(S.scDir || -1); else { S.scSort = k; S.scDir = -1; } save(); route(); };
+    const pctS = (f) => (f == null ? "–" : sgn(100 * (f - 1)) + "%");
+    let rows, groups, about;
+    if (view === "rest") {
+      rows = teams.map((tm) => { const o = { tm, left: (E[tm].rs || []).length }; for (const g of PS) { const a = sosOf(y, tm, g), b = sosOf(y, tm, g, 15, 17); o[g + ":all"] = a ? a.f : null; o[g + ":po"] = b ? b.f : null; } return o; });
+      groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Tm", cls: "l fz2" }, { h: "Left", t: "Games left" }], end: 1 }];
+      for (const g of PS) groups.push({ name: g, end: 1, cols: [{ h: "Rest", t: `Remaining opponents' average matchup factor against ${g}s: +% = they've allowed more than those offenses usually score`, onSort: sb(g + ":all"), lit: sortK === g + ":all" }, { h: "Wk 15-17", t: "The same over weeks 15-17, the fantasy playoffs", onSort: sb(g + ":po"), lit: sortK === g + ":po" }] });
+      about = "Each offense's remaining opponents by position: a defense's matchup factor is the PPR points it allowed to a position over what those same offenses scored there in their other games, shrunk toward even by its games n / (n + 30); a team's figure is the average over the games it has left, and over weeks 15-17 for the fantasy playoffs. +% = a softer schedule. Be careful with it: tested on every 2016-25 season at weeks 4-14, a defense's factor to date tracks its rest of season at only r .15-.21, and the schedule added nothing measurable to the rest-of-season projections — hence the heavy shrinking, and why every figure sits within a few percent. Red is softer.";
+    } else {
+      rows = teams.map((tm) => { const o = { tm }; for (const g of PS) { const x = fac[tm + ":" + g]; o[g + ":ag"] = x ? x.ag : null; o[g + ":raw"] = x ? x.raw : null; o[g + ":f"] = x ? x.f : null; o.n = x ? x.n : o.n; } return o; });
+      groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Def", cls: "l fz2" }, { h: "G" }], end: 1 }];
+      for (const g of PS) groups.push({ name: `vs ${g}`, end: 1, cols: [{ h: "FP/G", t: `PPR points allowed a game to ${g}s`, onSort: sb(g + ":ag"), lit: sortK === g + ":ag" }, { h: "Raw", t: "Allowed over what those offenses score there in their other games", onSort: sb(g + ":raw"), lit: sortK === g + ":raw" }, { h: "Factor", t: "Raw shrunk toward even by games n / (n + 30): what to expect of it", onSort: sb(g + ":f"), lit: sortK === g + ":f" }] });
+      about = "Each defense's PPR points allowed a game by position, the same over what those offenses score at the position in their other games (Raw), and that shrunk toward even by its games (Factor) — the matchup figure the schedule and the projections use. Raw swings widely and mostly washes out: tested 2016-25, a defense's factor to date tracks its rest of season at only r .15-.21. Red is softer for the offense.";
+    }
+    const val = (r) => r[sortK];
+    rows.sort((a, b) => { const va = val(a), vb = val(b); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
+    const board = listFrame(main, { page: "schedule", title: "Schedule", sub: view === "rest" ? "remaining schedule · +% softer" : "defense vs position",
+      ctl: [filtersBtn("Schedule filters", view === "def" ? 1 : 0), count(`${rows.length} teams · ${y} · through week ${D.meta.through}`, `${rows.length} teams`)], about });
+    const t = table(groups), box = boxOf(t, ["sc", y, view, sortK, dir].join(":")); box.classList.add("nonm");
+    const keys = view === "rest" ? PS.flatMap((g) => [g + ":all", g + ":po"]) : PS.flatMap((g) => [g + ":ag", g + ":raw", g + ":f"]);
+    const rk = {}; for (const k of keys) rk[k] = ranker(rows.map((r) => r[k]));
+    rows.forEach((r, i) => {
+      const cells = [td(String(i + 1), "fz rk"), cellLink(r.tm, `#team/${r.tm}/${y}`, "l fz2"), td(String(view === "rest" ? r.left : r.n || ""))];
+      for (const k of keys) { const v = r[k], c = td(k.endsWith(":ag") ? num(v) : pctS(v)); if (v != null) { paint(c, rk[k](v)); if (k !== sortK) c.classList.remove("heat"); } cells.push(c); }
+      t.addRow(cells);
+    });
+    board.append(box); keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
+  }
+
   // ---------- Dynasty: every season by his year in the league ----------
   // (18 Oct 2026; Sean: "for WRs I want like target share tprr yprr and I also want a dynasty view of that so I can look at rookies
   // across years second year guys across years etc"). A career year is the season less his first NFL season (the draft year, else
@@ -2148,6 +2275,9 @@
       `<b>xFP</b> — expected PPR points: every target priced by its air yards, field position, down and distance, location and formation, every carry by field position, down, distance and gap, by what a play like it scores; fitted on every other season and anchored so each season's xFP sums to its real points. FPOE is points over expected, TDOE touchdowns over expected. Skills like separation, broken tackles and yards after contact are shown with how well they repeat and what they're worth, but stay out of xFP, which prices the opportunity.`,
       `<b>Teams</b> — each offense's xFP / G, FP / G and +/− by position (QB, RB, WR, TE, and all four) for a season or its last 4 or 8 games, each cell coloured by its rank among the 32. A traded player counts for the team he played for that week; a QB's xFP is his passing and rushing xFP, every attempt and carry priced (a season built before 6 Nov 2026 used his actual passing points).`,
       `<b>Role Watch</b> — every back, receiver and tight end's share of his team's work in the games he played (a back's carries + targets, a receiver's targets) against what the drafts expected, after any week since 2017. <b>More work</b> marks a projected rest-of-season share 10+ points over the drafts' for a back, 4+ for a receiver — a weekly read, since most backfield turns are an injury or a benching ahead of him.`,
+      `<b>Trends</b> — each player's snap, route, target (and a back's carry and opportunity) shares in his last three games against his games before them, and his projected next four, weighted by what held up 2017-25: playing time follows the last three games, target share weighs both. Rising / Falling marks a real move. A player's Usage trend tab draws it week by week.`,
+      `<b>Projections</b> — each player's projected PPR points a game for the rest of the season, from his points and expected points so far and lately, last season, his team's Vegas total and his schedule, fitted on 2016-25 with each season held out; it misses by about 3 points a game, 7-14% less than his FP / G to date.`,
+      `<b>Schedule</b> — each offense's remaining opponents by position (and weeks 15-17), and each defense's points allowed by position against what those offenses usually score, shrunk heavily: a defense's matchup is mostly noise (r .15-.21 from one part of a season to the next).`,
       `<b>Backfields</b> — every team's lead back's share of the carries, opportunities, snaps and goal-line carries in the games he played (so an injury doesn't read as a committee), the RB2, backs used, the backs' share of targets, and FP per opportunity for both — the RB2 in red when he out-produced the lead back per touch. A team opens its week-by-week split.`,
       `<b>Coaches</b> — every coach on an offensive staff since 2016, by how his teams split running back work in the seasons he was there: <b>Bell cow</b> when his lead backs averaged 68%+ of the RB carries in their games, <b>Committee</b> under 60%. Head coaches, coordinators or the whole staff; a coach's page lists every stint and season. Tested before building on it: what follows a coach to a new team is the RB share of targets — the lead back's share is the room, not the staff.`,
       `<b>Dynasty</b> — every season laid out by the player's year in the league (rookies, year 2 …), by position, draft round and class; the sorted column is coloured against the same career year in every class since ${SEASONS[0]}, with what he did the next season beside it.`,
@@ -2157,7 +2287,7 @@
   }
 
   // ---------- routing ----------
-  const PAGE_TITLE = { leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
+  const PAGE_TITLE = { leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", proj: "Projections", schedule: "Schedule", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
   function route() {
     const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
@@ -2168,7 +2298,7 @@
     const main = $("main"), same = S.lastPage === h;
     if (page === "player" && same) main.style.minHeight = main.offsetHeight + "px"; else main.style.minHeight = "";   // a player's page redrawn in place (a season, a tab) keeps its height through the Loading… line, so the page stays where it was
     main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
+    const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "proj" ? projPage(main) : page === "schedule" ? schedulePage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.style.minHeight = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
