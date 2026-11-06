@@ -839,3 +839,21 @@ pressure), Line yds (Football Outsiders' adjusted line yards per RB designed car
 implied total .60 / .86 / .51, EPA / play .39 / .83 / .51, red-zone trips .32 / .79 / .43, neutral pass rate .40 / .57 / .26, PROE .39 / .54 / .26,
 sack rate .34 / −.58 / −.32, line yards .35 / .34 / .19, plays / game .24 / .45 / .17, pace .43 / −.23 / −.13, RZ TD% .11 / .56 / .26. A week's
 implied total tracks that week's team skill FP at r .42 (5,278 team-weeks). OL pass / run block win rates (ESPN) and PFF grades aren't free.
+
+## Trends (Sean, 6 Nov 2026: "Weekly usage trends")
+
+**Trends** (`#trends`, `trendsPage()` in `fb.js`, in the header after Role Watch; Filters ▸ Position WR / TE / RB) lists every player with 5+ games
+this season (a game = 5%+ of the snaps) by his **last three games against his games before them** for each share — WR / TE: Snap%, Route%, Tgt%;
+RB: Snap%, Opp% (carries + targets over the team's), Car%, Tgt% — each with **Before · Last 3 · Next 4 · Δ**. Next 4 = a + b·Before + c·Last 3
+(`TR_FIT`), Δ = Next 4 − Before; a **Rising** / **Falling** badge (`.rwflag`, `.down` blue) when the main share's Δ is 2.5+ points of target share
+(WR / TE) or 4+ of opportunity share (RB) (`TR_MAIN` / `TR_FLAG`). The player page (not QBs) has a **Usage trend** tab (`usageTab`): the main
+share by week as bars, the three-game rolling line in red, the next four's projection dashed, and a week table with Before / Last 3 / Next 4 rows.
+The weekly shares are computed in the app (`usageWeeks`, `trTeamTot`): the team's targets and carries summed from every player's week rows,
+its dropbacks from `data/env.js`. This season's routes are the build's estimate (snap share × team dropbacks), so Route% follows Snap% until the
+season's participation is published.
+
+**The fit** (scratch `qbx/trend.py`: every 2017-25 player-season at every week with 2+ games before the last three and 3+ of the next four
+played, 18,067 windows), weight on Before / Last 3, r at the next four (Before alone / Last 3 alone / both), the median share of a one-sd jump that
+held: WR snap .18 / .65 (.70 / .80 / .81), route .17 / .66 (.71 / .81 / .82, 87% held), target .37 / .48 (.76 / .78 / .81, 52%); TE route .27 / .63
+(.83 / .87 / .88), target .47 / .46 (.81 / .82 / .85); RB snap .24 / .60, opportunity .32 / .58 (.81 / .85 / .87, 60%), carry .27 / .62, target
+.41 / .39. Playing time follows the last three games; target share is half signal, half noise.

@@ -655,3 +655,14 @@ html, body { overscroll-behavior: none; }
 /* a table that only slides sideways (every one but the standing lists' box) stops its sideways bounce only: blocking its up-and-down too
    swallowed a vertical swipe that started on it, so on a phone the player page wouldn't scroll over the season table (found 23 Oct 2026) */
 .tbox:not(.lbbox) { overscroll-behavior-x: none; overscroll-behavior-y: auto; }
+
+/* Trends (6 Nov 2026): a falling flag in the blue of the heat scale's cold end; the Usage trend tab's chart in the tokens */
+.rwflag.down { background: #3661ad; }
+.trsvg { display: block; width: 100%; max-width: 640px; height: auto; margin: 6px 0 10px; }
+.trsvg .trbar { fill: color-mix(in srgb, var(--band2) 70%, transparent); }
+.trsvg .trline { fill: none; stroke: var(--red); stroke-width: 2.5; stroke-linejoin: round; }
+.trsvg .trproj { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 5 4; }
+.trsvg .trgrid { stroke: var(--grid); stroke-width: 1; }
+.trsvg .trax { fill: var(--muted); font: 500 10px var(--body); }
+.trleg { color: var(--muted); font: 500 12px var(--body); margin-top: 4px; }
+.trsvg .trnext { fill: var(--ink); font-weight: 700; font-size: 12px; }

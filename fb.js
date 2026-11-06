@@ -393,7 +393,7 @@
   // the baseball site's header (23 Oct 2026): the band with the red rule, every page a white boxy button in the condensed face — the
   // current one filled navy — and the search at the right; on a phone the search and a "☰ Menu" button share the one line and the
   // pages open under it as a grid of the same buttons (body.navopen), closing on a pick, a page change or a tap elsewhere
-  const PAGES = [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
+  const PAGES = [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
   const PO = { QB: 0, RB: 1, FB: 1, WR: 2, TE: 3 };
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
@@ -539,7 +539,7 @@
   // the count beside it), the title over the red rule with the sort beside it and a "More about these numbers" link that folds the page's
   // notes under the title (the baseball Movers' pattern; the table keeps the room), and the framed box, the one thing on the page that
   // scrolls (body.lst sizes main to the screen). Nothing sits under the table.
-  const LIST_PAGES = new Set(["leaders", "teams", "roles", "backfields", "coaches", "dynasty"]);
+  const LIST_PAGES = new Set(["leaders", "teams", "roles", "trends", "backfields", "coaches", "dynasty"]);
   const ABOUT = {};   // the pages whose folded note is open this visit
   function filtersBtn(label, extra) {
     const tb = el("div", "tbtns");
@@ -826,7 +826,7 @@
   // scroller, the sticky bar at its top with a × in a strip above the name — so the list is exactly where it was when the popup closes:
   // nothing redraws it. ×, the backdrop, Escape or any hash change close it (a team link or the header search go to a page). A season or a
   // tab picked inside redraws the popup in place (repaint). Every other page goes to his page as before.
-  const XPOP_PAGES = new Set(["leaders", "roles", "dynasty", "backfields"]);
+  const XPOP_PAGES = new Set(["leaders", "roles", "trends", "dynasty", "backfields"]);
   let XP = null;   // { id } while a popup is up
   const pageHost = () => (XP ? $("#xboard") : $("main"));   // where the player page was last drawn
   function openPlayer(id, ev) {
@@ -1123,7 +1123,7 @@
   let tabY0 = null;
   function renderBelow(p, y, pos, meta) {
     const sec = el("section", "pbelow2"), bar = el("div", "btabs"); bar.setAttribute("role", "tablist");
-    const TABS = [["build", "xFP build-up"]]; if (pos !== "QB" && neutralOf(p)) TABS.push(["neut", "Neutral FP/G"]); TABS.push(["log", "Game log"]); if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);
+    const TABS = [["build", "xFP build-up"]]; if (pos !== "QB" && neutralOf(p)) TABS.push(["neut", "Neutral FP/G"]); TABS.push(["log", "Game log"]); if (pos !== "QB") TABS.push(["use", "Usage trend"]); if (pos === "RB" && p.tm) TABS.push(["bf", "Backfield"]);
     const pick = TABS.some((t) => t[0] === S.ptab) ? S.ptab : null;   // the strip opens closed (the baseball's); a tab stays picked across pages until it's tapped again
     for (const [k, lab] of TABS) {
       const b = el("button", "btab" + (k === pick ? " on" : ""), lab); b.type = "button"; b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(k === pick));
@@ -1131,7 +1131,7 @@
       bar.append(b);
     }
     sec.append(bar);
-    if (pick) { const body = el("div", "btabbody"); if (pick === "log") gameLog(body, p, meta); else if (pick === "neut") neutralTab(body, p, y, pos); else buildUp(body, p, y, pos); sec.append(body); }
+    if (pick) { const body = el("div", "btabbody"); if (pick === "log") gameLog(body, p, meta); else if (pick === "use") { body.textContent = "Loading…"; loadScript("data/env.js").catch(() => {}).then(() => { body.textContent = ""; usageTab(body, p, y, pos); }); } else if (pick === "neut") neutralTab(body, p, y, pos); else buildUp(body, p, y, pos); sec.append(body); }
     requestAnimationFrame(() => {
       // a phone's strip slides sideways with a fade at its right edge unless every tab fits, when it is centred like a desktop's
       const fits = [...bar.children].reduce((w, b) => w + b.offsetWidth, 0) + 14 * (bar.children.length - 1) + 24 <= bar.clientWidth;
@@ -1667,6 +1667,122 @@
     if (POP.open) { popBody(); placePop(); }
   }
 
+  // ---------- Trends: the last three games against the rest of his season ----------
+  // (6 Nov 2026; Sean: "Weekly usage trends"). Each week's shares from the week rows: snap%, route% (routes over his team's dropbacks that
+  // week, data/env.js), target share and, for a back, carry share and opportunity share (carries + targets over the team's), the team's
+  // targets and carries summed from every player's week rows. A game counts when he played 5%+ of the snaps. Next 4 = a + b·(his share
+  // before the last three) + c·(his last three), fitted on every 2017-25 player-season at every week with 2+ games before the last three
+  // and 3+ of the next four played (18,067 windows; scratch qbx/trend.py). Playing time is mostly the last three games (route% WR .17 /
+  // .66, r .82 at the next four against .71 for his earlier share; 84% of a one-sd jump holds); target share weighs both about equally
+  // (WR .37 / .48, TE .47 / .46, RB .41 / .39; about half of a jump holds); a back's carry share .27 / .62, opportunity share .32 / .58
+  const TR_FIT = {
+    WR: { snp: [0.175, 0.646, 11.8], rte: [0.171, 0.663, 11.76], tgt: [0.374, 0.483, 2.39] },
+    TE: { snp: [0.265, 0.604, 7.85], rte: [0.268, 0.632, 6.39], tgt: [0.47, 0.458, 1.23] },
+    RB: { snp: [0.241, 0.604, 7.05], opp: [0.32, 0.582, 2.16], car: [0.269, 0.624, 4.28], tgt: [0.412, 0.391, 1.46] },
+  };
+  const TR_MAIN = { WR: "tgt", TE: "tgt", RB: "opp" }, TR_FLAG = { WR: 2.5, TE: 2.5, RB: 4 };   // a rising / falling flag: the projected next four at least this many points off his earlier share
+  const TR_LAB = { snp: ["Snap%", "Offensive snap share"], rte: ["Route%", "Routes over his team's dropbacks"], tgt: ["Tgt%", "Share of his team's targets"],
+                   car: ["Car%", "Share of his team's carries"], opp: ["Opp%", "Carries + targets over his team's"] };
+  const trTeam = new Map();
+  function trTeamTot(y) {   // team → week → [targets, carries, dropbacks]
+    if (trTeam.has(y)) return trTeam.get(y);
+    const D = window.FB[y], F = D.meta.wfields, ix = (k) => F.indexOf(k), T = {};
+    for (const p of D.players) for (const r of p.w) { const tm = r[ix("tm")]; if (!tm) continue; const k = tm + ":" + r[ix("wk")], c = (T[k] = T[k] || [0, 0, 0]); c[0] += r[ix("tgt")] || 0; c[1] += r[ix("car")] || 0; }
+    const E = window.FB_ENV && window.FB_ENV.s[String(y)], db = E ? window.FB_ENV.f.indexOf("db") : -1;
+    if (E) for (const tm in E) for (const r of E[tm].w) { const k = tm + ":" + r[0]; (T[k] = T[k] || [0, 0, 0])[2] = r[db] || 0; }
+    trTeam.set(y, T); return T;
+  }
+  function usageWeeks(p, y) {
+    const D = window.FB[y], F = D.meta.wfields, ix = (k) => F.indexOf(k), T = trTeamTot(y), out = [];
+    for (const r of p.w) {
+      const tm = r[ix("tm")], snp = r[ix("snp")]; if (!tm || snp == null || snp < 5) continue;
+      const c = T[tm + ":" + r[ix("wk")]] || [0, 0, 0], tg = r[ix("tgt")] || 0, ca = r[ix("car")] || 0;
+      out.push({ wk: r[ix("wk")], opp: r[ix("opp")], snp, rte: c[2] ? 100 * (r[ix("rts")] || 0) / c[2] : null, tgt: c[0] ? 100 * tg / c[0] : null,
+                 car: c[1] ? 100 * ca / c[1] : null, opp_: c[0] + c[1] ? 100 * (tg + ca) / (c[0] + c[1]) : null, fp: r[ix("fp")] });
+    }
+    for (const w of out) { w.oppsh = w.opp_; delete w.opp_; }
+    return out;
+  }
+  const trKey = (k) => (k === "opp" ? "oppsh" : k);
+  const trMean = (W, k) => { const v = W.map((w) => w[trKey(k)]).filter((x) => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  function trendOf(p, y, g) {
+    const W = usageWeeks(p, y); if (W.length < 5) return null;
+    const pr = W.slice(0, -3), l3 = W.slice(-3), o = { W, g: W.length, last: l3[l3.length - 1].wk, m: {} };
+    for (const [k, [a, b, c]] of Object.entries(TR_FIT[g])) {
+      const P = trMean(pr, k), L = trMean(l3, k); if (P == null || L == null) { o.m[k] = null; continue; }
+      const n = Math.max(0, a * P + b * L + c); o.m[k] = { p: P, l3: L, n, d: n - P };
+    }
+    return o;
+  }
+  async function trendsPage(main) {
+    const y = CUR, pos = ["WR", "TE", "RB"].includes(S.trPos) ? S.trPos : "WR", g = pos;
+    const [D] = await Promise.all([ensure(y), loadScript("data/env.js").catch(() => {})]);
+    main.textContent = "";
+    POP.spec = { page: "trends", tabs: [["position", "Position"], TABLE_TAB], keys: ["trPos"], draw: (tab, h) => {
+      const s = h.sec("Position"); s.append(h.seg(["WR", "TE", "RB"].map((x) => [x, x]), pos, (x) => { S.trPos = x; save(); route(); }));
+      h.note(s, "A receiver's or tight end's snap, route and target shares; a back's snap, carry, opportunity (carries + targets) and target shares. Games he played 5%+ of the snaps; 5 needed.");
+    } };
+    const main_ = TR_MAIN[g], thr = TR_FLAG[g], keys = Object.keys(TR_FIT[g]);
+    let rows = D.players.filter((p) => posGroup(p.pos) === (g === "RB" ? "RB" : pos)).map((p) => ({ p, t: trendOf(p, y, g) })).filter((x) => x.t && x.t.m[main_] && Math.max(x.t.m[main_].p, x.t.m[main_].l3) >= (g === "RB" ? 15 : 8));
+    const sortK = S.trSort || main_ + ":d", dir = S.trDir || -1, [sk, sf] = sortK.split(":"), val = (x) => (x.t.m[sk] ? x.t.m[sk][sf] : null);
+    rows.sort((a, b) => { const va = val(a), vb = val(b); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
+    const sb = (k) => () => { if (S.trSort === k) S.trDir = -(S.trDir || -1); else { S.trSort = k; S.trDir = -1; } save(); route(); };
+    const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }, { h: "G", t: "Games he played 5%+ of the snaps" }], end: 1 }];
+    for (const k of keys) groups.push({ name: TR_LAB[k][0], end: 1, cols: [
+      { h: "Before", t: `${TR_LAB[k][1]}: his games before the last three`, onSort: sb(k + ":p"), lit: sortK === k + ":p" },
+      { h: "Last 3", t: `${TR_LAB[k][1]}: his last three games`, onSort: sb(k + ":l3"), lit: sortK === k + ":l3" },
+      { h: "Next 4", t: `${TR_LAB[k][1]}: projected for his next four games from the two, weighted by what held up 2017-25`, onSort: sb(k + ":n"), lit: sortK === k + ":n" },
+      { h: "Δ", t: "Next 4 less Before: the part of his change the history says will hold", onSort: sb(k + ":d"), lit: sortK === k + ":d" }] });
+    const board = listFrame(main, { page: "trends", title: "Trends", sub: `${POS_WORD[pos]}s · by ${TR_LAB[sk] ? TR_LAB[sk][0] : ""} ${{ p: "before", l3: "last 3", n: "next 4", d: "Δ" }[sf] || ""}`,
+      ctl: [filtersBtn(`${POS_WORD[pos]} filters`, 0), count(`${rows.length} ${pos}s with 5+ games · ${y} · through week ${D.meta.through}`, `${rows.length} ${pos}s`)],
+      about: `Each player's shares in his last three games against his games before them, and what the history says his next four will look like. Fitted on every 2017-25 player-season at every week (18,067 windows): playing time follows the last three games — route% and snap% weigh them two to one or more over his earlier games, and 70-85% of a one-sd jump held for the next four — while target share weighs the two about equally and about half of a jump held. ${g === "RB" ? "A back's opportunity share is his carries + targets over his team's; Rising / Falling marks a projected change of 4+ points." : "Rising / Falling marks a projected change of 2.5+ points of target share."} A game counts when he played 5%+ of the snaps. This season's routes are estimated (snap share × his team's dropbacks) until nflverse publishes the participation data after the season, so Route% follows Snap% for now. Δ is coloured red up, blue down; the sorted column is bold.` });
+    const t = table(groups), box = boxOf(t, ["tr", y, pos, sortK, dir].join(":"));
+    const rk = {}; for (const k of keys) for (const f of ["p", "l3", "n"]) rk[k + f] = ranker(rows.map((x) => x.t.m[k] && x.t.m[k][f]));
+    rows.forEach((x, i) => {
+      const nm = td(null, "l fz2"), wrap = el("div", "nmwrap"); wrap.append(playerLink(x.p.n, x.p.id)); nm.append(wrap);
+      const dm = x.t.m[main_].d;
+      if (Math.abs(dm) >= thr) { const f = el("span", "rwflag" + (dm < 0 ? " down" : ""), dm > 0 ? (document.documentElement.dataset.view === "mobile" ? "Up" : "Rising") : (document.documentElement.dataset.view === "mobile" ? "Down" : "Falling")); f.title = `Projected ${TR_LAB[main_][0]} for his next four ${sgn(dm)} points against his earlier games`; wrap.append(f); }
+      const cells = [td(String(i + 1), "fz rk"), nm, td(x.p.tm || ""), td(String(x.t.g))];
+      for (const k of keys) {
+        const m = x.t.m[k];
+        for (const f of ["p", "l3", "n", "d"]) {
+          const v = m ? m[f] : null, c = td(f === "d" ? sgn(v) : pc(v));
+          if (v != null) { if (f === "d") paint(c, 50 + 50 * Math.max(-1, Math.min(1, v / (2 * (k === main_ ? thr : 8))))); else paint(c, rk[k + f](v)); if (sortK !== k + ":" + f) c.classList.remove("heat"); if (f !== "d" && sortK !== k + ":" + f) c.style.background = c.style.color = ""; }
+          cells.push(c);
+        }
+      }
+      rowPop(t.addRow(cells), x.p.id);
+    });
+    board.append(box); keepBox(box); freeze(t);
+    if (POP.open) { popBody(); placePop(); }
+  }
+  // his page's Usage trend tab: week by week, with the three-game rolling line and the next four's projection
+  function usageTab(host, p, y, pos) {
+    const g = pos === "RB" ? "RB" : pos === "TE" ? "TE" : "WR", W = usageWeeks(p, y), keys = Object.keys(TR_FIT[g]), tr = trendOf(p, y, g);
+    if (!W.length) { host.append(el("p", "note", "No games with 5%+ of the snaps.")); return; }
+    const c = card("Usage by week", `${y} · games he played 5%+ of the snaps · the red line is his last three games rolling`);
+    const main_ = TR_MAIN[g], wide = 420, hgt = 190, pad = 30, xs = (i) => pad + (W.length < 2 ? 0 : (wide - 2 * pad) * i / (W.length - 1));
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg"); svg.setAttribute("viewBox", `0 0 ${wide} ${hgt}`); svg.setAttribute("class", "trsvg");
+    const vals = W.map((w) => w[trKey(main_)] || 0), roll = vals.map((_, i) => { const a = vals.slice(Math.max(0, i - 2), i + 1); return a.reduce((s, v) => s + v, 0) / a.length; });
+    const mx = Math.max(10, ...vals, tr && tr.m[main_] ? tr.m[main_].n : 0) * 1.1, ys = (v) => hgt - 22 - (hgt - 40) * v / mx;
+    const mk = (tag, at) => { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const k in at) e.setAttribute(k, at[k]); svg.append(e); return e; };
+    for (const v of [0, mx / 2]) { mk("line", { x1: pad, x2: wide - pad, y1: ys(v), y2: ys(v), class: "trgrid" }); mk("text", { x: 2, y: ys(v) + 4, class: "trax" }).textContent = Math.round(v) + "%"; }
+    const bw = Math.min(26, 0.62 * (wide - 2 * pad) / Math.max(W.length, 1));
+    W.forEach((w, i) => { mk("rect", { x: xs(i) - bw / 2, y: ys(vals[i]), width: bw, height: Math.max(0, ys(0) - ys(vals[i])), class: "trbar" }); mk("text", { x: xs(i), y: hgt - 6, class: "trax", "text-anchor": "middle" }).textContent = w.wk; });
+    mk("polyline", { points: roll.map((v, i) => `${xs(i)},${ys(v)}`).join(" "), class: "trline" });
+    if (tr && tr.m[main_]) { const n = tr.m[main_].n; mk("line", { x1: xs(W.length - 1) - 10, x2: wide - 4, y1: ys(n), y2: ys(n), class: "trproj" }); mk("text", { x: wide - 4, y: Math.max(12, ys(Math.max(n, vals[vals.length - 1], roll[roll.length - 1])) - 8), class: "trax trnext", "text-anchor": "end" }).textContent = `Next 4: ${n.toFixed(1)}%`; }
+    c.append(el("div", "trleg", `${TR_LAB[main_][0]} by week (bars), last three rolling (line)${tr && tr.m[main_] ? ", projected next four (dashed)" : ""}`), svg);
+    const t = table([{ cols: [{ h: "Wk", cls: "l fz" }, { h: "Opp" }], end: 1 }, { cols: keys.map((k) => ({ h: TR_LAB[k][0], t: TR_LAB[k][1] })).concat([{ h: "FP" }]) }], { front: false });
+    for (const w of W) t.addRow([td(String(w.wk), "l fz"), td(w.opp || "")].concat(keys.map((k) => td(pc(w[trKey(k)]))), [td(num(w.fp))]));
+    if (tr) {
+      t.addRow([td("Before", "l fz"), td("")].concat(keys.map((k) => td(tr.m[k] ? pc(tr.m[k].p) : "–")), [td("")]), "tot first");
+      t.addRow([td("Last 3", "l fz"), td("")].concat(keys.map((k) => td(tr.m[k] ? pc(tr.m[k].l3) : "–")), [td("")]), "tot");
+      t.addRow([td("Next 4", "l fz"), td("proj.")].concat(keys.map((k) => td(tr.m[k] ? pc(tr.m[k].n) : "–")), [td("")]), "tot");
+    }
+    c.append(t.box, el("p", "note", tr ? "Next 4 weighs his last three games against his earlier ones as the history did (2017-25): playing time mostly on the last three, target share about equally." : "Five games are needed for the projection."));
+    host.append(c);
+  }
+
   // ---------- Dynasty: every season by his year in the league ----------
   // (18 Oct 2026; Sean: "for WRs I want like target share tprr yprr and I also want a dynasty view of that so I can look at rookies
   // across years second year guys across years etc"). A career year is the season less his first NFL season (the draft year, else
@@ -2041,7 +2157,7 @@
   }
 
   // ---------- routing ----------
-  const PAGE_TITLE = { leaders: "Leaders", teams: "Teams", roles: "Role Watch", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
+  const PAGE_TITLE = { leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
   function route() {
     const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
@@ -2052,7 +2168,7 @@
     const main = $("main"), same = S.lastPage === h;
     if (page === "player" && same) main.style.minHeight = main.offsetHeight + "px"; else main.style.minHeight = "";   // a player's page redrawn in place (a season, a tab) keeps its height through the Loading… line, so the page stays where it was
     main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
+    const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.style.minHeight = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
