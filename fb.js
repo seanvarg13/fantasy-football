@@ -77,6 +77,9 @@
 
   // ---------- derived metrics ----------
   const passFP = (p) => (p.pyd || 0) / 25 + 4 * (p.ptd || 0) - 2 * (p.int_ || 0);
+  // a QB's passing xFP (6 Nov 2026): every attempt priced by what a throw like it scores (the build's `xp`); a file or career row built
+  // before it has none, and reads his actual passing points as before
+  const passX = (p) => (p.xp != null ? p.xp : passFP(p));
   const memo = new WeakMap();
   // a target is worth 2.5 carries: an RB's target by xFP over his carry, 2016-25 (1.52 PPR against 0.61), and the weight that best
   // predicts a back's next-season points per game of every one from 1 to 5 tried
@@ -167,7 +170,8 @@
   function M(p) {
     if (memo.has(p)) return memo.get(p);
     const g = Math.max(p.g || 0, 1), opp = (p.car || 0) + (p.tgt || 0), touch = (p.car || 0) + (p.rec || 0);
-    const xfp = (p.xr || 0) + (p.xu || 0) + (posGroup(p.pos) === "QB" ? passFP(p) : 0);
+    const xfp = (p.xr || 0) + (p.xu || 0) + (posGroup(p.pos) === "QB" ? passX(p) : 0);
+    const hp = p.xp != null && p.att > 0;
     const m = {
       g: p.g, tgt: p.tgt, rec: p.rec, ryd: p.ryd, rtd: p.rtd, car: p.car, ruyd: p.ruyd, rutd: p.rutd,
       att: p.att, pyd: p.pyd, ptd: p.ptd, int: p.int_, rts: p.rts,
@@ -203,6 +207,9 @@
       epac: p.epar != null && p.car ? p.epar / p.car : null,
       tdoe: ((p.rtd || 0) + (p.rutd || 0)) - ((p.xtr || 0) + (p.xtu || 0)),
       epadb: p.db ? p.epa / p.db : null, cpoe: p.cpoe, sackp: p.db ? 100 * p.sk / p.db : null,
+      pxg: hp ? p.xp / g : null, pfpg: p.att ? passFP(p) / g : null, poeg: hp ? (passFP(p) - p.xp) / g : null,
+      xpa: hp ? p.xp / p.att : null, fppa: p.att ? passFP(p) / p.att : null, ptdoe: hp && p.xtp != null ? p.ptd - p.xtp : null,
+      adotp: p.att && p.ay_p != null ? p.ay_p / p.att : null,
       ruxg: (p.xu || 0) / g, carg: (p.car || 0) / g,
       // the skill stats (16 Oct 2026): Next Gen's season row (sep / cush / nyoe, eff / tlos / box8) and PFR's charted counts over PFR's
       // own receptions, targets and carries
@@ -265,13 +272,22 @@
     oppg: { h: "Opp/G", d: 1, hib: 1, t: "Carries + targets per game" },
     fppo: { h: "FP/Opp", d: 2, hib: 1, t: "PPR points per carry + target" }, fppt: { h: "FP/Tch", d: 2, hib: 1, t: "PPR points per carry + catch" },
     fpg: { h: "FP/G", d: 1, hib: 1, t: "PPR points per game" },
-    xfpg: { h: "xFP/G", d: 1, hib: 1, t: "Expected PPR points per game: each target and carry priced by depth, field position, down and distance" },
+    xfpg: { h: "xFP/G", d: 1, hib: 1, t: "Expected PPR points per game: each target and carry priced by depth, field position, down and distance (a QB's pass attempts too)" },
     fpoeg: { h: "FPOE/G", d: 1, s: 1, hib: 1, t: "PPR points over expected, per game" },
     nfprr: { h: "nFP/RR", d: 2, hib: 1, t: "Neutral FP per route run: his targets per route × his points per target with his QB's missed catchable balls given back, pulled toward what his targets are worth by targets / (targets + 200) — receiving only, so his team's pass volume drops out. Repeats year to year at r .66 against .58 for his actual receiving FP per route" },
     nfpg: { h: "nFP/G", d: 1, hib: 1, t: "Neutral FP / game: his points in a league-average offense. A receiver: his target share stays his; his team's pass volume becomes the league's, the catchable balls his QB missed are given back (FTN's catchable-ball charting, 2022 on), and his points per target are pulled toward what his targets are worth by targets / (targets + 200); for receivers who changed teams it reads next season's FP / G better than FP / G (r .69 vs .62). A back: his carry and target shares stay his, his team's carries and targets a game become the league's, his rushing is what his carries are worth plus his own rush yards over expected (the touchdowns his line handed him drop out), his receiving regressed as a receiver's; for backs who changed teams it ties FP / G at next season's points (r .47 each) — it shows the offense's effect rather than forecasting better" },
     tdoe: { h: "TDOE", d: 1, s: 1, hib: 1, t: "Touchdowns over expected" },
     epadb: { h: "EPA/db", d: 2, s: 1, hib: 1, t: "Expected points added per dropback" }, cpoe: { h: "CPOE", d: 1, s: 1, hib: 1, t: "Completion % over expected" },
     sackp: { h: "Sack%", d: 1, p: 1, hib: 0 }, ruxg: { h: "Rush xFP/G", d: 1, hib: 1 }, carg: { h: "Car/G", d: 1, hib: 1 },
+    // passing xFP (6 Nov 2026; Sean: "really want to create some accurate models"): every QB season with 200+ attempts 2016-25, each
+    // season priced by a model fitted on the others. Unlike a receiver's, a QB's points over expected repeat (r .32): passing skill is real
+    pxg: { h: "Pass xFP/G", d: 1, hib: 1, t: "Passing xFP per game: every attempt priced by what a throw like it scores in passing points (yards / 25, 4 a TD, −2 an INT) — its depth, field position, down and distance, side of the field, who it went to, and the score and clock. His volume and how far downfield he throws; tracks passing FP / G at r .82. Next season's FP / G follows his actual passing points (.50) more than this (.41)" },
+    pfpg: { h: "Pass FP/G", d: 1, hib: 1, t: "Passing fantasy points per game: yards / 25, 4 a touchdown, −2 an interception" },
+    poeg: { h: "Pass FPOE/G", d: 1, s: 1, hib: 1, t: "Passing points over expected per game: what he did with his throws beyond what throws like them score — completions, yards after the catch his receivers gained, touchdowns and interceptions. Unlike a receiver's FPOE it repeats year to year (r .32): passing skill" },
+    xpa: { h: "xFP/Att", d: 2, hib: 1, t: "Passing xFP per attempt: what his throws are worth before the result — deep, red-zone and end-zone throws price higher. Repeats at r .34" },
+    fppa: { h: "FP/Att", d: 2, hib: 1, t: "Passing fantasy points per attempt. Repeats at r .38" },
+    ptdoe: { h: "Pass TDOE", d: 1, s: 1, hib: 1, t: "Passing touchdowns over expected: his touchdown passes less what his throws' field position and depth expected" },
+    adotp: { h: "aDOT", d: 1, hib: 1, t: "Average depth of target on his attempts, in air yards" },
     // skills (16 Oct 2026; Sean: "wide receiver separation metrics ... rb broken tackles and skill stuff"): what he does with the ball, as
     // against the opportunity xFP prices. The tooltips carry what each one is worth (2018-25, qualified seasons): its tie to the season's
     // points per target / opportunity and to points over expected, and how well it repeats year to year — separation is a steady trait
@@ -315,7 +331,7 @@
   const COLS = {
     WR: [["Basic", ["g", "tgt", "rec", "ryd", "rtd"]], ["Usage", ["rte", "tprr", "tgtsh", "aysh", "adot", "wopr", "awopr", "rzt"]], ["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "ypr", "croe", "yacoe", "nyoe"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "nfprr", "fpoeg", "tdoe"]]],
     RB: [["Basic", ["g", "car", "ruyd", "rutd", "tgt", "rec", "ryd"]], ["Usage", ["snp", "carsh", "tgtsh", "oppg", "glc", "rzc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Efficiency", ["ypc", "ryoe", "yprr", "syprr", "fppo", "expl", "ybca"]], ["EPA", ["tepa", "epatch", "epac"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]]],
-    QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
+    QB: [["Passing", ["g", "att", "cmpp", "pyd", "ptd", "int"]], ["Efficiency", ["epadb", "cpoe", "sackp", "adotp"]], ["Passing xFP", ["pxg", "xpa", "pfpg", "poeg", "ptdoe"]], ["Rushing", ["car", "ruyd", "rutd", "ruxg"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]],
   };
   COLS.TE = COLS.WR;
 
@@ -327,7 +343,8 @@
     const sorted = {}; for (const k in METRIC) sorted[k] = ref.map((p) => M(p)[k]).filter((v) => v != null && isFinite(v)).sort((a, b) => a - b);
     const sum = (f) => ref.reduce((s, p) => s + (f(p) || 0), 0);
     const L = { g: sum((p) => p.g), rts: sum((p) => p.rts), tgt: sum((p) => p.tgt), xr: sum((p) => p.xr), car: sum((p) => p.car), xu: sum((p) => p.xu),
-                fp: sum((p) => p.fp), pfp: sum((p) => posGroup(p.pos) === "QB" ? passFP(p) : 0), n: ref.length };
+                fp: sum((p) => p.fp), pfp: sum((p) => posGroup(p.pos) === "QB" ? passFP(p) : 0), pxp: sum((p) => posGroup(p.pos) === "QB" ? passX(p) : 0),
+                att: sum((p) => p.att), hasX: ref.some((p) => p.xp != null), n: ref.length };
     const r = { ref, sorted, L }; pools.set(key, r); return r;
   }
   function pctOf(y, pos, k, v) {
@@ -620,7 +637,7 @@
   const CORE = {
     WR: ["fpg", "nfpg", "nfprr", "g", "rte", "tprr", "tgtsh", "wopr", "awopr", "rzt", "wos", "yprr", "syprr"],
     RB: ["fpg", "nfpg", "g", "snp", "carsh", "tgtsh", "oppg", "wog", "wos", "hvtg", "gls", "rzs"],
-    QB: ["g", "att", "pyd", "ptd", "int", "epadb", "car", "ruxg", "xfpg"],
+    QB: ["g", "att", "pyd", "ptd", "int", "epadb", "pxg", "poeg", "car", "ruxg", "xfpg"],
   };
   CORE.TE = CORE.WR;
   if (!S.coreCols) { S.lbCols = {}; S.coreCols = 1; }   // once: a list saved before the core set moves to it
@@ -765,7 +782,7 @@
   const BARS = {
     WR: [[["Opportunity", ["rte", "tgtsh", "tprr", "aysh", "rzt"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "nfprr", "fpoeg", "tdoe"]], ["Profile", ["adot", "wopr", "awopr", "snp"]]], [["Weighted opportunity", ["wos", "rzs", "ezs"]], ["Efficiency", ["yprr", "syprr", "croe", "yacoe", "nyoe", "ypr"]]]],
     RB: [[["Opportunity", ["snp", "carsh", "tgtsh", "oppg", "glc"]], ["Weighted opportunity", ["wog", "wos", "hvtg", "hvtp", "rzs", "gls"]], ["Fantasy", ["xfpg", "fpg", "nfpg", "fpoeg", "tdoe"]]], [["Efficiency", ["ypc", "ryoe", "expl", "ybca", "fppo"]], ["EPA", ["tepa", "epatch", "epac"]], ["Receiving", ["tprr", "yprr", "syprr"]]]],
-    QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
+    QB: [[["Passing", ["epadb", "cpoe", "cmpp", "sackp"]], ["Fantasy", ["xfpg", "fpg", "fpoeg"]]], [["Passing xFP", ["pxg", "xpa", "poeg", "adotp"]], ["Rushing", ["carg", "ruxg", "ypc", "rutd"]], ["Volume", ["att", "pyd", "ptd"]]]],
   };
   BARS.TE = BARS.WR;
   const LABEL = { rte: "Route %", tgtsh: "Target share", tprr: "Targets / route", aysh: "Air-yard share", rzt: "Red-zone targets", xfpg: "xFP / game", fpg: "FP / game", fpoeg: "Points over exp. / G",
@@ -774,7 +791,8 @@
                   epadb: "EPA / dropback", cpoe: "CPOE", cmpp: "Completion %", sackp: "Sack %", carg: "Carries / game", ruxg: "Rush xFP / game", rutd: "Rush TD", att: "Attempts", pyd: "Pass yards", ptd: "Pass TD",
                   sep: "Separation", sepoe: "Separation over exp.", cont: "Contested target %", contoe: "Contested over exp.", cush: "Cushion", nyoe: "YAC over exp. (NGS)", brkr: "Broken tackles / catch", dropp: "Drop %", brka: "Broken tackles / carry", ybca: "Yds before contact", yaca: "Yds after contact", eff: "Efficiency (NGS)", tlos: "Time to the line",
                   elus: "Elusive rating", expl: "Explosive run %", bkwy: "Breakaway %", stuff: "Stuffed %",
-                  wog: "Weighted opp. / G", wos: "Weighted opp. share", hvtg: "High-value touches / G", hvtp: "High-value touch %", rzs: "Red-zone opp. share", gls: "Goal-line carry share", ezs: "End-zone target share" };
+                  wog: "Weighted opp. / G", wos: "Weighted opp. share", hvtg: "High-value touches / G", hvtp: "High-value touch %", rzs: "Red-zone opp. share", gls: "Goal-line carry share", ezs: "End-zone target share",
+                  pxg: "Pass xFP / game", xpa: "Pass xFP / attempt", poeg: "Pass points over exp. / G", adotp: "Depth of target", pfpg: "Pass FP / game", fppa: "Pass FP / attempt", ptdoe: "Pass TD over expected" };
   // what the skill stats are worth, under the bars (the study of 16 Oct 2026: every qualified season 2018-25 against this season's points
   // per target / opportunity, points over expected and next season's; year-to-year r in brackets)
   const SKILL_NOTE = {
@@ -951,7 +969,7 @@
     for (const k of keys) { const c = el("span", "pbsh" + (narrow.has(k) ? " pbx" : "") + (sep(k) ? " sep" : ""), k); head.append(c); }
     box.append(head);
     const lineOf = (r) => {
-      const g = Math.max(r.g || 0, 1), xfp = (r.xr || 0) + (r.xu || 0) + (QB ? passFP(r) : 0), fpg = (r.fp || 0) / g, xfpg = xfp / g;
+      const g = Math.max(r.g || 0, 1), xfp = (r.xr || 0) + (r.xu || 0) + (QB ? passX(r) : 0), fpg = (r.fp || 0) / g, xfpg = xfp / g;
       const v = { "FP/G": num(fpg), "xFP/G": num(xfpg), G: String(r.g || 0), "FPOE/G": sgn(fpg - xfpg), "Rush Yds": String(r.ruyd || 0), "Rush TD": String(r.rutd || 0) };
       if (QB) Object.assign(v, { Att: String(r.att || 0), "Cmp%": r.att ? pc(100 * (r.cmp || 0) / r.att) : "–", "Pass Yds": String(r.pyd || 0), TD: String(r.ptd || 0), INT: String(r.int_ || 0) });
       else Object.assign(v, { Tgt: String(r.tgt || 0), Rec: String(r.rec || 0), Yds: String(r.ryd || 0), TD: String(r.rtd || 0), Car: String(r.car || 0) });
@@ -1149,6 +1167,15 @@
       step("xFP / carry", num(xc, 2), num(Lxc, 2), c * xc + Lt * Lx, "Where his carries come: goal-line work prices highest", (q) => (q.car ? (q.xu || 0) / q.car : null));
       step("Targets / game", num(t), num(Lt), c * xc + t * Lx, "His role in the passing game", (q) => (q.tgt || 0) / G(q));
       step("xFP / target", num(x, 2), num(Lx, 2), c * xc + t * x, "What his targets are worth", (q) => (q.tgt ? (q.xr || 0) / q.tgt : null));
+    } else if (p.xp != null && L.hasX && L.att) {
+      // passing priced (6 Nov 2026): attempts a game and what they're worth, then the rushing — to his expected points; the passing
+      // touchdowns, interceptions and yards over expected follow the mark
+      const La = L.att / L.g, Lxa = L.pxp / L.att, Lc = L.car / L.g, Lxc = L.xu / L.car, a = (p.att || 0) / g, xa = p.att ? p.xp / p.att : 0, c = p.car / g, xc = p.car ? p.xu / p.car : 0;
+      run = La * Lxa + Lc * Lxc; rows.push({ lab: "League QB", his: "", lg: "", d: null, run });
+      step("Attempts / game", num(a), num(La), a * Lxa + Lc * Lxc, "How much he throws", (q) => (q.att || 0) / G(q));
+      step("xFP / attempt", num(xa, 2), num(Lxa, 2), a * xa + Lc * Lxc, "What his throws are worth before the result: deep, red-zone and end-zone throws price higher", (q) => (q.att && q.xp != null ? q.xp / q.att : null));
+      step("Carries / game", num(c), num(Lc), a * xa + c * Lxc, "Designed runs and scrambles", (q) => (q.car || 0) / G(q));
+      step("xFP / carry", num(xc, 2), num(Lxc, 2), a * xa + c * xc, "Where his carries come", (q) => (q.car ? (q.xu || 0) / q.car : null));
     } else {
       const Lp = L.pfp / L.g, Lc = L.car / L.g, Lxc = L.xu / L.car, pf = passFP(p) / g, c = p.car / g, xc = p.car ? p.xu / p.car : 0;
       run = Lp + Lc * Lxc; rows.push({ lab: "League QB", his: "", lg: "", d: null, run });
@@ -1159,8 +1186,14 @@
     const xfpg = run; rows[rows.length - 1].mark = true;
     const tdoOf = (q) => ((q.rtd || 0) + (q.rutd || 0)) - ((q.xtr || 0) + (q.xtu || 0)), playOf = (q) => ((q.frt || 0) + (q.fru || 0) - (q.xr || 0) - (q.xu || 0) - 6 * tdoOf(q)) / G(q);
     const tdo = tdoOf(p), tdPts = 6 * tdo / g, playPts = playOf(p);
-    step("Touchdowns over expected", sgn(tdo), "0.0", run + tdPts, `${(p.rtd || 0) + (p.rutd || 0)} touchdowns against ${num((p.xtr || 0) + (p.xtu || 0))} expected: the least repeatable part`, (q) => tdoOf(q) / G(q));
-    step("Catches and yards over expected", sgn(playPts), "0.0", run + playPts, "Catching more than expected and gaining more after the catch or per carry, in points a game: partly skill", playOf);
+    if (pos === "QB" && p.xp != null && L.hasX) {
+      const ptdo = (p.ptd || 0) - (p.xtp || 0), into = (p.int_ || 0) - (p.xip || 0), pyo = (passFP(p) - p.xp) / g - 4 * ptdo / g + 2 * into / g;
+      step("Passing TDs over expected", sgn(ptdo), "0.0", run + 4 * ptdo / g, `${p.ptd || 0} touchdown passes against ${num(p.xtp || 0)} expected`, (q) => (q.xtp != null ? ((q.ptd || 0) - q.xtp) / G(q) : null));
+      step("Interceptions vs expected", sgn(-into), "0.0", run - 2 * into / g, `${p.int_ || 0} interceptions against ${num(p.xip || 0)} expected; fewer is better`, (q) => (q.xip != null ? ((q.xip || 0) - (q.int_ || 0)) / G(q) : null));
+      step("Passing yards over expected", sgn(pyo), "0.0", run + pyo, "Completions and the yards his throws gained beyond what throws like them gain, in points a game: unlike a receiver's, this repeats (r .32)", (q) => (q.xp != null && q.att ? ((passFP(q) - q.xp) - 4 * ((q.ptd || 0) - (q.xtp || 0)) + 2 * ((q.int_ || 0) - (q.xip || 0))) / G(q) : null));
+    }
+    step(pos === "QB" ? "Rushing TDs over expected" : "Touchdowns over expected", sgn(tdo), "0.0", run + tdPts, `${(p.rtd || 0) + (p.rutd || 0)} touchdowns against ${num((p.xtr || 0) + (p.xtu || 0))} expected: the least repeatable part`, (q) => tdoOf(q) / G(q));
+    step(pos === "QB" ? "Rushing yards over expected" : "Catches and yards over expected", sgn(playPts), "0.0", run + playPts, "Catching more than expected and gaining more after the catch or per carry, in points a game: partly skill", playOf);
     step("Other", "", "", m.fpg, "Fumbles lost, two-point conversions, and for non-QBs any passing");
     const split = el("div", "stack"), left = card("Fantasy points build-up", "his usage priced play by play, then what he did with it", "kcard");
     const t = table([{ cols: [{ h: "Step", cls: "l fz" }], end: 1 }, { cols: [{ h: "His" }, { h: "Lg" }], end: 1 }, { cols: [{ h: "± FP/G" }, { h: "FP/G" }] }], { front: false });
@@ -1182,6 +1215,12 @@
     if (p.car) parts.push(["Rushing TD", num(p.xtu), String(p.rutd), 6 * ((p.rutd || 0) - (p.xtu || 0)) / g]);
     if (p.tgt) parts.push(["Catches + rec. yards", num((p.xr - 6 * (p.xtr || 0)) / g, 1) + "/G", num((p.frt - 6 * (p.rtd || 0)) / g, 1) + "/G", ((p.frt - 6 * (p.rtd || 0)) - (p.xr - 6 * (p.xtr || 0))) / g]);
     if (p.car) parts.push(["Rushing yards", num((p.xu - 6 * (p.xtu || 0)) / g, 1) + "/G", num((p.fru - 6 * (p.rutd || 0)) / g, 1) + "/G", ((p.fru - 6 * (p.rutd || 0)) - (p.xu - 6 * (p.xtu || 0))) / g]);
+    if (pos === "QB" && p.xp != null) {
+      const ptdo = (p.ptd || 0) - (p.xtp || 0), into = (p.int_ || 0) - (p.xip || 0);
+      parts.push(["Passing TD", num(p.xtp), String(p.ptd || 0), 4 * ptdo / g]);
+      parts.push(["Interceptions", num(p.xip), String(p.int_ || 0), -2 * into / g]);
+      parts.push(["Passing yards", num((p.xp - 4 * (p.xtp || 0) + 2 * (p.xip || 0)) / g, 1) + "/G", num((passFP(p) - 4 * (p.ptd || 0) + 2 * (p.int_ || 0)) / g, 1) + "/G", (passFP(p) - p.xp - 4 * ptdo + 2 * into) / g]);
+    }
     const other = m.fpg - (p.frt + p.fru) / g - (pos === "QB" ? passFP(p) / g : 0); if (Math.abs(other) >= 0.05) parts.push(["Fumbles, 2-pt, other", "", "", other]);
     const tot = parts.reduce((s, x) => s + Math.abs(x[3]), 0);
     for (const [lab, ex, ac, d] of parts.sort((a, b) => Math.abs(b[3]) - Math.abs(a[3]))) { const dc = paint(td(sgn(d)), 50 + 14 * d); t2.addRow([td(lab, "l fz"), td(ex), td(ac), dc, td(tot >= 0.1 ? Math.round(100 * Math.abs(d) / tot) + "%" : "–")]); }
@@ -1297,7 +1336,7 @@
     const hd = el("div", "sbhead"); hd.append(el("h3", "sbtitle", "Season by season")); sec.append(hd);
     // a column is a header and a cell function of the line (a season's, or the summed totals with _tot set); the totals' cells read the sums
     const S0 = (v) => String(Math.round(v || 0)), P = (a, b, d = 1) => (b ? pc(100 * (a || 0) / b, d) : "–"), R = (a, b, d = 1) => (b ? num((a || 0) / b, d) : "–"), G1 = (r) => Math.max(r.g || 0, 1);
-    const xfpOf = (r) => (r.xr || 0) + (r.xu || 0) + (QB ? passFP(r) : 0), rkHeat = (rk) => Math.min(99, Math.max(1, 100 - 100 * ((rk || 60) - 1) / 60));
+    const xfpOf = (r) => (r.xr || 0) + (r.xu || 0) + (QB ? passX(r) : 0), rkHeat = (rk) => Math.min(99, Math.max(1, 100 - 100 * ((rk || 60) - 1) / 60));
     const heatRk = (txt, rk, r) => { const c = td(txt); if (!r._tot) paint(c, rkHeat(rk)); return c; };
     const wo = (r) => (r.car || 0) + WO_K * (r.tgt || 0), tmwo = (r) => (r.tmc || 0) + WO_K * (r.tmt || 0), opp = (r) => (r.car || 0) + (r.tgt || 0);
     const base = { end: 1, cols: [{ h: "Season", cls: "fz", f: (r) => (r._tot ? `${ys.length} Yrs` : String(r.y)) }, { h: "Age", cls: "age", f: (r) => (r._tot || r.age == null ? "" : String(Math.floor(r.age))) },
@@ -1422,8 +1461,8 @@
   // ---------- Teams: expected and actual points by position ----------
   // every team's PPR points a game from its QBs, RBs, WRs and TEs, and what those players' targets and carries were worth (Sean, 13 Oct 2026:
   // "an xfp/g and points/g by team by position"), from the week rows so a traded player counts for the team he played for that week. A QB's
-  // xFP is his rushing xFP plus his actual passing points, as on the Leaders page (passing isn't priced): his week's points less his rushing and
-  // receiving points, plus his week's rushing xFP. Per game = over the team's games in the window.
+  // xFP is his passing xFP (the week row's `xp`, 6 Nov 2026) plus his rushing xFP; a file built before it has no `xp`, and there it's his
+  // actual passing points (his week's points less his rushing and receiving ones) plus his rushing xFP. Per game = over the team's games.
   const TPOS = ["QB", "RB", "WR", "TE"];
   async function teamsPage(main) {
     const y = SEASONS.includes(+S.tmSeason) ? +S.tmSeason : CUR, D = await ensure(y), F = D.meta.wfields, ix = (k) => F.indexOf(k);
@@ -1441,12 +1480,12 @@
       // a QB's passing points by week: his week's points less his rushing / receiving ones, scaled so the weeks add to his season's
       // passing points (the leftover is fumbles lost and two-point plays, which xFP leaves out)
       const own = (r) => (r[ix("ruyd")] || 0) / 10 + 6 * (r[ix("rutd")] || 0) + (r[ix("rec")] || 0) + (r[ix("ryd")] || 0) / 10 + 6 * (r[ix("rtd")] || 0);
-      let k = 0; if (g === "QB") { const raw = p.w.reduce((a, r) => a + Math.max(0, (r[ix("fp")] || 0) - own(r)), 0); k = raw > 0 ? passFP(p) / raw : 0; }
+      const xi = ix("xp"); let k = 0; if (g === "QB" && xi < 0) { const raw = p.w.reduce((a, r) => a + Math.max(0, (r[ix("fp")] || 0) - own(r)), 0); k = raw > 0 ? passFP(p) / raw : 0; }
       for (const r of p.w) {
         const tm = r[ix("tm")], wk = r[ix("wk")]; if (!tm) continue;
         const fp = r[ix("fp")] || 0, xr = r[ix("xfp")] || 0;
         const W = ((acc[tm] = acc[tm] || {})[wk] = acc[tm][wk] || {}), c = (W[g] = W[g] || [0, 0]);
-        c[0] += fp; c[1] += g === "QB" ? xr + k * Math.max(0, fp - own(r)) : xr;
+        c[0] += fp; c[1] += g === "QB" ? xr + (xi >= 0 ? r[xi] || 0 : k * Math.max(0, fp - own(r))) : xr;
       }
     }
     const rows = Object.keys(acc).sort().map((tm) => {
@@ -1463,7 +1502,7 @@
     const NAME = { QB: "Quarterbacks", RB: "Running backs", WR: "Receivers", TE: "Tight ends", ALL: "All four" };
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Tm", cls: "l fz2" }, { h: "G" }], end: 1 }];
     for (const g of TPOS.concat(["ALL"])) groups.push({ name: NAME[g], end: 1, cols: [
-      { h: "xFP/G", t: g === "QB" ? "Rushing xFP plus actual passing points, per team game" : "Expected PPR points per team game from their targets and carries", onSort: sb(g + ":xfp"), lit: sortK === g + ":xfp" },
+      { h: "xFP/G", t: g === "QB" ? (ix("xp") >= 0 ? "Passing and rushing xFP, per team game: every attempt and carry priced" : "Rushing xFP plus actual passing points, per team game") : "Expected PPR points per team game from their targets and carries", onSort: sb(g + ":xfp"), lit: sortK === g + ":xfp" },
       { h: "FP/G", t: "PPR points per team game", onSort: sb(g + ":fp"), lit: sortK === g + ":fp" },
       { h: "+/−", t: "FP/G − xFP/G", onSort: sb(g + ":d"), lit: sortK === g + ":d" }] });
     for (const r of rows) for (const g of TPOS.concat(["ALL"])) r[g].d = r[g].fp != null && r[g].xfp != null ? r[g].fp - r[g].xfp : null;
@@ -1922,7 +1961,7 @@
       `<b>Leaders</b> — WR / TE / RB / QB for any season since ${SEASONS[0]}: Basic, Usage, Weighted opportunity, Efficiency, Separation, Skills and Fantasy groups, the sorted column coloured by its percentile among the position's qualifiers (receivers and tight ends with 200 routes or 40 targets, backs with 90 carries + targets, quarterbacks with 200 dropbacks — scaled by weeks played in a season in progress), a Qualified avg row at the foot. Qualified only lists just them.`,
       `<b>A player's page</b> — the band with his bio and FP / G · xFP / G · FPOE / G, percentile bars by section against his position's qualifiers, the <b>xFP build-up</b> (the league's per-game expected points with his routes, targets per route, points per target and rushing swapped in one at a time, then touchdown luck and the rest to his real points), a game log, a Backfield tab for a back, and his season table with each year's head coach and coordinator.`,
       `<b>xFP</b> — expected PPR points: every target priced by its air yards, field position, down and distance, location and formation, every carry by field position, down, distance and gap, by what a play like it scores; fitted on every other season and anchored so each season's xFP sums to its real points. FPOE is points over expected, TDOE touchdowns over expected. Skills like separation, broken tackles and yards after contact are shown with how well they repeat and what they're worth, but stay out of xFP, which prices the opportunity.`,
-      `<b>Teams</b> — each offense's xFP / G, FP / G and +/− by position (QB, RB, WR, TE, and all four) for a season or its last 4 or 8 games, each cell coloured by its rank among the 32. A traded player counts for the team he played for that week; a QB's xFP is his rushing xFP plus his actual passing points.`,
+      `<b>Teams</b> — each offense's xFP / G, FP / G and +/− by position (QB, RB, WR, TE, and all four) for a season or its last 4 or 8 games, each cell coloured by its rank among the 32. A traded player counts for the team he played for that week; a QB's xFP is his passing and rushing xFP, every attempt and carry priced (a season built before 6 Nov 2026 used his actual passing points).`,
       `<b>Role Watch</b> — every back, receiver and tight end's share of his team's work in the games he played (a back's carries + targets, a receiver's targets) against what the drafts expected, after any week since 2017. <b>More work</b> marks a projected rest-of-season share 10+ points over the drafts' for a back, 4+ for a receiver — a weekly read, since most backfield turns are an injury or a benching ahead of him.`,
       `<b>Backfields</b> — every team's lead back's share of the carries, opportunities, snaps and goal-line carries in the games he played (so an injury doesn't read as a committee), the RB2, backs used, the backs' share of targets, and FP per opportunity for both — the RB2 in red when he out-produced the lead back per touch. A team opens its week-by-week split.`,
       `<b>Coaches</b> — every coach on an offensive staff since 2016, by how his teams split running back work in the seasons he was there: <b>Bell cow</b> when his lead backs averaged 68%+ of the RB carries in their games, <b>Committee</b> under 60%. Head coaches, coordinators or the whole staff; a coach's page lists every stint and season. Tested before building on it: what follows a coach to a new team is the RB share of targets — the lead back's share is the room, not the staff.`,
