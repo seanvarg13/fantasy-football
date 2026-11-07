@@ -93,6 +93,13 @@ jobs:
           season=$(python -c "import datetime as d; t=d.date.today(); print(t.year if t.month >= 8 else t.year - 1)")
           python tools/build_proj.py --data data --current $season || echo "::warning::Role Watch build failed; last build's files kept"
 
+      # the projection models (data/ros.js, tools/build_ros.py: every input, rest of season and next game); after Role Watch, which feeds it
+      - name: Projections
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          season=$(python -c "import datetime as d; t=d.date.today(); print(t.year if t.month >= 8 else t.year - 1)")
+          python tools/build_ros.py --cache .cache/fb --data data --current $season || echo "::warning::Projection models failed; last build's file kept"
+
       - name: Publish
         if: (steps.gate.outputs.go == 'true' || steps.gate.outputs.adp == 'true') && inputs.dry != true
         run: |

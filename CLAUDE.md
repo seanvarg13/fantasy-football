@@ -898,3 +898,30 @@ else FTN's `n_defense_box` — as the situation; season only), Line yds, Stuff%.
   QB's second-half sack rate .486 → .487, EPA / dropback .481 → .495. The line ratings are descriptive.
 * Not built: individual linemen (participation lists who was on the field, so an on / off plus-minus is possible for 2016-25, but this season's
   participation isn't published until it ends), and pressure / time to throw for the season in progress (participation again).
+
+## The projection models (Sean, 7 Nov 2026: "My goal is basically to be able to get some sort of model that projects players as accurate as possible, can you do so for each position using literally every input that is possible")
+
+`tools/build_ros.py` → **`data/ros.js`** (`window.FB_ROS = {meta: {season, through, built, features, mae}, p: {id: {ros, nxt, G, fpg, xfpg, left, nxw,
+nxi, nxf}}}`), run by the update workflow's **Projections** step after Role Watch (non-fatal; ~10 minutes, most of it the history's snapshots).
+The Projections page reads it: **Proj** under Rest of season is the model's (the page's old five-input linear fit, `rosOf` / `ROS_B`, stands in for
+a player the file lacks, and its inputs still fill the To date / Inputs columns), and a **Next game** column is the model's next-game points.
+* **Rows**: a snapshot of every player after every week K of every season 2016-25 (74,146), features from weeks ≤ K only; games = weeks with
+  5%+ of the snaps. Targets: his FP / G over the rest of the season (3+ games) and his next game's points (when he played his team's next game).
+* **Inputs (104)**: FP, xFP and FP − xFP a game to date, over the last three and last game; snap %, targets / carries / weighted opportunities a game,
+  target, carry, air-yard, opportunity, weighted-opportunity, red-zone, goal-line and end-zone shares, targets per estimated route (snap share ×
+  team dropbacks, the same every season — this season has no real routes yet), each to date and over the last three (a few for the last game);
+  aDOT, yards per target and carry, catch rate and YAC over expected, EPA per target / carry, TD rate, 10+ yard and stuffed runs, deep / end-zone /
+  goal-line / inside-10 looks a game, FP and xFP per opportunity; a QB's attempts, EPA / dropback, CPOE, sack rate, YPA, TD and INT rates, air yards
+  per attempt, scrambles; games missed; his last two seasons (games, FP / G, xFP / G, snap %, target and carry share, QB EPA); age, draft pick and
+  round, years in the league, height, weight; his team's average implied total, plays, dropbacks, neutral pass rate, points, EPA / play and its QB's
+  EPA / dropback; the next game's implied total, home / away and the opponent's matchup factor, the remaining schedule's factor and implied total,
+  games left; Role Watch's preseason points and share and its current projections (not for QBs); the week.
+* **The model**: per position and target, the average of a ridge (medians filled in, a missing flag per input, standardised; α 1000 rest of season,
+  300 next game) and a gradient-boosted tree model held tight (8 leaves, 600 rows a leaf, half the inputs per split, 300 rounds at 0.03). A loose
+  boosted model on all 104 inputs did *worse* than the old linear fit (WR 3.11 vs 3.03): each player-season is ~17 near-identical snapshots, which a
+  free model memorises.
+* **Backtest** (`--study`, every season held out of its own fit; mean miss QB / RB / WR / TE): rest of season **3.05 / 3.02 / 2.93 / 2.39** (r .60 /
+  .73 / .73 / .70) against 3.25 / 3.24 / 3.03 / 2.43 for the old linear fit and 3.99 / 3.58 / 3.34 / 2.70 for FP / G to date; next game **5.97 /
+  5.26 / 5.28 / 4.42** (r .44 / .56 / .52 / .49) against 6.19 / 5.43 / 5.39 / 4.51 and 6.46 / 5.58 / 5.57 / 4.67. A single game is mostly noise —
+  the best model explains about a quarter of it.
+* `--snap FILE` pickles the snapshots and `--study --from-snap FILE` reruns the backtest from them in ~2 minutes.

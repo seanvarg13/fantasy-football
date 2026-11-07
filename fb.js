@@ -1839,14 +1839,18 @@
   }
   async function projPage(main) {
     const y = CUR, pos = ["QB", "RB", "WR", "TE"].includes(S.prPos) ? S.prPos : "WR";
-    const [D] = await Promise.all([ensure(y), ensure(y - 1).catch(() => null), loadScript("data/env.js").catch(() => {})]);
+    const [D] = await Promise.all([ensure(y), ensure(y - 1).catch(() => null), loadScript("data/env.js").catch(() => {}), loadScript("data/ros.js").catch(() => {})]);
+    // the projection models (7 Nov 2026; tools/build_ros.py → data/ros.js): every input, a ridge + boosted blend per position, rest of season
+    // and next game; this page's own linear fit stands in for a player the file doesn't have (or a site without the file)
+    const RS = window.FB_ROS && window.FB_ROS.meta.season === y ? window.FB_ROS : null;
     main.textContent = "";
     POP.spec = { page: "proj", tabs: [["position", "Position"], TABLE_TAB], keys: ["prPos"], draw: (tab, h) => {
       const s = h.sec("Position"); s.append(h.seg(["QB", "RB", "WR", "TE"].map((x) => [x, x]), pos, (x) => { S.prPos = x; save(); route(); }));
       h.note(s, "Everyone with 3+ games (5%+ of the snaps) and 4+ FP / G. Tight ends and receivers are their own fits; fullbacks count as backs.");
     } };
     let rows = D.players.filter((p) => posGroup(p.pos) === pos).map((p) => ({ p, r: rosOf(p, y) })).filter((x) => x.r && x.r.fpg >= 4);
-    const K = { proj: (x) => x.r.proj, tot: (x) => x.r.tot, fpg: (x) => x.r.fpg, xg: (x) => x.r.xg, f3: (x) => x.r.f3, ppg: (x) => x.r.ppg, imp: (x) => x.r.imp, sos: (x) => x.r.sos, left: (x) => x.r.left, d: (x) => x.r.proj - x.r.fpg };
+    for (const x of rows) { const m = RS && RS.p[x.p.id]; x.r.model = !!(m && m.ros != null); if (x.r.model) { x.r.proj = m.ros; x.r.tot = m.ros * x.r.left; } x.r.nxt = m && m.nxt != null ? m.nxt : null; x.r.nxw = m ? m.nxw : null; }
+    const K = { proj: (x) => x.r.proj, nxt: (x) => x.r.nxt, tot: (x) => x.r.tot, fpg: (x) => x.r.fpg, xg: (x) => x.r.xg, f3: (x) => x.r.f3, ppg: (x) => x.r.ppg, imp: (x) => x.r.imp, sos: (x) => x.r.sos, left: (x) => x.r.left, d: (x) => x.r.proj - x.r.fpg };
     const sortK = K[S.prSort] ? S.prSort : "proj", dir = S.prDir || -1;
     rows.sort((a, b) => { const va = K[sortK](a), vb = K[sortK](b); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
     const sb = (k) => () => { if (S.prSort === k) S.prDir = -(S.prDir || -1); else { S.prSort = k; S.prDir = -1; } save(); route(); };
@@ -1854,19 +1858,20 @@
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }, { h: "G", t: "Games he played 5%+ of the snaps" }], end: 1 },
       { name: "To date", end: 1, cols: [col("FP/G", "fpg", "PPR points a game"), col("xFP/G", "xg", "Expected points a game"), col("Last 3", "f3", "PPR points a game over his last three")] },
       { name: "Inputs", end: 1, cols: [col(`${y - 1}`, "ppg", `His ${y - 1} FP / G (4+ games)`), col("Implied", "imp", "His team's average Vegas implied total in his games"), col("SOS", "sos", "His remaining opponents' matchup factor at his position (Schedule page): +% = softer")] },
+      { name: "Next game", end: 1, cols: [col("Proj", "nxt", "Projected PPR points in his team's next game, if he plays (the model's)")] },
       { name: "Rest of season", end: 1, cols: [col("Proj", "proj", "Projected PPR points a game for the rest of the season"), col("Δ", "d", "Projected less his FP / G to date"), col("Left", "left", "His team's games left"), col("Total", "tot", "Projected points a game × games left (no injuries assumed)")] }];
-    const board = listFrame(main, { page: "proj", title: "Projections", sub: `${POS_WORD[pos]}s · rest of season · by ${{ proj: "Proj", tot: "Total", fpg: "FP/G", xg: "xFP/G", f3: "Last 3", ppg: String(y - 1), imp: "Implied", sos: "SOS", left: "Left", d: "Δ" }[sortK]}`,
+    const board = listFrame(main, { page: "proj", title: "Projections", sub: `${POS_WORD[pos]}s · rest of season · by ${{ proj: "Proj", nxt: "next game", tot: "Total", fpg: "FP/G", xg: "xFP/G", f3: "Last 3", ppg: String(y - 1), imp: "Implied", sos: "SOS", left: "Left", d: "Δ" }[sortK]}`,
       ctl: [filtersBtn(`${POS_WORD[pos]} filters`, 0), count(`${rows.length} ${pos}s · ${y} · through week ${D.meta.through}`, `${rows.length} ${pos}s`)],
-      about: `Each player's projected PPR points a game for the rest of the season, from his points and expected points so far and over his last three games, his ${y - 1} points a game, his team's Vegas implied total and his remaining schedule — weighted by a fit on every 2016-25 player at weeks 4-14, each season held out of its own fit (24,179 player-windows). It misses what a player actually scores the rest of the way by 2.5-3.3 points a game on average (QB 3.15, RB 3.26, WR 3.09, TE 2.52), 7-14% less than his FP / G to date does (QB 3.66, RB 3.54, WR 3.32, TE 2.77). The gain is expected points and last season; the implied total and the schedule added nothing measurable in the test, so they barely move it. Total assumes he plays every game left. Coloured among the rows; the sorted column is bold.` });
+      about: RS ? `Projected PPR points for his next game and a game for the rest of the season, from the projection models: every input the site has, after week ${RS.meta.through} — his points and expected points to date, over his last three and in his last game; every usage share (snaps, targets per route, target and air-yard share, carry and opportunity share, weighted opportunity, red-zone, goal-line, end-zone and deep looks); efficiency (catch rate and YAC over expected, yards per target and carry, EPA, TD rate, explosive and stuffed runs); a QB's passing (attempts, EPA, CPOE, sacks, aDOT, scrambles); his last two seasons; age, draft pick, years in the league, size; games missed; his team (Vegas implied totals, plays, neutral pass rate, points, EPA, its QB's EPA); his schedule (next game's implied total, home or away, the next and remaining opponents' matchups); and Role Watch's preseason and current lines — ${RS.meta.features} in all, a ridge model and a regularised boosted-tree model averaged, one pair a position. Tested on 2016-25 with every season held out of its own fit, the mean miss on the rest of the season (QB / RB / WR / TE): ${RS.meta.mae ? RS.meta.mae.ros.join(" / ") : ""}, against ${RS.meta.mae ? RS.meta.mae.lin.join(" / ") : ""} for the old five-input fit and ${RS.meta.mae ? RS.meta.mae.fpg.join(" / ") : ""} for his FP / G to date; on the next game ${RS.meta.mae ? RS.meta.mae.nxt.join(" / ") : ""} (one game is mostly noise: the best model explains a quarter of it). Inputs shows the old fit's few; Total = rest-of-season projection × games left, no injuries assumed.` : `Each player's projected PPR points a game for the rest of the season, from his points and expected points so far and over his last three games, his ${y - 1} points a game, his team's Vegas implied total and his remaining schedule — weighted by a fit on every 2016-25 player at weeks 4-14, each season held out of its own fit (24,179 player-windows). It misses what a player actually scores the rest of the way by 2.5-3.3 points a game on average (QB 3.15, RB 3.26, WR 3.09, TE 2.52), 7-14% less than his FP / G to date does (QB 3.66, RB 3.54, WR 3.32, TE 2.77). The gain is expected points and last season; the implied total and the schedule added nothing measurable in the test, so they barely move it. Total assumes he plays every game left. Coloured among the rows; the sorted column is bold.` });
     const t = table(groups), box = boxOf(t, ["pr", y, pos, sortK, dir].join(":"));
     const rk = {}; for (const k of Object.keys(K)) rk[k] = ranker(rows.map(K[k]));
     rows.forEach((x, i) => {
       const r = x.r, nm = td(null, "l fz2"); nm.append(playerLink(x.p.n, x.p.id));
-      const v = { fpg: num(r.fpg), xg: num(r.xg), f3: num(r.f3), ppg: r.ppg == null ? "–" : num(r.ppg), imp: num(r.imp), sos: sgn(100 * (r.sos - 1)) + "%", proj: num(r.proj), d: sgn(r.proj - r.fpg), left: String(r.left), tot: num(r.tot, 0) };
+      const v = { nxt: r.nxt == null ? "–" : num(r.nxt), fpg: num(r.fpg), xg: num(r.xg), f3: num(r.f3), ppg: r.ppg == null ? "–" : num(r.ppg), imp: num(r.imp), sos: sgn(100 * (r.sos - 1)) + "%", proj: num(r.proj), d: sgn(r.proj - r.fpg), left: String(r.left), tot: num(r.tot, 0) };
       const cells = [td(String(i + 1), "fz rk"), nm, td(r.tm || ""), td(String(r.g))];
-      for (const k of ["fpg", "xg", "f3", "ppg", "imp", "sos", "proj", "d", "left", "tot"]) {
+      for (const k of ["fpg", "xg", "f3", "ppg", "imp", "sos", "nxt", "proj", "d", "left", "tot"]) {
         const c = td(v[k]), val = K[k](x);
-        if (val != null && (k === sortK || k === "proj" || k === "d")) { paint(c, k === "d" ? 50 + 50 * Math.max(-1, Math.min(1, val / 4)) : rk[k](val)); if (k !== sortK) c.classList.remove("heat"); }
+        if (val != null && (k === sortK || k === "proj" || k === "nxt" || k === "d")) { paint(c, k === "d" ? 50 + 50 * Math.max(-1, Math.min(1, val / 4)) : rk[k](val)); if (k !== sortK) c.classList.remove("heat"); }
         cells.push(c);
       }
       rowPop(t.addRow(cells), x.p.id);
