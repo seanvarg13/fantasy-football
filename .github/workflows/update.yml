@@ -100,6 +100,13 @@ jobs:
           season=$(python -c "import datetime as d; t=d.date.today(); print(t.year if t.month >= 8 else t.year - 1)")
           python tools/build_ros.py --cache .cache/fb --data data --current $season || echo "::warning::Projection models failed; last build's file kept"
 
+      # the preseason models (data/pre.js, tools/build_pre.py: every season 2017-on as seen at kickoff, held out, and this one)
+      - name: Preseason
+        if: steps.gate.outputs.go == 'true'
+        run: |
+          season=$(python -c "import datetime as d; t=d.date.today(); print(t.year if t.month >= 8 else t.year - 1)")
+          python tools/build_pre.py --cache .cache/fb --data data --current $season || echo "::warning::Preseason models failed; last build's file kept"
+
       - name: Publish
         if: (steps.gate.outputs.go == 'true' || steps.gate.outputs.adp == 'true') && inputs.dry != true
         run: |
