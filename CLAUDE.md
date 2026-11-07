@@ -925,3 +925,42 @@ a player the file lacks, and its inputs still fill the To date / Inputs columns)
   5.26 / 5.28 / 4.42** (r .44 / .56 / .52 / .49) against 6.19 / 5.43 / 5.39 / 4.51 and 6.46 / 5.58 / 5.57 / 4.67. A single game is mostly noise —
   the best model explains about a quarter of it.
 * `--snap FILE` pickles the snapshots and `--study --from-snap FILE` reruns the backtest from them in ~2 minutes.
+
+## Preseason projections (Sean, 7 Nov 2026: "models that pre season project points using literally every single possible input available ... could've predicted Jaylen Warren, Ashton Jeanty, Chuba Hubbard, Bucky Irving, cmc, Omarion Hampton being bad ... the individuals own skill/talent, their coaching staffs ability to generate production as well as their playcalling history and preferences, their teams qb and his skill, their o line")
+
+`tools/build_pre.py` → **`data/pre.js`** (`window.FB_PRE = {meta: {seasons, current, inputs, mae}, s: {season: {id: {p, pm, mk, adp, act, g, tm, age, p1, why}}}}`),
+the update workflow's **Preseason** step (non-fatal, ~4 minutes), and the **Preseason** page (`#preseason`, `preseasonPage()`, in the header after
+Projections; Filters ▸ Position / Season). A row per player-season (his team = his first game row's; the target his FP / G in games with 5%+ snaps,
+4+ needed); who's projected (`eligible`): a Week 1 starting QB, anyone with an ADP or a Role Watch line, 6+ FP / G last season, or a round 1-3 rookie.
+* **Inputs (165)**: his last season line by line as rates (`season_feats`: FP / xFP / FPOE a game, snap %, target / carry / air-yard / opportunity /
+  red-zone / goal-line / end-zone share, route %, TPRR, YPRR, aDOT, yards per target / catch / carry, catch rate and YAC over expected, NGS rush yards
+  over expected, TD luck, EPA per target / carry, explosive / stuffed runs, broken tackles, yards before / after contact, drops, separation, separation
+  over expected, NGS YAC+, efficiency, 8+ boxes, high-value touches, a QB's dropbacks, attempts, EPA, CPOE, sack rate, YPA, TD / INT rates, passing xFP
+  and passing over expected, scrambles); the season before a subset (`P2KEYS`); his career (seasons, FP / G, best season); age, draft pick and round,
+  years in the league, rookie, height, weight, the combine (40, vertical, broad, cone, shuttle, bench, speed score; nflverse `combine.parquet` by PFR id)
+  and a new-team flag; his team the year before (`team_tables`: plays, neutral pass rate, PROE, points, EPA, sack and hit rate, line yards, adjusted line
+  yards, the line's sacks, Vegas totals, red-zone trips, lead-back share, backs used, RB target / carry share, its production and xFP at his position);
+  the Week 1 Vegas total; his team's Week 1 QB (the games list's `home_qb_id` / `away_qb_id`: last season's EPA / dropback, CPOE, FP / G, passing xFP
+  and over expected, sack rate, YPA, volume, scrambles, draft pick, rookie, new to the team; whether he is that QB); the play-caller's and head
+  coach's history before the season (`coach_hist`: their teams' average production by position, xFP at RB / WR / TE, pace, pass rate, PROE, points,
+  EPA, lead-back share, backs used, RB target share, seasons) and whether either is new; the depth chart at kickoff (teammates in his group who played
+  by week 2: their opportunities the year before, his share of the room's, the best teammate's FP / G, the best teammate's draft pick, round 1-3
+  rookies added, and the group's opportunities that left); the market (ADP, Role Watch's ADP line, and Role Watch's preseason model, which has ADP in it).
+* **The model**: the in-season `Blend` (ridge + regularised trees) at preseason scale — ridge α 300, 60 rows a leaf (the sample is ~1,000
+  player-seasons a position; the in-season settings, 600 a leaf, squashed every projection toward the middle: predictions' sd 1.5 against 5.2).
+  **Model** (`p`) uses no market input; **+ ADP** (`pm`) adds ADP and Role Watch's lines where the season has them (2026 has no saved ADP).
+* **Backtest** (`--study`; every eligible player-season 2017-25 with 4+ games, each season held out of its own fit; mean miss in FP / G, QB / RB /
+  WR / TE): model **3.14 / 2.67 / 2.52 / 1.82** (r .65 / .78 / .78 / .78); with the market **3.14 / 2.54 / 2.44 / 1.76**; the market alone (Role
+  Watch's fit on ADP) — / 2.76 / 2.71 / 2.23; last season's FP / G 3.93 / 3.02 / 2.84 / 1.98. The model with no market input beats the market at
+  every position, and the two together are best.
+* **Why** (`why()`): each group of inputs — his last two seasons, his career, age / draft / athleticism, his team's offense and line, his QB, his
+  play-caller and head coach, the depth chart — set to the training medians and the whole model run again; the difference is the group's push. The
+  page shows the three biggest; the tooltip all seven. Across the board the coaching, QB and line groups push least (±0.5 a game) — the same finding
+  as the staff study of 13 Oct — and his own last two seasons, draft capital and the depth chart most.
+* **Sean's cases**: Jeanty 2025 model 11.5 (+ ADP 14.5) against the market's 16.7, scored 14.4; Hubbard 2024 9.6 against 8.1, scored 16.1 (the
+  breakout a backup's injury and a role won in camp made, which nothing at kickoff shows); Irving 2024 5.4 against 6.4, scored 14.4; Warren 2025 7.8
+  (+ ADP 10.0) against 9.8, scored 13.6; CMC 2025 14.3 (+ ADP 17.2) against 17.8, scored 24.4 — the model leaned on his injured 2024; Hampton 2026
+  15.7, 8.9 through week 9. The model beats the market on average; the big breakouts and busts are mostly injuries and camp battles it can't see.
+* Not in it: college production (no free source reachable from the build — cfbfastR's data repos aren't open to this session), preseason injury
+  news, and camp depth charts. Next season (2027) needs its rosters: until its games start the page shows the latest season it has.
+* `--snap FILE` pickles the rows and `--from-snap FILE` reuses them (the study in ~1 minute, the file in ~3).

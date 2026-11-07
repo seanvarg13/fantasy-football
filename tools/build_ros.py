@@ -240,8 +240,8 @@ class Blend:
     """the average of a ridge on every input (medians filled in, a flag for each missing input, standardised) and a heavily regularised
     gradient-boosted tree model. Each player-season gives ~17 near-identical snapshots, so an unregularised boosted model on 100+ inputs
     overfits and did worse than the old five-input linear fit; these two together beat it at every position (study())"""
-    def __init__(self, alpha):
-        self.alpha = alpha
+    def __init__(self, alpha, leaf=600, leaves=8, iters=300):
+        self.alpha, self.leaf, self.leaves, self.iters = alpha, leaf, leaves, iters
 
     def _prep(self, X):
         Z = X.fillna(self.med)
@@ -251,16 +251,17 @@ class Blend:
     def fit(self, X, y):
         from sklearn.ensemble import HistGradientBoostingRegressor
         from sklearn.linear_model import Ridge
-        self.med = X.median(); self.flags = [c for c in X.columns if 0 < X[c].isna().mean() < 1]
+        self.med = X.median().fillna(0); self.flags = [c for c in X.columns if 0 < X[c].isna().mean() < 1]
         Z = pd.concat([X.fillna(self.med), X[self.flags].isna().astype(float).add_suffix("_na")], axis=1)
         self.mu = Z.mean(); self.sd = Z.std().replace(0, 1)
         self.r = Ridge(alpha=self.alpha).fit((Z - self.mu) / self.sd, y)
-        self.h = HistGradientBoostingRegressor(max_iter=300, learning_rate=0.03, max_leaf_nodes=8, min_samples_leaf=600, l2_regularization=5,
-                                               max_features=0.5, random_state=7).fit(X, y)
+        self.hc = [c for c in X.columns if X[c].notna().any()]   # a column empty in this fold (a field a season lacked) is left out of the trees
+        self.h = HistGradientBoostingRegressor(max_iter=self.iters, learning_rate=0.03, max_leaf_nodes=self.leaves, min_samples_leaf=self.leaf, l2_regularization=5,
+                                               max_features=0.5, random_state=7).fit(X[self.hc], y)
         return self
 
     def predict(self, X):
-        return (self.r.predict(self._prep(X)) + self.h.predict(X)) / 2
+        return (self.r.predict(self._prep(X)) + self.h.predict(X[self.hc])) / 2
 
 
 ALPHA = {"t_ros": 1000, "t_nxt": 300}
