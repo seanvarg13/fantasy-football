@@ -50,7 +50,11 @@ def season_feats(p, D):
              epadb=sd(p.get("epa"), p.get("db")) if p.get("epa") is not None else np.nan, cpoe=p.get("cpoe"), skr=sd(p.get("sk") or 0, p.get("db")),
              ypa=sd(p.get("pyd") or 0, p.get("att")), tdp=sd(p.get("ptd") or 0, p.get("att")), intp=sd(p.get("int_") or 0, p.get("att")),
              pxg=(p.get("xp") or 0) / g if p.get("xp") is not None else np.nan, poeg=((p.get("pyd") or 0) / 25 + 4 * (p.get("ptd") or 0) - 2 * (p.get("int_") or 0) - (p.get("xp") or 0)) / g if p.get("xp") is not None else np.nan,
-             scr=(p.get("scr") or 0) / g)
+             scr=(p.get("scr") or 0) / g,
+             # how open he got (12 Nov 2026): FTN's contested targets against what his depths draw (2022 on), his catchable targets, NGS cushion
+             cont=sd(p.get("cnt"), p.get("ftgt")) if p.get("cnt") is not None else np.nan, contoe=sd((p.get("cnt") or 0) - (p.get("xcnt") or 0), p.get("ftgt")) if p.get("cnt") is not None else np.nan,
+             catr=sd(p.get("fcat"), p.get("ftgt")) if p.get("fcat") is not None else np.nan, catg=(p.get("fcat") or 0) / g if p.get("fcat") is not None else np.nan,
+             vcatg=(p.get("vcat") or 0) / g if p.get("vcat") is not None else np.nan, cush=p.get("cush"))
     return f
 
 
@@ -78,6 +82,15 @@ def load(data, cache, seasons):
         g = pfr2g.get(r.pfr_id)
         if isinstance(g, str):
             C[g] = dict(forty=r.forty, vert=r.vertical, broad=r.broad_jump, cone=r.cone, shuttle=r.shuttle, bench=r.bench)
+    try:   # college production and the athletic score (college.py); a failed download leaves them out, the models still run
+        from college import college_feats, ras_table
+        CF = college_feats(cache, fetch, pl, I); RS = ras_table(comb, pl)
+    except Exception as e:
+        print(f"  college / athletic score skipped: {e}", flush=True); CF, RS = {}, {}
+    for g, v in RS.items():
+        C.setdefault(g, {}).update(v)
+    for g, v in CF.items():
+        C.setdefault(g, {}).update(v)
     return S, I, T, E, RW, games, C
 
 
@@ -177,6 +190,9 @@ def build_rows(S, I, T, E, RW, games, C, seasons, current):
             for k in ("forty", "vert", "broad", "cone", "shuttle", "bench"):
                 f[k] = cb.get(k)
             f["speed"] = (f["wt"] * 200 / cb["forty"] ** 4) if cb.get("forty") and f["wt"] else np.nan
+            for k, v in cb.items():   # the athletic score (ras_*) and college production (col_*)
+                if k.startswith(("ras", "col_")):
+                    f[k] = v
             # his last two seasons, and his career before this one
             for i, nm in ((1, "p1_"), (2, "p2_")):
                 q = line.get((y - i, pid))
@@ -184,6 +200,17 @@ def build_rows(S, I, T, E, RW, games, C, seasons, current):
                 for k, v in sf.items():
                     if i == 1 or k in P2KEYS:
                         f[nm + k] = v
+            # his role at the end of last season (12 Nov 2026): the last six weeks he played, since a role won in November carries into September
+            q1 = line.get((y - 1, pid))
+            if q1:
+                wq = {k: i for i, k in enumerate(S[y - 1]["meta"]["wfields"])}
+                lw = [r for r in q1["w"] if (r[wq["snp"]] or 0) >= 5][-6:]
+                if len(lw) >= 3:
+                    n6 = len(lw); xq = lambda r: (r[wq["xfp"]] or 0) + ((r[wq["xp"]] or 0) if "xp" in wq and g == "QB" else 0)
+                    f["l6_fpg"] = sum(r[wq["fp"]] or 0 for r in lw) / n6; f["l6_xfpg"] = sum(xq(r) for r in lw) / n6
+                    f["l6_snp"] = float(np.mean([r[wq["snp"]] or 0 for r in lw])); f["l6_opp"] = sum((r[wq["tgt"]] or 0) + (r[wq["car"]] or 0) for r in lw) / n6
+                    f["l6_tgt"] = sum(r[wq["tgt"]] or 0 for r in lw) / n6; f["l6_rts"] = sum(r[wq["rts"]] or 0 for r in lw) / n6
+                f["p1_gmiss"] = (17 if y - 1 >= 2021 else 16) - len([r for r in q1["w"] if (r[wq["snp"]] or 0) >= 5])
             car = [line[(s, pid)] for s in range(2016, y) if (s, pid) in line]
             f["c_n"] = len(car); f["c_fpg"] = sd(sum(q["fp"] for q in car), sum(q["g"] for q in car)) if car else np.nan
             f["c_best"] = max((q["fp"] / max(q["g"], 1) for q in car if q["g"] >= 6), default=np.nan)
@@ -235,12 +262,64 @@ def build_rows(S, I, T, E, RW, games, C, seasons, current):
 
 DROP = {"y", "id", "g", "tm", "t_fpg", "t_g", "t_fp"}
 MARKET = {"adp", "mkp", "rw_pre", "rw_prep"}   # Role Watch's preseason lines carry ADP in them, so they count as the market
-ALPHA = 300   # the sample is ~1,000 player-seasons a position, so lighter than the in-season blend: ridge 300, 60 rows a leaf (tested 10-300 / 20-60)
+# the models (12 Nov 2026; Sean: "test the models on the past 5 years, and make it so each model (the models can be different for each
+# different position), are set out to predict each players scoring based on any possible variables ... i want the model to be as good at
+# projection points per game as possible"). Tested forward — every 2021-25 season scored by models fitted only on the seasons before it
+# (scratch fbm/: harness, nested group selection, exp1-6):
+#  * QB: its own blend (ridge α 1000 at half, trees 30 rows a leaf, inputs held to their 1st-99th percentile), without the head coach's history,
+#    the combine / athletic score and the late-season inputs — the nested selection (each season choosing its inputs from the seasons before
+#    it) dropped those in most seasons, and leaving them out took the miss from 3.26 to 3.17.
+#  * RB, WR, TE: one boosted-tree model fitted on all three together with a flag for each position (three times the rows; the trees split
+#    on the flag where a position needs its own rules), 80%, and each position's own ridge, 20%. Pooled, every position gained (RB 2.58 →
+#    2.52, WR 2.54 → 2.50, TE 1.80 → 1.72); each position alone, or a rookie / veteran split, or seed-averaged trees, did not.
+#  * Per group, what the inputs added in that final model (leaving the group out): college production RB +0.02, TE +0.03 (rookie TEs +0.14),
+#    WR −0.03 (masking it for WRs alone cost the others more than it gained); the athletic score and combine ±0.01; FTN's contested / catchable
+#    targets and NGS separation and cushion ±0.01; coaching, the line ±0.01; last season's final six weeks +0.01-0.02.
+QB_OUT = ("hc_", "ras", "l6_")
+QB_OUT_K = {"p1_gmiss", "ht", "wt", "forty", "vert", "broad", "cone", "shuttle", "bench", "speed"}
+POOL = ("RB", "WR", "TE")
+FWD_FROM = 2020   # from here a past season is scored by models fitted only on the seasons before it; 2017-19 (too few before) by every other season
 
 
-def fit_pred(q, cols, tr, te, tgt):
-    m = Blend(ALPHA, leaf=60).fit(q.loc[tr, cols], q.loc[tr, tgt])
-    return m.predict(q.loc[te, cols]), m
+def incols(q, g, market):
+    cs = [c for c in q.columns if c not in DROP and (market or c not in MARKET) and q[c].notna().any() and not c.startswith("is_")]
+    return [c for c in cs if not (c.startswith(QB_OUT) or c in QB_OUT_K)] if g == "QB" else cs
+
+
+class Pre:
+    """one fit of the four preseason models (see above)"""
+    def fit(self, q, tr, market=False):
+        tr = np.asarray(tr); self.cols, self.med, self.m = {}, {}, {}
+        for g in GROUPS:
+            w = tr & (q.g == g).to_numpy()
+            self.cols[g] = incols(q[w], g, market); self.med[g] = q.loc[w, self.cols[g]].median()
+            if g == "QB":
+                self.m[g] = Blend(1000, leaf=30, w=0.5, clip=True).fit(q.loc[w, self.cols[g]], q.loc[w, "t_fpg"])
+            else:
+                self.m[g] = Blend(1000, w=1, clip=True).fit(q.loc[w, self.cols[g]], q.loc[w, "t_fpg"])
+        w = tr & q.g.isin(POOL).to_numpy()
+        self.pc = sorted(set().union(*(self.cols[g] for g in POOL)), key=list(q.columns).index) + [f"is_{g}" for g in POOL]
+        self.pool = Blend(0, leaf=40, leaves=12, iters=500, w=0, clip=True).fit(self._flag(q.loc[w]), q.loc[w, "t_fpg"])
+        return self
+
+    def _flag(self, X, g=None):
+        # the pooled model's inputs: every column any of the three uses (a column another position lacks is missing, as the trees allow), and his flag
+        Z = X.reindex(columns=self.pc).copy()
+        for p in POOL:
+            Z[f"is_{p}"] = (X.g == p).astype(float).to_numpy() if g is None else float(g == p)
+        return Z
+
+    def predict(self, X, g):
+        if g == "QB":
+            return self.m[g].predict(X[self.cols[g]])
+        return 0.8 * self.pool.predict(self._flag(X, g)) + 0.2 * self.m[g].predict(X[self.cols[g]])
+
+
+def frame(sn):
+    q = sn[eligible(sn)].reset_index(drop=True)
+    for g in POOL:
+        q[f"is_{g}"] = (q.g == g).astype(float)
+    return q
 
 
 def eligible(sn):
@@ -248,25 +327,34 @@ def eligible(sn):
     return (sn.qb_is == 1) | sn.adp.notna() | sn.rw_prep.notna() | (sn.p1_fpg >= 6) | ((sn.rookie == 1) & (sn.dround <= 3))
 
 
+def score_seasons(q, ys, train_of, market=False):
+    """each season in ys scored by a fit on train_of(y) (a row mask); returns the predictions"""
+    pred = np.full(len(q), np.nan)
+    for y in ys:
+        te = (q.y == y).to_numpy()
+        if not te.any():
+            continue
+        m = Pre().fit(q, train_of(y), market)
+        for g in GROUPS:
+            w = te & (q.g == g).to_numpy()
+            if w.any():
+                pred[w] = m.predict(q.loc[w], g)
+    return pred
+
+
 def study(sn):
-    ys = [y for y in sorted(sn.y.unique()) if y >= 2017 and sn[(sn.y == y)].t_fpg.notna().sum() > 100 and y < sn.y.max()]
+    """the forward backtest: every 2021-25 season scored by models fitted only on the seasons before it"""
+    q = frame(sn); fin = q.t_fpg.notna().to_numpy(); out = [2021, 2022, 2023, 2024, 2025]
+    pn = score_seasons(q, out, lambda y: fin & (q.y < y).to_numpy())
+    pa = score_seasons(q, out, lambda y: fin & (q.y < y).to_numpy(), market=True)
+    t = q.t_fpg.to_numpy()
     for g in GROUPS:
-        q = sn[(sn.g == g) & eligible(sn) & sn.t_fpg.notna() & sn.y.isin(ys)].reset_index(drop=True)
-        colsA = [c for c in q.columns if c not in DROP and q[c].notna().any()]
-        colsN = [c for c in colsA if c not in MARKET]
-        pa = np.full(len(q), np.nan); pn = np.full(len(q), np.nan)
-        for y in ys:
-            te = (q.y == y).to_numpy(); tr = ~te
-            pa[te], _ = fit_pred(q, colsA, tr, te, "t_fpg"); pn[te], _ = fit_pred(q, colsN, tr, te, "t_fpg")
-        t = q.t_fpg.to_numpy(); mk = q.mkp.to_numpy(); has = ~np.isnan(mk)
-        mae = lambda p, m=np.ones(len(q), bool): float(np.mean(np.abs(p[m] - t[m])))
-        r = lambda p, m=np.ones(len(q), bool): float(np.corrcoef(p[m], t[m])[0, 1])
-        lf = q.p1_fpg.to_numpy(); hl = ~np.isnan(lf)
-        print(f"{g}: n {len(q)} | with market MAE {mae(pa):.2f} r {r(pa):.3f} | no market {mae(pn):.2f} r {r(pn):.3f}"
-              f" || players with ADP (n {has.sum()}): market {mae(mk, has):.2f} r {r(mk, has):.3f}, model+market {mae(pa, has):.2f} r {r(pa, has):.3f}, model alone {mae(pn, has):.2f} r {r(pn, has):.3f}"
-              f" || last season FP/G (n {hl.sum()}) {mae(lf, hl):.2f}, model {mae(pa, hl):.2f}", flush=True)
-        q["pa"], q["pn"] = pa, pn
-        q.to_pickle(f"/tmp/pre_{g}.pkl") if os.environ.get("PRE_DUMP") else None
+        m = fin & (q.g == g).to_numpy() & q.y.isin(out).to_numpy()
+        mae = lambda p, k=m: float(np.mean(np.abs(p[k] - t[k]))); r = lambda p, k=m: float(np.corrcoef(p[k], t[k])[0, 1])
+        mk = q.mkp.to_numpy(); hm = m & ~np.isnan(mk); lf = q.p1_fpg.to_numpy(); hl = m & ~np.isnan(lf); rk = m & (q.rookie == 1).to_numpy()
+        print(f"{g}: n {m.sum()} | model {mae(pn):.2f} r {r(pn):.3f} | + market {mae(pa):.2f} r {r(pa):.3f}"
+              + (f" | market alone (n {hm.sum()}) {mae(mk, hm):.2f}, model {mae(pn, hm):.2f}" if hm.any() else "")
+              + f" | last season FP/G (n {hl.sum()}) {mae(lf, hl):.2f}, model {mae(pn, hl):.2f} | rookies (n {rk.sum()}) model {mae(pn, rk):.2f}", flush=True)
 
 
 # names for the "why" lines (the inputs that moved his projection most, from the ridge half of the blend)
@@ -293,18 +381,19 @@ for k in list(LAB):
 
 # what moved his projection: each group of inputs set to an average player's (the training medians) and the whole model run again;
 # the difference is that group's push, in FP / G
-WHY = [("his last two seasons", ("p1_", "p2_")), ("his career", ("c_",)), ("age, draft and athleticism", ("age", "dpick", "dround", "yrs", "rookie", "ht", "wt", "forty", "vert", "broad", "cone", "shuttle", "bench", "speed")),
+WHY = [("his last two seasons", ("p1_", "p2_", "l6_")), ("his career", ("c_",)), ("age and draft", ("age", "dpick", "dround", "yrs", "rookie")),
+       ("athleticism", ("ht", "wt", "forty", "vert", "broad", "cone", "shuttle", "bench", "speed", "ras")), ("college production", ("col_",)),
        ("his team's offense and line", ("tp_", "imp1", "moved")), ("his quarterback", ("qb_",)), ("his play-caller and head coach", ("pc_", "hc_")), ("the depth chart", ("rm_", "vac"))]
 
 
-def why(m, X, base):
+def why(m, X, base, g):
     out = []
     for nm, pre in WHY:
-        cs = [c for c in X.columns if c.startswith(pre) or c in pre]
+        cs = [c for c in m.med[g].index if c.startswith(pre) or c in pre]
         if not cs:
             continue
-        Z = X.copy(); Z[cs] = m.med[cs].to_numpy()
-        out.append((nm, base - m.predict(Z)))
+        Z = X.copy(); Z[cs] = m.med[g][cs].to_numpy()
+        out.append((nm, base - m.predict(Z, g)))
     return out
 
 
@@ -313,36 +402,35 @@ def write(sn, a):
     cur = int(sn.y.max())
     ys = [int(y) for y in sorted(sn.y.unique()) if 2017 <= y < cur]
     out = {str(y): {} for y in ys + [cur]}
-    for g in GROUPS:
-        q = sn[(sn.g == g) & eligible(sn) & sn.y.isin(ys + [cur])].reset_index(drop=True)
-        colsN = [c for c in q.columns if c not in DROP and c not in MARKET and q[c].notna().any()]
-        colsA = [c for c in q.columns if c not in DROP and q[c].notna().any()]
-        fin = (q.y < cur) & q.t_fpg.notna()
-        for y in ys + [cur]:
-            te = (q.y == y).to_numpy(); tr = (fin & (q.y != y)).to_numpy()
-            m = Blend(ALPHA, leaf=60).fit(q.loc[tr, colsN], q.loc[tr, "t_fpg"])
-            X = q.loc[te, colsN]; pred = m.predict(X); W = why(m, X, pred)
-            hasm = q.loc[te, "adp"].notna().to_numpy()   # the version with the market, where there was one
-            pm = np.full(len(X), np.nan)
-            if hasm.any() and q.loc[tr, "adp"].notna().any():
-                mA = Blend(ALPHA, leaf=60).fit(q.loc[tr, colsA], q.loc[tr, "t_fpg"]); pm = mA.predict(q.loc[te, colsA])
-            for j, i in enumerate(np.where(te)[0]):
-                r = q.iloc[i]
-                nn = lambda v, d=2: None if v != v or v is None else round(float(v), d)
+    q = frame(sn); fin = ((q.y < cur) & q.t_fpg.notna()).to_numpy()
+    for y in ys + [cur]:
+        te = (q.y == y).to_numpy()
+        tr = fin & ((q.y < y) if y >= FWD_FROM else (q.y != y)).to_numpy()
+        m = Pre().fit(q, tr)
+        mA = Pre().fit(q, tr, market=True) if q.loc[te, "adp"].notna().any() and q.loc[tr, "adp"].notna().any() else None
+        nn = lambda v, d=2: None if v is None or v != v else round(float(v), d)
+        for g in GROUPS:
+            w = te & (q.g == g).to_numpy()
+            if not w.any():
+                continue
+            X = q.loc[w]; pred = m.predict(X, g); W = why(m, X, pred, g)
+            hasm = X.adp.notna().to_numpy(); pm = mA.predict(X, g) if mA is not None and hasm.any() else np.full(len(X), np.nan)
+            for j, (_, r) in enumerate(X.iterrows()):
                 out[str(y)][r.id] = dict(p=round(float(max(pred[j], 0)), 2), pm=nn(pm[j]) if hasm[j] else None, mk=nn(r.mkp), adp=nn(r.adp, 1), act=nn(r.t_fpg), g=int(r.t_g),
                                          tm=r.tm, age=nn(r.age, 1), p1=nn(r.p1_fpg), why=[[nm, round(float(v[j]), 1)] for nm, v in W])
-        print(f"  preseason {g} done", flush=True)
-    meta = dict(built=time.strftime("%Y-%m-%d %H:%M"), seasons=ys + [cur], current=cur, inputs=len([c for c in sn.columns if c not in DROP]), mae=MAE)
+        print(f"  preseason {y} done", flush=True)
+    meta = dict(built=time.strftime("%Y-%m-%d %H:%M"), seasons=ys + [cur], current=cur, fwd=FWD_FROM, inputs=len([c for c in sn.columns if c not in DROP]), mae=MAE)
     with open(f"{a.data}/pre.js", "w") as f:
         f.write("window.FB_PRE=" + jsdump(clean({"meta": meta, "s": out})) + ";\n")
     print(f"  wrote pre.js", flush=True)
 
 
-# the backtest (study(), 7 Nov 2026; every eligible player-season 2017-25 with 4+ games, each season held out of its own fit; mean miss in
-# FP / G, QB / RB / WR / TE): the model with no market input (no ADP, no Role Watch line) 3.14 / 2.67 / 2.52 / 1.82 (r .65 / .78 / .78 / .78);
-# with the market 3.14 / 2.54 / 2.44 / 1.76 (r .65 / .80 / .79 / .80); the market's own line (Role Watch's fit on ADP alone; no QBs) 2.76 /
-# 2.71 / 2.23 (r .77 / .76 / .70); last season's FP / G 3.93 / 3.02 / 2.84 / 1.98
-MAE = {"model": [3.14, 2.67, 2.52, 1.82], "withmkt": [3.14, 2.54, 2.44, 1.76], "market": [None, 2.76, 2.71, 2.23], "last": [3.93, 3.02, 2.84, 1.98]}
+# the backtest (study(), 12 Nov 2026; every eligible player-season 2021-25 with 4+ games, each scored by models fitted only on the seasons
+# before it; mean miss in FP / G, QB / RB / WR / TE): model 3.21 / 2.52 / 2.51 / 1.73 (r .68 / .80 / .80 / .82); with the market 3.21 / 2.44 /
+# 2.43 / 1.69; the market alone (Role Watch's fit on ADP) — / 2.68 / 2.65 / 2.23; last season's FP / G (players with one) 4.04 / 2.91 / 2.81 /
+# 1.84; the 7 Nov models on the same test 3.26 / 2.63 / 2.57 / 1.85 (r .66 / .78 / .79 / .78)
+MAE = {"model": [3.21, 2.52, 2.51, 1.73], "withmkt": [3.21, 2.44, 2.43, 1.69], "market": [None, 2.68, 2.65, 2.23], "last": [4.04, 2.91, 2.81, 1.84],
+       "old": [3.26, 2.63, 2.57, 1.85], "test": "2021-25"}
 
 
 def main():
