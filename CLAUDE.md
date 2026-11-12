@@ -996,3 +996,23 @@ Projections; Filters ▸ Position / Season). A row per player-season (his team =
   2.44 / 2.43 / 1.69; ADP alone — / 2.68 / 2.65 / 2.23; last season's FP / G (players with one) 4.04 / 2.91 / 2.81 / 1.84. Rookies: 3.65 / 3.05 / 2.78 / 1.87.
   The Why column has two more groups, college production and athleticism (a rookie's "last two seasons" push is his missing NFL line set to an average
   player's — read it as "no NFL history").
+
+### Round two (Sean, 12 Nov 2026: "Is it possible at all to add anything in to better predict each position", then "Yeah sure" to the depth chart, contracts, more seasons and injuries)
+
+* **How much is left**: a season's FP / G carries week-to-week noise no preseason model can see — its standard error averaged over 2021-25
+  gives a floor on the mean miss of ~1.9 / 1.3 / 1.3 / 0.9 (QB / RB / WR / TE). Round one sat at 3.21 / 2.52 / 2.51 / 1.73, so about half of
+  each miss was reachable at most.
+* **`tools/extras.py`**: the **Week 1 depth chart** (nflverse `depth_charts_<y>`: the league's weekly charts through 2024, week 1; from 2025 ESPN's
+  daily captures, the last before the season's first game — `dc_rank` at his spot, `dc_start`, `dc_listed`), **contracts** (nflverse
+  `historical_contracts`, Over The Cap: the deal in force at kickoff — `k_cap` share of the cap, `k_gtd` / `k_apy` inflated, `k_new` signed this
+  league year, `k_left`, `k_rookie`, `k_second`, `k_n`; a deal's date isn't in the file, so an in-season extension counts from its league year),
+  and **injury history** (weekly reports: weeks Out / Doubtful, listed, soft-tissue, last season and three) — **tested and left out**: it made
+  RB / WR / TE worse (2.46 / 2.42 / 1.67 without it against 2.48 / 2.43 / 1.68 with) and QB only 0.01 better. Depth chart and contracts together:
+  QB 3.21 → 3.17, RB 2.52 → 2.46, WR 2.51 → 2.42, TE 1.73 → 1.67 (the depth chart most for WR, contracts most for QB and WR).
+* **More seasons to learn from** (`data/train/`): `build_fb.py --seasons 2012-2026 --write 2012,2013,2014,2015` once (snap counts start 2012; no
+  participation before 2016, so routes are estimated as in a season in progress; no NGS / FTN) — `fb-2012…2015.js`, and the players, team-seasons
+  and team environments only those seasons have (`index.js`, `teams.js`, `env.js`). `load()` reads them; the site never does (`publish.py` stamps
+  only `data/*.js`). Training from 2013 instead of 2017: QB 3.16 → 3.10, RB 2.47 → 2.43, WR 2.42 → 2.38, TE 1.65-1.67. Every past season the
+  page shows (2017 on) is now a forward fit (`FWD_FROM`). They never change, so nothing rebuilds them.
+* **Result** (forward 2021-25, mean miss in FP / G): **3.11 / 2.44 / 2.39 / 1.67** (r .71 / .81 / .81 / .83); with ADP 3.11 / 2.40 / 2.38 / 1.63.
+  Rookies 3.29 / 3.00 / 2.61 / 1.95. Why has one more group, the depth chart at kickoff and his contract.
