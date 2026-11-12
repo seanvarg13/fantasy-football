@@ -240,8 +240,13 @@ class Blend:
     """the average of a ridge on every input (medians filled in, a flag for each missing input, standardised) and a heavily regularised
     gradient-boosted tree model. Each player-season gives ~17 near-identical snapshots, so an unregularised boosted model on 100+ inputs
     overfits and did worse than the old five-input linear fit; these two together beat it at every position (study())"""
-    def __init__(self, alpha, leaf=600, leaves=8, iters=300):
-        self.alpha, self.leaf, self.leaves, self.iters = alpha, leaf, leaves, iters
+    def __init__(self, alpha, leaf=600, leaves=8, iters=300, lr=0.03, w=0.5, clip=False):
+        # w: the ridge's weight in the average; clip: each input held to its 1st-99th percentile in training (12 Nov 2026, the preseason models:
+        # a rate on a handful of plays, 30 yards a catch on one catch, had pulled the ridge around)
+        self.alpha, self.leaf, self.leaves, self.iters, self.lr, self.w, self.clip = alpha, leaf, leaves, iters, lr, w, clip
+
+    def _cl(self, X):
+        return X.clip(self.lo, self.hi, axis=1) if self.clip else X
 
     def _prep(self, X):
         Z = X.fillna(self.med)
@@ -251,17 +256,20 @@ class Blend:
     def fit(self, X, y):
         from sklearn.ensemble import HistGradientBoostingRegressor
         from sklearn.linear_model import Ridge
+        if self.clip:
+            self.lo, self.hi = X.quantile(0.01), X.quantile(0.99); X = X.clip(self.lo, self.hi, axis=1)
         self.med = X.median().fillna(0); self.flags = [c for c in X.columns if 0 < X[c].isna().mean() < 1]
         Z = pd.concat([X.fillna(self.med), X[self.flags].isna().astype(float).add_suffix("_na")], axis=1)
         self.mu = Z.mean(); self.sd = Z.std().replace(0, 1)
-        self.r = Ridge(alpha=self.alpha).fit((Z - self.mu) / self.sd, y)
+        self.r = Ridge(alpha=self.alpha).fit((Z - self.mu) / self.sd, y) if self.w > 0 else None
         self.hc = [c for c in X.columns if X[c].notna().any()]   # a column empty in this fold (a field a season lacked) is left out of the trees
-        self.h = HistGradientBoostingRegressor(max_iter=self.iters, learning_rate=0.03, max_leaf_nodes=self.leaves, min_samples_leaf=self.leaf, l2_regularization=5,
+        self.h = None if self.w >= 1 else HistGradientBoostingRegressor(max_iter=self.iters, learning_rate=self.lr, max_leaf_nodes=self.leaves, min_samples_leaf=self.leaf, l2_regularization=5,
                                                max_features=0.5, random_state=7).fit(X[self.hc], y)
         return self
 
     def predict(self, X):
-        return (self.r.predict(self._prep(X)) + self.h.predict(X[self.hc])) / 2
+        X = self._cl(X)
+        return (self.w * self.r.predict(self._prep(X)) if self.r is not None else 0) + ((1 - self.w) * self.h.predict(X[self.hc]) if self.h is not None else 0)
 
 
 ALPHA = {"t_ros": 1000, "t_nxt": 300}

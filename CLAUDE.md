@@ -964,3 +964,35 @@ Projections; Filters ▸ Position / Season). A row per player-season (his team =
 * Not in it: college production (no free source reachable from the build — cfbfastR's data repos aren't open to this session), preseason injury
   news, and camp depth charts. Next season (2027) needs its rosters: until its games start the page shows the latest season it has.
 * `--snap FILE` pickles the rows and `--from-snap FILE` reuses them (the study in ~1 minute, the file in ~3).
+
+### The preseason models, rebuilt per position and tested forward (Sean, 12 Nov 2026: "test the models on the past 5 years, and make it so each model (the models can be different for each different position), are set out to predict each players scoring based on any possible variables like their prior year scoring, age, what year theyre in, their college data, the combine testing/ras, athleticism, any spearation metrics, any open metrics, their coaching staff, OC, o line, i want the model to be as good at projection points per game as possible")
+
+* **The test is forward now**: every 2021-25 season scored by models fitted only on the seasons before it (`--study`). The 7 Nov leave-one-season-out
+  test let a model see later seasons; on the forward test the 7 Nov models miss by **3.26 / 2.63 / 2.57 / 1.85** (QB / RB / WR / TE, r .66 / .78 /
+  .79 / .78). The page's past seasons from 2020 on (`FWD_FROM`) are the forward fits too; 2017-19 (too few seasons before them) still every other season.
+* **New inputs** (216 in all): **college production** (`tools/college.py`, `col_*`) — ESPN's college box scores, every FBS game 2010 on, from
+  sportsdataverse's `espn_cfb_player_box` / `espn_cfb_team_box` releases (downloaded to `.cache/fb/cfb/`, ~16 MB), joined by ESPN id (nflverse's
+  `players.parquet` `espn_id`; ESPN keeps one id from college to the pros; 3,862 players matched): his last college season's share of his team's
+  receiving yards and TDs (dominator), receiving yards per team pass attempt, rushing and scrimmage share, yards / TDs / catches a game, his best and
+  career dominator, breakout age (first 20% dominator; a back's first 20% scrimmage share), college seasons and games, and a passer's completion rate,
+  YPA, TD / INT rates, attempts and QBR from his last 100-attempt season (CFBD needs a key and Sports Reference blocks the cloud, so ESPN's it is);
+  an **athletic score** built like RAS (`ras`, `ras_size / speed / expl / agil`: each test's percentile among the combine's players at his position, 0-10,
+  averaged by area, three of four areas needed — ras.football answers 429 to a build); **how open he got** — FTN's contested-target rate and contested
+  over expected, catchable-target rate and catchable targets a game (2022 on), Next Gen cushion beside the separation already in; **his role at the end of
+  last season** (`l6_*`: FP, xFP, snaps, opportunities, targets and routes a game over his last six games) and games missed (`p1_gmiss`). Not
+  available: ESPN's Open Score and Reception Perception (not public data), PFF grades.
+* **The models** (`Pre` in `build_pre.py`): **QB** its own blend (ridge α 1000 at half, trees 30 rows a leaf, inputs clipped to their 1st-99th
+  percentile — the clip alone fixed a ridge that tiny-sample rates had been dragging, TE ridge 2.05 → 1.84), without the head coach's history, the
+  combine / athletic score and the late-season inputs. **RB / WR / TE** one boosted-tree model on all three with a flag per position (12 leaves, 40 rows
+  a leaf, 500 rounds at .03), 80%, plus each position's own ridge, 20%. `Blend` (build_ros.py) takes `w` (the ridge's weight) and `clip` now; its
+  defaults are the old behaviour, so the in-season projections don't move.
+* **What was tried** (scratch `fbm/`): ridge alone, trees alone, blends at .3 / .5 / .7, leaf sizes, game-weighted rows, a rookie / veteran split, five
+  tree seeds averaged — none beat the pooled design; pooling WR + TE alone helped TE, pooling all three helped all three. A nested selection (each
+  test season dropping input groups by forward folds on the three seasons before it) gave QB 3.27 / RB 2.57 / WR 2.57 / TE 1.80 per position; the
+  groups it kept dropping for QBs are the ones left out above. Per group in the final model (the miss with the group left out, + = the group helps):
+  college RB +0.02, TE +0.03 (rookie TEs +0.14), WR −0.03 (masking it for WRs alone cost RBs and TEs more than WRs gained, so it stays); the athletic
+  score and combine, FTN / NGS openness, coaching, the line ±0.01 (noise); the late-season role +0.01-0.02.
+* **Result** (forward, 2021-25, mean miss in FP / G, QB / RB / WR / TE): **3.21 / 2.52 / 2.51 / 1.73** (r .68 / .80 / .80 / .82); with ADP 3.21 /
+  2.44 / 2.43 / 1.69; ADP alone — / 2.68 / 2.65 / 2.23; last season's FP / G (players with one) 4.04 / 2.91 / 2.81 / 1.84. Rookies: 3.65 / 3.05 / 2.78 / 1.87.
+  The Why column has two more groups, college production and athleticism (a rookie's "last two seasons" push is his missing NFL line set to an average
+  player's — read it as "no NFL history").
