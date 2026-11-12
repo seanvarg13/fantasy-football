@@ -23,6 +23,7 @@ from build_fb import fetch, R, OLD_CODES, jsdump, clean   # noqa: E402
 from build_ros import readjs, Blend, POSG   # noqa: E402
 
 GROUPS = ("QB", "RB", "WR", "TE")
+EXTRA = {}
 
 
 def sd(a, b):
@@ -67,6 +68,18 @@ def load(data, cache, seasons):
         if os.path.exists(f"{data}/fb-{y}.js"):
             S[y] = readjs(f"{data}/fb-{y}.js")
     T = readjs(f"{data}/teams.js"); E = readjs(f"{data}/env.js")
+    # the training-only seasons (data/train/, 12 Nov 2026): 2012-15 built by build_fb.py once and kept out of the site (it doesn't load them);
+    # four more seasons to learn from took the forward miss down at every position. The site's own files win where both have a player.
+    tr = f"{data}/train"
+    if os.path.isdir(tr):
+        for y in seasons:
+            if y not in S and os.path.exists(f"{tr}/fb-{y}.js"):
+                S[y] = readjs(f"{tr}/fb-{y}.js")
+        I = {**readjs(f"{tr}/index.js"), **I}
+        for k, v in readjs(f"{tr}/teams.js").items():
+            T.setdefault(k, v)
+        for k, v in readjs(f"{tr}/env.js")["s"].items():
+            E["s"].setdefault(k, v)
     RW = {}
     for y in seasons:
         p = f"{data}/proj-{y}.js"
@@ -87,6 +100,12 @@ def load(data, cache, seasons):
         CF = college_feats(cache, fetch, pl, I); RS = ras_table(comb, pl)
     except Exception as e:
         print(f"  college / athletic score skipped: {e}", flush=True); CF, RS = {}, {}
+    global EXTRA
+    try:   # the Week 1 depth chart, contracts, injury history (extras.py)
+        import extras
+        EXTRA = {"dc": extras.depth(cache, fetch, seasons, games), "k": extras.contracts(cache, fetch)}   # injury history (extras.injuries) tested and left out: it made RB / WR / TE worse
+    except Exception as e:
+        print(f"  depth chart / contracts / injuries skipped: {e}", flush=True); EXTRA = {}
     for g, v in RS.items():
         C.setdefault(g, {}).update(v)
     for g, v in CF.items():
@@ -211,7 +230,11 @@ def build_rows(S, I, T, E, RW, games, C, seasons, current):
                     f["l6_snp"] = float(np.mean([r[wq["snp"]] or 0 for r in lw])); f["l6_opp"] = sum((r[wq["tgt"]] or 0) + (r[wq["car"]] or 0) for r in lw) / n6
                     f["l6_tgt"] = sum(r[wq["tgt"]] or 0 for r in lw) / n6; f["l6_rts"] = sum(r[wq["rts"]] or 0 for r in lw) / n6
                 f["p1_gmiss"] = (17 if y - 1 >= 2021 else 16) - len([r for r in q1["w"] if (r[wq["snp"]] or 0) >= 5])
-            car = [line[(s, pid)] for s in range(2016, y) if (s, pid) in line]
+            if EXTRA:
+                import extras
+                f.update(EXTRA["dc"].get((y, pid), {"dc_listed": 0.0}))
+                f.update(extras.contract_feats(EXTRA["k"], pid, y))
+            car = [line[(s, pid)] for s in range(min(S), y) if (s, pid) in line]
             f["c_n"] = len(car); f["c_fpg"] = sd(sum(q["fp"] for q in car), sum(q["g"] for q in car)) if car else np.nan
             f["c_best"] = max((q["fp"] / max(q["g"], 1) for q in car if q["g"] >= 6), default=np.nan)
             t1 = team0.get((y - 1, pid)); f["moved"] = 1.0 if t1 and t1 != tm else 0.0
@@ -278,7 +301,8 @@ MARKET = {"adp", "mkp", "rw_pre", "rw_prep"}   # Role Watch's preseason lines ca
 QB_OUT = ("hc_", "ras", "l6_")
 QB_OUT_K = {"p1_gmiss", "ht", "wt", "forty", "vert", "broad", "cone", "shuttle", "bench", "speed"}
 POOL = ("RB", "WR", "TE")
-FWD_FROM = 2020   # from here a past season is scored by models fitted only on the seasons before it; 2017-19 (too few before) by every other season
+FWD_FROM = 2017   # from here a past season is scored by models fitted only on the seasons before it (every season the page shows)
+TRAIN_FROM = 2013   # the first season with a season before it (data/train starts at 2012)
 
 
 def incols(q, g, market):
@@ -344,7 +368,7 @@ def score_seasons(q, ys, train_of, market=False):
 
 def study(sn):
     """the forward backtest: every 2021-25 season scored by models fitted only on the seasons before it"""
-    q = frame(sn); fin = q.t_fpg.notna().to_numpy(); out = [2021, 2022, 2023, 2024, 2025]
+    q = frame(sn); fin = (q.t_fpg.notna() & (q.y >= TRAIN_FROM)).to_numpy(); out = [2021, 2022, 2023, 2024, 2025]
     pn = score_seasons(q, out, lambda y: fin & (q.y < y).to_numpy())
     pa = score_seasons(q, out, lambda y: fin & (q.y < y).to_numpy(), market=True)
     t = q.t_fpg.to_numpy()
@@ -383,7 +407,7 @@ for k in list(LAB):
 # the difference is that group's push, in FP / G
 WHY = [("his last two seasons", ("p1_", "p2_", "l6_")), ("his career", ("c_",)), ("age and draft", ("age", "dpick", "dround", "yrs", "rookie")),
        ("athleticism", ("ht", "wt", "forty", "vert", "broad", "cone", "shuttle", "bench", "speed", "ras")), ("college production", ("col_",)),
-       ("his team's offense and line", ("tp_", "imp1", "moved")), ("his quarterback", ("qb_",)), ("his play-caller and head coach", ("pc_", "hc_")), ("the depth chart", ("rm_", "vac"))]
+       ("his team's offense and line", ("tp_", "imp1", "moved")), ("the depth chart at kickoff and his contract", ("dc_", "k_")), ("his quarterback", ("qb_",)), ("his play-caller and head coach", ("pc_", "hc_")), ("the depth chart", ("rm_", "vac"))]
 
 
 def why(m, X, base, g):
@@ -402,7 +426,7 @@ def write(sn, a):
     cur = int(sn.y.max())
     ys = [int(y) for y in sorted(sn.y.unique()) if 2017 <= y < cur]
     out = {str(y): {} for y in ys + [cur]}
-    q = frame(sn); fin = ((q.y < cur) & q.t_fpg.notna()).to_numpy()
+    q = frame(sn); fin = ((q.y < cur) & (q.y >= TRAIN_FROM) & q.t_fpg.notna()).to_numpy()
     for y in ys + [cur]:
         te = (q.y == y).to_numpy()
         tr = fin & ((q.y < y) if y >= FWD_FROM else (q.y != y)).to_numpy()
@@ -425,11 +449,12 @@ def write(sn, a):
     print(f"  wrote pre.js", flush=True)
 
 
-# the backtest (study(), 12 Nov 2026; every eligible player-season 2021-25 with 4+ games, each scored by models fitted only on the seasons
-# before it; mean miss in FP / G, QB / RB / WR / TE): model 3.21 / 2.52 / 2.51 / 1.73 (r .68 / .80 / .80 / .82); with the market 3.21 / 2.44 /
-# 2.43 / 1.69; the market alone (Role Watch's fit on ADP) — / 2.68 / 2.65 / 2.23; last season's FP / G (players with one) 4.04 / 2.91 / 2.81 /
-# 1.84; the 7 Nov models on the same test 3.26 / 2.63 / 2.57 / 1.85 (r .66 / .78 / .79 / .78)
-MAE = {"model": [3.21, 2.52, 2.51, 1.73], "withmkt": [3.21, 2.44, 2.43, 1.69], "market": [None, 2.68, 2.65, 2.23], "last": [4.04, 2.91, 2.81, 1.84],
+# the backtest (study(), 12 Nov 2026, round two — the Week 1 depth chart, contracts and 2012-15 to learn from; injury history tested and left
+# out; every eligible player-season 2021-25 with 4+ games, each scored by models fitted only on the seasons before it; mean miss in FP / G,
+# QB / RB / WR / TE): model 3.11 / 2.44 / 2.39 / 1.67 (r .71 / .81 / .81 / .83); with the market 3.11 / 2.40 / 2.38 / 1.63; the market alone
+# (Role Watch's fit on ADP) — / 2.68 / 2.65 / 2.23; last season's FP / G (players with one) 4.04 / 2.91 / 2.81 / 1.84; round one (the same
+# morning) 3.21 / 2.52 / 2.51 / 1.73; the 7 Nov models 3.26 / 2.63 / 2.57 / 1.85 (r .66 / .78 / .79 / .78)
+MAE = {"model": [3.11, 2.44, 2.39, 1.67], "withmkt": [3.11, 2.40, 2.38, 1.63], "market": [None, 2.68, 2.65, 2.23], "last": [4.04, 2.91, 2.81, 1.84],
        "old": [3.26, 2.63, 2.57, 1.85], "test": "2021-25"}
 
 
@@ -442,7 +467,7 @@ def main():
     if a.from_snap:
         sn = pd.read_pickle(a.from_snap)
     else:
-        seasons = list(range(2016, a.current + 1))
+        seasons = list(range(2012, a.current + 1))
         S, I, T, E, RW, games, C = load(a.data, a.cache, seasons)
         sn = build_rows(S, I, T, E, RW, games, C, seasons, a.current)
         if a.snap:
