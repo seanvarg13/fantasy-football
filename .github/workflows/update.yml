@@ -106,6 +106,7 @@ jobs:
         run: |
           season=$(python -c "import datetime as d; t=d.date.today(); print(t.year if t.month >= 8 else t.year - 1)")
           python tools/build_pre.py --cache .cache/fb --data data --current $season || echo "::warning::Preseason models failed; last build's file kept"
+          python tools/upside.py --data data || echo "::warning::Upside model failed; projections left as built"
 
       - name: Publish
         if: (steps.gate.outputs.go == 'true' || steps.gate.outputs.adp == 'true') && inputs.dry != true
