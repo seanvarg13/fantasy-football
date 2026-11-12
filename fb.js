@@ -1905,6 +1905,18 @@
   // fit), and this season fitted on them all. "Model" uses no market input at all; "+ ADP" adds the market where there was one
   /* Breakout types (Sean, 12 Nov 2026): which kinds of player break out most, position by position: "Year 2 WR", "Year 3 RB". A breakout is a season that beats the
      preseason model by 4+ points a game (the Preseason page's definition); every player-season 2017-25 with a projection of 4+ is counted by position and years in the league. */
+  /* a type's candidates in a popup (Sean, 12 Nov 2026): everyone of that position and year in the league, best upside odds first; the projections are this season's, the newest the model has */
+  function archPop(g, now) {
+    const list = now.filter((c) => c.k === g.pos + "|" + g.yr).sort((a, b) => (b.v.bo ?? -1) - (a.v.bo ?? -1)).slice(0, 25);
+    const bg = el("div", "archbg"), w = el("div", "archwin"), close = () => { bg.remove(); document.removeEventListener("keydown", esc); }, esc = (e) => { if (e.key === "Escape") close(); };
+    const x = el("button", "archx", "×"); x.type = "button"; x.setAttribute("aria-label", "Close"); x.addEventListener("click", close); bg.addEventListener("click", (e) => { if (e.target === bg) close(); });
+    w.append(x, el("h3", null, `Year ${g.yr}${g.yr === 8 ? "+" : ""} ${g.pos}: top candidates`), el("p", "note", `${(g.rate * 100).toFixed(0)}% of these seasons broke out (${g.b} of ${g.n}). Ranked by upside odds: the chance of beating the projection by 4+ points a game. Projections are the newest the model has.`));
+    const t = el("table", "br weekt"), h = el("tr"); for (const c of ["#", "Player", "Tm", "Age", "Model", "Upside", "Ceiling"]) h.append(el("th", null, c)); t.append(h);
+    list.forEach((c, i) => { const r = el("tr"), nm = el("td"); nm.append(playerLink(c.e.n, c.id)); r.append(el("td", null, String(i + 1)), nm, el("td", null, c.v.tm || ""), el("td", null, c.v.age == null ? "–" : num(c.v.age, 1)), el("td", null, num(c.v.p)), el("td", null, c.v.bo == null ? "–" : Math.round(c.v.bo) + "%"), el("td", null, c.v.hi == null ? "–" : num(c.v.hi))); t.append(r); });
+    if (!list.length) w.append(el("p", "note", "No one of this type has a projection yet."));
+    else { const bx = el("div", "brscroll"); bx.append(t); w.append(bx); }
+    bg.append(w); document.body.append(bg); document.addEventListener("keydown", esc);
+  }
   async function archetypesPage(main) {
     await loadScript("data/pre.js").catch(() => {}); const PR = window.FB_PRE; main.textContent = "";
     if (!PR) { main.append(el("p", "load", "The preseason projections haven't been built yet.")); return; }
@@ -1925,7 +1937,7 @@
     rows.forEach((g, i) => {
       const cand = now.filter((c) => c.k === g.pos + "|" + g.yr && c.v.bo != null).sort((a, b) => b.v.bo - a.v.bo).slice(0, 4).map((c) => `${c.e.n} ${Math.round(c.v.bo)}%`).join(", ") || "–";
       const ex = g.ex.sort((a, b) => b.d - a.d).slice(0, 3).map((z) => `${z.n} '${String(z.y).slice(2)} +${z.d.toFixed(1)}`).join(", ");
-      const r = el("tr"); for (const x of [String(i + 1), `Year ${g.yr}${g.yr === 8 ? "+" : ""} ${g.pos}`, String(g.b), String(g.n), (g.rate * 100).toFixed(0) + "%", (g.rate / base).toFixed(1) + "×", ex, cand]) r.append(el("td", null, x)); t.append(r);
+      const r = el("tr", "archrow"); r.tabIndex = 0; r.title = "Open the candidates"; r.addEventListener("click", () => archPop(g, now)); r.addEventListener("keydown", (e) => { if (e.key === "Enter") archPop(g, now); }); for (const x of [String(i + 1), `Year ${g.yr}${g.yr === 8 ? "+" : ""} ${g.pos}`, String(g.b), String(g.n), (g.rate * 100).toFixed(0) + "%", (g.rate / base).toFixed(1) + "×", ex, cand]) r.append(el("td", null, x)); t.append(r);
     });
     const bx = el("div", "fscroll brscroll"); bx.append(t); wrap.append(bx); main.append(wrap);
   }
