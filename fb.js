@@ -398,7 +398,14 @@
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
     nav.setAttribute("aria-label", "Pages");
-    for (const [h, lab] of PAGES) { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); if (h === "#settings") a.title = "Stat glossary, appearance and how the pages work"; nav.append(a); }
+    const mk = (h, lab) => { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); if (h === "#settings") a.title = "Stat glossary, appearance and how the pages work"; return a; };
+    /* the baseball header's shape (Sean, 12 Nov 2026): a few pages in one row and the research pages behind one menu (a phone's Menu lays them all out) */
+    const MORE = new Set(["teams", "roles", "trends", "proj", "preseason", "schedule", "backfields", "coaches"]);
+    const more = el("div", "navmore"), mb = el("button", "navmorebtn", "Research ▾"), dd = el("div", "navdd"); mb.type = "button"; mb.setAttribute("aria-haspopup", "true"); mb.setAttribute("aria-expanded", "false"); more.append(mb, dd);
+    for (const [h, lab] of PAGES) { if (MORE.has(h.slice(1))) dd.append(mk(h, lab)); else { if (h === "#settings") nav.append(more); nav.append(mk(h, lab)); } }
+    mb.addEventListener("click", (e) => { e.stopPropagation(); const on = !more.classList.contains("open"); more.classList.toggle("open", on); mb.setAttribute("aria-expanded", String(on)); });
+    document.addEventListener("click", () => { more.classList.remove("open"); mb.setAttribute("aria-expanded", "false"); });
+    window.addEventListener("hashchange", () => more.classList.remove("open"));
     const sr = el("div", "srch"), inp = el("input"); inp.type = "search"; inp.placeholder = "Find a player…"; inp.setAttribute("aria-label", "Find a player");
     const hits = el("div", "hits"); hits.hidden = true; sr.append(inp, hits);
     const ALL = Object.entries(IDX).map(([id, e]) => ({ id, e, k: norm(e.n), last: Math.max(...e.s) }));
@@ -555,7 +562,12 @@
     const fb = el("button", "btn btn-quiet tbtn" + (POP.open ? " open" : "") + (extra ? " on" : ""), `${label}${extra ? ` (${extra})` : ""}`);
     fb.type = "button"; fb.dataset.panel = "grp"; fb.setAttribute("aria-haspopup", "true"); fb.setAttribute("aria-expanded", String(!!POP.open));
     fb.addEventListener("click", (e) => { e.stopPropagation(); if (POP.open) closePanel(false); else openPanel(popTab(POP.spec)); });
-    tb.append(fb); return tb;
+    /* the baseball's Leaders bar: a page picker, then the page's own button, in one joined control */
+    const bar = el("div", "sbviews lbviews"), pk = el("div", "pgpick"), pb = el("button", "pgname", (PAGE_TITLE[document.body.dataset.page] || "Leaders") + " ▾"); pb.type = "button"; pb.setAttribute("aria-haspopup", "true");
+    const menu = el("div", "pgmenu"); menu.hidden = true;
+    for (const [h, lab] of PAGES) if (h !== "#settings") { const a = el("a", null, lab); a.href = h; if (h.slice(1) === document.body.dataset.page) a.className = "on"; menu.append(a); }
+    pb.addEventListener("click", (e) => { e.stopPropagation(); menu.hidden = !menu.hidden; }); document.addEventListener("click", () => { menu.hidden = true; });
+    pk.append(pb, menu); fb.className = "sbview" + (POP.open ? " on" : "") + (extra ? " set" : ""); bar.append(pk, fb); tb.append(bar); return tb;
   }
   const count = (long, short) => el("span", "count pcount", isMobile() ? short : long);
   // the frame: the control row (ctl: nodes), the title row and, when there is one, the folded note (a string, or nodes — a note and a findings box)
@@ -1924,8 +1936,11 @@
       about: `Each player's PPR points a game projected before Week 1, from ${PR.meta.inputs} inputs: his last two seasons line by line (usage, efficiency, skill: shares, targets and yards per route, catch rate and YAC over expected, rush yards over expected, broken tackles, EPA, a QB's passing over expected), his role over the last six weeks of last season, games missed, how open he got (FTN's contested and catchable targets, Next Gen separation and cushion), his career, age, draft pick, years in the league; his college production (his share of his team's receiving yards and touchdowns, yards per team pass attempt, rushing share, a QB's completion rate, yards per attempt and QBR, his breakout age) and athleticism (the combine and an athletic score built like RAS: size, speed, explosion, agility against his position's combine players); his team at kickoff — its offense, pass rate, points, line (the line's sacks, adjusted line yards) and production at his position the year before; its Week 1 QB and his record; the play-caller's and head coach's history (what their offenses produced at each position, their backfield split and RB targets), and whether either is new; the team's Week 1 depth chart (his rank at his spot) and his contract (its share of the cap, guarantees, whether it's new, years left, a rookie deal or a second one); the room (his share of its work the year before, the best teammate, a teammate's draft capital, early-round rookies added, the work that left); the Week 1 Vegas total. QBs have a model of their own (a ridge and a boosted-tree model averaged; the head coach's history, the combine and the late-season inputs left out, which made it more accurate); backs, receivers and tight ends share one boosted-tree model fitted on all three with a flag for each position — three times the data — blended with each position's own ridge. Trained on every season from 2013. Tested forward on ${mae.test || "2021-25"}: each season scored by models fitted only on the seasons before it. Mean miss in FP / G (${pos}): model ${mae.model[PI]}${mae.withmkt ? `, with ADP ${mae.withmkt[PI]}` : ""}${mae.market[PI] != null ? `, ADP alone ${mae.market[PI]}` : ""}, last season's FP / G ${mae.last[PI]}${mae.old ? `, the earlier model ${mae.old[PI]}` : ""}. A past season's projection is the one a model fitted only on the seasons before it gave${(PR.meta.fwd || 2020) > 2017 ? ` (from ${PR.meta.fwd}; before that, on every other season)` : ""}. What it can't see is what nobody could at kickoff — an injury ahead of him (Chuba Hubbard 2024, Kyren Williams 2023) or a role won in camp (Bucky Irving 2024); Why lists what pushed each projection, so you can see what it leaned on. ` });
     const t = table(groups), box = boxOf(t, ["ps", y, pos, sortK, dir].join(":"));
     const rk = {}; for (const k of Object.keys(K)) rk[k] = ranker(rows.map(K[k]));
+    const boS = rows.map((x) => x.v.bo).filter((z) => z != null).sort((a, b) => b - a), bkCut = boS.length >= 10 ? boS[Math.floor(boS.length * 0.1)] : null;
     rows.forEach((x, i) => {
       const v = x.v, nm = td(null, "l fz2"); nm.append(playerLink(x.n, x.id));
+      /* the breakout flag (Sean, 12 Nov 2026): the top tenth of this position's upside odds, the 25%+ ones in red; held out 2021-25 the top tenth broke out about twice as often */
+      if (v.bo != null && live && bkCut != null && v.bo >= bkCut) { const f = el("span", "bkflag" + (v.bo >= 25 ? " hot" : ""), isMobile() ? "▲" : v.bo >= 25 ? "BREAKOUT" : "Breakout watch"); f.title = `${Math.round(v.bo)}% chance he beats his projection by 4+ points a game; his 80th-percentile ceiling is ${num(v.hi)}`; nm.append(f); }
       const cells = [td(String(i + 1), "fz rk"), nm, td(v.tm || ""), td(v.age == null ? "–" : num(v.age, 1))];
       const put = (k, txt) => { const c = td(txt), val = K[k](x); if (val != null && (k === sortK || k === "p" || k === "d")) { paint(c, k === "d" ? 50 + 50 * Math.max(-1, Math.min(1, val / 6)) : k === "adp" ? 100 - rk[k](val) : rk[k](val)); if (k !== sortK) c.classList.remove("heat"); } cells.push(c); };
       put("p", num(v.p)); put("p1", v.p1 == null ? "–" : num(v.p1));
@@ -2452,6 +2467,7 @@
   function route() {
     const h = location.hash.replace(/^#/, "") || "week", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
+    { const nm = document.querySelector(".navmorebtn"); if (nm) nm.classList.toggle("on", !!document.querySelector(".navdd a.on")); }
     document.body.dataset.page = page; document.body.classList.toggle("lst", LIST_PAGES.has(page));   // a list page stands: main is the screen's height and only the box scrolls
     document.title = PAGE_TITLE[page] ? "Sean's Football · " + PAGE_TITLE[page] : "Sean's Football Site";
     const bs = $("#bscroll"); if (bs) { if (Object.keys(LB.keep).length > 40) LB.keep = {}; LB.keep[bs.dataset.key] = { top: bs.scrollTop, left: bs.scrollLeft }; }   // a list box's place, put back whenever that same list draws again
