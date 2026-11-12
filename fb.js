@@ -393,7 +393,7 @@
   // the baseball site's header (23 Oct 2026): the band with the red rule, every page a white boxy button in the condensed face — the
   // current one filled navy — and the search at the right; on a phone the search and a "☰ Menu" button share the one line and the
   // pages open under it as a grid of the same buttons (body.navopen), closing on a pick, a page change or a tap elsewhere
-  const PAGES = [["#week", "This week"], ["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#proj", "Projections"], ["#preseason", "Preseason"], ["#schedule", "Schedule"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
+  const PAGES = [["#week", "This week"], ["#league", "League"], ["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#proj", "Projections"], ["#preseason", "Preseason"], ["#schedule", "Schedule"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
   const PO = { QB: 0, RB: 1, FB: 1, WR: 2, TE: 3 };
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
@@ -1970,6 +1970,47 @@
     wrap.append(rs.length ? t2 : el("p", "weeknote", "No risers over 2 points right now."));
   }
 
+
+  // The League page (Sean's recommendation, 12 Nov 2026): a Sleeper league, read straight from Sleeper's open API in the browser (CORS is open; no key).
+  // Connect with the league id and your Sleeper username; Sleeper's player ids are matched to the site's through Sleeper's own players file (gsis_id),
+  // fetched only on this page. Shows your roster on the projection models, the best players nobody in the league has, and every team's total.
+  const SL = "https://api.sleeper.app/v1", SLS = "fb.league";
+  async function slGet(path) { const r = await fetch(SL + path); if (!r.ok) throw new Error("Sleeper answered " + r.status); return r.json(); }
+  async function leaguePage(main) {
+    const y = CUR, [D] = await Promise.all([ensure(y), loadScript("data/ros.js").catch(() => {}), loadScript("data/pre.js").catch(() => {})]);
+    main.textContent = ""; const wrap = el("div", "weekpage"); main.append(wrap);
+    wrap.append(el("h2", "weekh", "League"));
+    const cfg = store.get("league", null), RS = window.FB_ROS && window.FB_ROS.meta.season === y ? window.FB_ROS : null, PR = window.FB_PRE && window.FB_PRE.s[String(y)];
+    const form = el("div", "weekbar"), li = el("input", "weekin"), ui = el("input", "weekin"), go = el("button", "linkbtn", cfg ? "Reconnect" : "Connect");
+    li.placeholder = "Sleeper league ID"; ui.placeholder = "Your Sleeper username"; li.value = cfg ? cfg.id : ""; ui.value = cfg ? cfg.user : ""; go.type = "button";
+    form.append(li, ui, go); wrap.append(form);
+    const out = el("div"); wrap.append(out);
+    const run = async (c) => {
+      out.textContent = ""; out.append(el("p", "weeknote", "Reading the league from Sleeper…"));
+      try {
+        const [lg, rosters, users, players, u] = await Promise.all([slGet("/league/" + c.id), slGet(`/league/${c.id}/rosters`), slGet(`/league/${c.id}/users`), slGet("/players/nfl"), slGet("/user/" + encodeURIComponent(c.user))]);
+        const uname = new Map(users.map((x) => [x.user_id, (x.metadata && x.metadata.team_name) || x.display_name]));
+        const toSite = (sid) => { const pl = players[sid]; return pl && pl.gsis_id ? pl.gsis_id : null; };
+        const mine = rosters.find((r) => r.owner_id === u.user_id), taken = new Set(); for (const r of rosters) for (const sid of r.players || []) { const g = toSite(sid); if (g) taken.add(g); }
+        out.textContent = "";
+        const P = new Map(D.players.map((p) => [p.id, p])), val = (id) => (RS && RS.p[id] ? RS.p[id] : null);
+        out.append(el("p", "weeknote", `${lg.name} · ${rosters.length} teams · ${lg.scoring_settings && lg.scoring_settings.rec === 1 ? "PPR" : lg.scoring_settings && lg.scoring_settings.rec === 0.5 ? "half PPR" : "standard"} · projections are PPR`));
+        const tbl = (title, rows, cols) => { out.append(el("h3", "weekh3", title)); const t = el("table", "br weekt"), h = el("tr"); for (const x of cols) h.append(el("th", null, x)); t.append(h);
+          for (const r of rows) { const tr = el("tr"); r.forEach((v, i) => { const td = el("td", i === 0 ? "l" : null); if (v && v.p) td.append(playerLink(v.p.n, v.p.id)); else td.textContent = v == null ? "–" : v; tr.append(td); }); t.append(tr); } out.append(t); };
+        const row = (id) => { const p = P.get(id), v = val(id), pr = PR && PR[id]; return p ? [{ p }, posGroup(p.pos), p.tm || "", v && v.nxt != null ? num(v.nxt) : "–", v && v.ros != null ? num(v.ros) : "–", pr && pr.bo != null ? Math.round(pr.bo) + "%" : "–"] : null; };
+        if (mine) { const ids = (mine.players || []).map(toSite).filter(Boolean); const rs = ids.map(row).filter(Boolean).sort((a, b) => (parseFloat(b[4]) || -1) - (parseFloat(a[4]) || -1)); tbl("Your roster · " + (uname.get(mine.owner_id) || ""), rs, ["Player", "Pos", "Tm", "Next", "ROS/G", "Upside"]); }
+        else out.append(el("p", "weeknote lgwarn", "Couldn't find your team: check the username matches your Sleeper account."));
+        const worst = {}; if (mine) for (const sid of mine.players || []) { const g = toSite(sid), p = g && P.get(g), v = g && val(g); if (p && v && v.ros != null) { const k = posGroup(p.pos); worst[k] = Math.min(worst[k] == null ? 99 : worst[k], v.ros); } }
+        const fa = D.players.filter((p) => !taken.has(p.id) && val(p.id) && val(p.id).ros != null && ["QB", "RB", "WR", "TE"].includes(posGroup(p.pos))).sort((a, b) => val(b.id).ros - val(a.id).ros).slice(0, 25);
+        tbl("Best available (nobody in your league has them)", fa.map((p) => { const v = val(p.id), pr = PR && PR[p.id], w = worst[posGroup(p.pos)]; return [{ p }, posGroup(p.pos), p.tm || "", v.nxt != null ? num(v.nxt) : "–", num(v.ros), w == null ? "–" : sgn(v.ros - w), pr && pr.bo != null ? Math.round(pr.bo) + "%" : "–"]; }), ["Player", "Pos", "Tm", "Next", "ROS/G", "vs your worst at pos", "Upside"]);
+        const tot = rosters.map((r) => { let s = 0; for (const sid of r.players || []) { const g = toSite(sid), v = g && val(g); if (v && v.ros != null) s += Math.max(0, v.ros - 8); } return [uname.get(r.owner_id) || "Team " + r.roster_id, `${(r.settings || {}).wins || 0}-${(r.settings || {}).losses || 0}`, num(s, 0)]; }).sort((a, b) => parseFloat(b[2]) - parseFloat(a[2]));
+        tbl("Every team on the projections", tot, ["Team", "Record", "Depth score"]);
+      } catch (e) { out.textContent = ""; out.append(el("p", "weeknote lgwarn", "Couldn't read the league: " + e.message + ". Check the league ID (Sleeper app ▸ League ▸ Settings) and that the league is not hidden.")); }
+    };
+    go.addEventListener("click", () => { const c = { id: li.value.trim(), user: ui.value.trim() }; if (!c.id || !c.user) return; store.set("league", c); run(c); });
+    if (cfg) run(cfg); else out.append(el("p", "weeknote", "Enter your Sleeper league ID and username to see your roster on the projections, the best players nobody in your league has, and every team's depth. Nothing is sent anywhere but Sleeper."));
+  }
+
   // the Schedule page: each team's remaining schedule by position (and the fantasy playoffs, weeks 15-17), or each defense's factor
   async function schedulePage(main) {
     const y = CUR, view = S.scView === "def" ? "def" : "rest";
@@ -2389,7 +2430,7 @@
   }
 
   // ---------- routing ----------
-  const PAGE_TITLE = { week: "This week", leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", proj: "Projections", preseason: "Preseason", schedule: "Schedule", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
+  const PAGE_TITLE = { week: "This week", league: "League", leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", proj: "Projections", preseason: "Preseason", schedule: "Schedule", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
   function route() {
     const h = location.hash.replace(/^#/, "") || "week", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
@@ -2400,7 +2441,7 @@
     const main = $("main"), same = S.lastPage === h;
     if (page === "player" && same) main.style.minHeight = main.offsetHeight + "px"; else main.style.minHeight = "";   // a player's page redrawn in place (a season, a tab) keeps its height through the Loading… line, so the page stays where it was
     main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "week" ? weekPage(main) : page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "proj" ? projPage(main) : page === "preseason" ? preseasonPage(main) : page === "schedule" ? schedulePage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
+    const go = page === "week" ? weekPage(main) : page === "league" ? leaguePage(main) : page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "proj" ? projPage(main) : page === "preseason" ? preseasonPage(main) : page === "schedule" ? schedulePage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.style.minHeight = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
