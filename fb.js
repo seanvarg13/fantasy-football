@@ -393,7 +393,7 @@
   // the baseball site's header (23 Oct 2026): the band with the red rule, every page a white boxy button in the condensed face — the
   // current one filled navy — and the search at the right; on a phone the search and a "☰ Menu" button share the one line and the
   // pages open under it as a grid of the same buttons (body.navopen), closing on a pick, a page change or a tap elsewhere
-  const PAGES = [["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#proj", "Projections"], ["#preseason", "Preseason"], ["#schedule", "Schedule"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
+  const PAGES = [["#week", "This week"], ["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#proj", "Projections"], ["#preseason", "Preseason"], ["#schedule", "Schedule"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
   const PO = { QB: 0, RB: 1, FB: 1, WR: 2, TE: 3 };
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
@@ -1896,7 +1896,7 @@
     let rows = Object.entries(PR.s[String(y)] || {}).map(([id, v]) => ({ id, v, n: (byId.get(id) || {}).n || (IDX[id] || {}).n || id, pos: posGroup((byId.get(id) || {}).pos || (IDX[id] || {}).pos) }))
       .filter((x) => x.pos === pos && (x.v.p >= 4 || (x.v.act || 0) >= 4));
     const past = rows.some((x) => x.v.act != null) && y < PR.meta.current, live = y === PR.meta.current;
-    const K = { p: (x) => x.v.p, pm: (x) => x.v.pm, mk: (x) => x.v.mk, adp: (x) => x.v.adp, act: (x) => x.v.act, g: (x) => x.v.g, d: (x) => (x.v.act != null ? x.v.act - x.v.p : null), p1: (x) => x.v.p1, age: (x) => x.v.age };
+    const K = { p: (x) => x.v.p, pm: (x) => x.v.pm, mk: (x) => x.v.mk, adp: (x) => x.v.adp, act: (x) => x.v.act, g: (x) => x.v.g, d: (x) => (x.v.act != null ? x.v.act - x.v.p : null), p1: (x) => x.v.p1, age: (x) => x.v.age, bo: (x) => x.v.bo, hi: (x) => x.v.hi };
     const sortK = K[S.psSort] ? S.psSort : "p", dir = S.psDir || (sortK === "adp" ? 1 : -1);
     rows.sort((a, b) => { const va = K[sortK](a), vb = K[sortK](b); if (va == null) return 1; if (vb == null) return -1; return dir * (va - vb); });
     const sb = (k) => () => { if (S.psSort === k) S.psDir = -(S.psDir || -1); else { S.psSort = k; S.psDir = k === "adp" ? 1 : -1; } save(); route(); };
@@ -1904,6 +1904,7 @@
     const hasM = rows.some((x) => x.v.mk != null), hasPM = rows.some((x) => x.v.pm != null);
     const groups = [{ cols: [{ h: "Rk", cls: "fz" }, { h: "Player", cls: "l fz2" }, { h: "Tm" }, col("Age", "age", "Age on September 1")], end: 1 },
       { name: "At kickoff", end: 1, cols: [col("Model", "p", "The model's projected PPR points a game, from every input but the market: his last two seasons, his career, age and draft, college production, athleticism, his team's offense and line, his Week 1 QB, his play-caller and head coach, the depth chart and his contract"), col(`${y - 1}`, "p1", `His ${y - 1} FP / G`)]
+        .concat(rows.some((x) => x.v.bo != null) ? [col("Upside", "bo", "Chance he beats this projection by 4+ points a game: a second model on the projection, last year's points, age, years in the league, draft round and the market gap (held out 2021-25: the top tenth broke out about twice as often as the rest)"), col("Ceiling", "hi", "His 80th-percentile points a game: one season in five he beats it")] : [])
         .concat(hasPM ? [col("+ ADP", "pm", "The same model with the market added (ADP and Role Watch's preseason lines): the most accurate of all, where there was a market")] : [])
         .concat(hasM ? [col("Market", "mk", "What his ADP implied, as Role Watch's fit on ADP alone reads it"), col("ADP", "adp", "Preseason PPR ADP")] : []) },
       { name: live ? "So far" : "What happened", end: 1, cols: [col("FP/G", "act", "His PPR points a game in games he played 5%+ of the snaps (4+ needed)"), col("G", "g", "Games he played 5%+ of the snaps"), col("vs model", "d", "What he scored less the model's projection")] },
@@ -1919,6 +1920,7 @@
       const cells = [td(String(i + 1), "fz rk"), nm, td(v.tm || ""), td(v.age == null ? "–" : num(v.age, 1))];
       const put = (k, txt) => { const c = td(txt), val = K[k](x); if (val != null && (k === sortK || k === "p" || k === "d")) { paint(c, k === "d" ? 50 + 50 * Math.max(-1, Math.min(1, val / 6)) : k === "adp" ? 100 - rk[k](val) : rk[k](val)); if (k !== sortK) c.classList.remove("heat"); } cells.push(c); };
       put("p", num(v.p)); put("p1", v.p1 == null ? "–" : num(v.p1));
+      if (rows.some((z) => z.v.bo != null)) { put("bo", v.bo == null ? "–" : Math.round(v.bo) + "%"); put("hi", v.hi == null ? "–" : num(v.hi)); }
       if (hasPM) put("pm", v.pm == null ? "–" : num(v.pm));
       if (hasM) { put("mk", v.mk == null ? "–" : num(v.mk)); put("adp", v.adp == null ? "–" : num(v.adp, 1)); }
       put("act", v.act == null ? "–" : num(v.act)); put("g", String(v.g || 0)); put("d", v.act == null ? "–" : sgn(v.act - v.p));
@@ -1928,6 +1930,44 @@
     });
     board.append(box); keepBox(box); freeze(t);
     if (POP.open) { popBody(); placePop(); }
+  }
+
+
+  // This week (Sean's recommendation, 12 Nov 2026: the site had no page that answers "who do I start, who do I add"): a start / sit comparison on the
+  // projection models' next-game and rest-of-season numbers, and the waiver risers — players the models now project well above where the preseason
+  // model had them, with the upside model's chance of a breakout beside it. League-blind: the site has no league connection yet, so "available" is yours to check.
+  async function weekPage(main) {
+    const y = CUR, [D] = await Promise.all([ensure(y), loadScript("data/ros.js").catch(() => {}), loadScript("data/pre.js").catch(() => {})]);
+    main.textContent = "";
+    const RS = window.FB_ROS && window.FB_ROS.meta.season === y ? window.FB_ROS : null, PR = window.FB_PRE && window.FB_PRE.s[String(y)];
+    const wrap = el("div", "weekpage"); main.append(wrap);
+    wrap.append(el("h2", "weekh", "This week"), el("p", "weeknote", RS ? `Projections after week ${RS.meta.through}: the models' next game and rest-of-season points a game, PPR. Pick two players to compare, or scan the risers below.` : "The projection models haven't been built for this season yet."));
+    if (!RS) return;
+    const pool = D.players.filter((p) => ["QB", "RB", "WR", "TE"].includes(posGroup(p.pos)) && RS.p[p.id] && RS.p[p.id].ros != null).sort((a, b) => RS.p[b.id].ros - RS.p[a.id].ros);
+    const byName = new Map(pool.map((p) => [p.n.toLowerCase(), p]));
+    const dl = el("datalist"); dl.id = "weeknames"; for (const p of pool) { const o = el("option"); o.value = p.n; dl.append(o); } wrap.append(dl);
+    const bar = el("div", "weekbar"), res = el("div", "weekres");
+    const mk = (ph) => { const i = el("input", "weekin"); i.setAttribute("list", "weeknames"); i.placeholder = ph; i.autocomplete = "off"; return i; };
+    const a = mk("Player A"), b = mk("Player B"); bar.append(a, el("span", "weekvs", "vs"), b); wrap.append(bar, res);
+    const row = (p) => { const r = RS.p[p.id], pr = PR && PR[p.id]; return { p, nxt: r.nxt, ros: r.ros, fpg: r.fpg, xg: r.xfpg, left: r.left, bo: pr && pr.bo, hi: pr && pr.hi }; };
+    const draw = () => {
+      res.textContent = ""; const A = byName.get(a.value.trim().toLowerCase()), B = byName.get(b.value.trim().toLowerCase());
+      if (!A || !B) { res.append(el("p", "weeknote", "Type two names from the list to compare them.")); return; }
+      const x = row(A), z = row(B), t = el("table", "br weekt"), th = el("tr");
+      for (const h of ["", A.n, B.n]) th.append(el("th", null, h)); t.append(th);
+      const L = [["Next game (proj)", "nxt", 1], ["Rest of season (proj / G)", "ros", 1], ["FP/G to date", "fpg", 1], ["xFP/G to date", "xg", 1], ["Upside (chance of +4 over preseason line)", "bo", 1], ["Ceiling (80th pct)", "hi", 1]];
+      for (const [lab, k] of L) { const tr = el("tr"), va = x[k], vb = z[k]; tr.append(el("td", "l", lab));
+        for (const [v, o] of [[va, vb], [vb, va]]) { const c = el("td", null, v == null ? "–" : k === "bo" ? Math.round(v) + "%" : num(v)); if (v != null && o != null && v > o) c.classList.add("win"); tr.append(c); } t.append(tr); }
+      const sa = (x.nxt || 0) * 0.6 + x.ros * 0.4, sb = (z.nxt || 0) * 0.6 + z.ros * 0.4, w = sa >= sb ? A : B, d = Math.abs(sa - sb);
+      res.append(t, el("p", "weekverdict", `${d < 0.6 ? "Close call — lean " : "Start "}${w.n}${d < 0.6 ? " on the upside number" : ""} (blend of next game 60% and rest of season 40%: ${num(Math.max(sa, sb))} vs ${num(Math.min(sa, sb))}).`));
+    };
+    a.addEventListener("input", draw); b.addEventListener("input", draw); draw();
+    // waiver risers: the models' rest-of-season line against where the preseason model had him
+    const rs = pool.map((p) => { const pr = PR && PR[p.id]; return pr ? { p, ros: RS.p[p.id].ros, pre: pr.p, d: RS.p[p.id].ros - pr.p, bo: pr.bo, hi: pr.hi, nxt: RS.p[p.id].nxt } : null; }).filter((x) => x && x.d >= 2 && x.ros >= 8).sort((m, n) => n.d - m.d).slice(0, 25);
+    wrap.append(el("h3", "weekh3", "Risers: projected well above the preseason line"));
+    const t2 = el("table", "br weekt"), h2 = el("tr"); for (const h of ["Player", "Pos", "Tm", "Preseason", "Now (ROS)", "Δ", "Next game", "Upside"]) h2.append(el("th", null, h)); t2.append(h2);
+    for (const x of rs) { const tr = el("tr"), nm = el("td", "l"); nm.append(playerLink(x.p.n, x.p.id)); tr.append(nm, el("td", null, posGroup(x.p.pos)), el("td", null, x.p.tm || ""), el("td", null, num(x.pre)), el("td", null, num(x.ros)), el("td", "win", "+" + num(x.d)), el("td", null, x.nxt == null ? "–" : num(x.nxt)), el("td", null, x.bo == null ? "–" : Math.round(x.bo) + "%")); t2.append(tr); }
+    wrap.append(rs.length ? t2 : el("p", "weeknote", "No risers over 2 points right now."));
   }
 
   // the Schedule page: each team's remaining schedule by position (and the fantasy playoffs, weeks 15-17), or each defense's factor
@@ -2349,9 +2389,9 @@
   }
 
   // ---------- routing ----------
-  const PAGE_TITLE = { leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", proj: "Projections", preseason: "Preseason", schedule: "Schedule", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
+  const PAGE_TITLE = { week: "This week", leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", proj: "Projections", preseason: "Preseason", schedule: "Schedule", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
   function route() {
-    const h = location.hash.replace(/^#/, "") || "leaders", [page, a, b] = h.split("/");
+    const h = location.hash.replace(/^#/, "") || "week", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
     document.body.dataset.page = page; document.body.classList.toggle("lst", LIST_PAGES.has(page));   // a list page stands: main is the screen's height and only the box scrolls
     document.title = PAGE_TITLE[page] ? "Sean's Football · " + PAGE_TITLE[page] : "Sean's Football Site";
@@ -2360,7 +2400,7 @@
     const main = $("main"), same = S.lastPage === h;
     if (page === "player" && same) main.style.minHeight = main.offsetHeight + "px"; else main.style.minHeight = "";   // a player's page redrawn in place (a season, a tab) keeps its height through the Loading… line, so the page stays where it was
     main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "proj" ? projPage(main) : page === "preseason" ? preseasonPage(main) : page === "schedule" ? schedulePage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
+    const go = page === "week" ? weekPage(main) : page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "proj" ? projPage(main) : page === "preseason" ? preseasonPage(main) : page === "schedule" ? schedulePage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.style.minHeight = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
