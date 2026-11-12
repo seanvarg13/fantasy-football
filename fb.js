@@ -393,14 +393,14 @@
   // the baseball site's header (23 Oct 2026): the band with the red rule, every page a white boxy button in the condensed face — the
   // current one filled navy — and the search at the right; on a phone the search and a "☰ Menu" button share the one line and the
   // pages open under it as a grid of the same buttons (body.navopen), closing on a pick, a page change or a tap elsewhere
-  const PAGES = [["#week", "This week"], ["#league", "League"], ["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#proj", "Projections"], ["#preseason", "Preseason"], ["#schedule", "Schedule"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
+  const PAGES = [["#week", "This week"], ["#league", "League"], ["#leaders", "Leaders"], ["#teams", "Teams"], ["#roles", "Role Watch"], ["#trends", "Trends"], ["#proj", "Projections"], ["#preseason", "Preseason"], ["#archetypes", "Breakout types"], ["#schedule", "Schedule"], ["#backfields", "Backfields"], ["#coaches", "Coaches"], ["#dynasty", "Dynasty"], ["#settings", "Settings"]];
   const PO = { QB: 0, RB: 1, FB: 1, WR: 2, TE: 3 };
   function header() {
     const top = el("header", "top"), inn = el("div", "in"), nav = el("nav", "nav");
     nav.setAttribute("aria-label", "Pages");
     const mk = (h, lab) => { const a = el("a", null, lab); a.href = h; a.dataset.page = h.slice(1); if (h === "#settings") a.title = "Stat glossary, appearance and how the pages work"; return a; };
     /* the baseball header's shape (Sean, 12 Nov 2026): a few pages in one row and the research pages behind one menu (a phone's Menu lays them all out) */
-    const MORE = new Set(["teams", "roles", "trends", "proj", "preseason", "schedule", "backfields", "coaches"]);
+    const MORE = new Set(["archetypes", "teams", "roles", "trends", "proj", "preseason", "schedule", "backfields", "coaches"]);
     const more = el("div", "navmore"), mb = el("button", "navmorebtn", "Research ▾"), dd = el("div", "navdd"); mb.type = "button"; mb.setAttribute("aria-haspopup", "true"); mb.setAttribute("aria-expanded", "false"); more.append(mb, dd);
     for (const [h, lab] of PAGES) { if (MORE.has(h.slice(1))) dd.append(mk(h, lab)); else { if (h === "#settings") nav.append(more); nav.append(mk(h, lab)); } }
     mb.addEventListener("click", (e) => { e.stopPropagation(); const on = !more.classList.contains("open"); more.classList.toggle("open", on); mb.setAttribute("aria-expanded", String(on)); });
@@ -1903,6 +1903,32 @@
   // ---------- Preseason (7 Nov 2026; Sean: "models that pre season project points using literally every single possible input available"):
   // data/pre.js from tools/build_pre.py — every season 2017-25 as the model would have seen it at kickoff (each season held out of its own
   // fit), and this season fitted on them all. "Model" uses no market input at all; "+ ADP" adds the market where there was one
+  /* Breakout types (Sean, 12 Nov 2026): which kinds of player break out most, position by position: "Year 2 WR", "Year 3 RB". A breakout is a season that beats the
+     preseason model by 4+ points a game (the Preseason page's definition); every player-season 2017-25 with a projection of 4+ is counted by position and years in the league. */
+  async function archetypesPage(main) {
+    await loadScript("data/pre.js").catch(() => {}); const PR = window.FB_PRE; main.textContent = "";
+    if (!PR) { main.append(el("p", "load", "The preseason projections haven't been built yet.")); return; }
+    const cur = PR.meta.current, ys = PR.meta.seasons.map(Number).filter((y) => y < cur), G = {}, now = [];
+    let tot = 0, hit = 0;
+    for (const y of [...ys, cur]) for (const [id, v] of Object.entries(PR.s[String(y)] || {})) {
+      const e = IDX[id]; if (!e || v.p == null || v.p < 4) continue; const pos = posGroup(e.pos); if (!["QB", "RB", "WR", "TE"].includes(pos)) continue;
+      const yr = Math.max(1, Math.min(8, y - (e.rk || (e.s ? Math.min(...e.s) : y)) + 1)), k = pos + "|" + yr;
+      if (y === cur) { now.push({ id, e, v, pos, yr, k }); continue; }
+      if (v.act == null) continue;
+      const g = G[k] || (G[k] = { pos, yr, n: 0, b: 0, ex: [] }); g.n++; tot++; if (v.act - v.p >= 4) { g.b++; hit++; g.ex.push({ n: e.n, y, d: v.act - v.p, act: v.act }); }
+    }
+    const base = hit / Math.max(1, tot);
+    const rows = Object.values(G).filter((g) => g.n >= 20 && g.b >= 3).map((g) => ({ ...g, rate: g.b / g.n })).sort((a, b) => b.b - a.b).slice(0, 12);
+    const wrap = el("section"); wrap.id = "board"; wrap.classList.add("weekpage");
+    wrap.append(el("h2", null, "Breakout types"), el("p", "note", `The kinds of player who most often beat their preseason projection by 4+ points a game, ${ys[0]}-${ys[ys.length - 1]}: ${hit} breakouts in ${tot} projected seasons (${(base * 100).toFixed(0)}% overall). Ranked by how many there were; the rate and lift say how much each type is worth betting on.`));
+    const t = el("table", "br weekt"), h = el("tr"); for (const x of ["#", "Type", "Breakouts", "Seasons", "Rate", "vs all", "Biggest examples", "Candidates now"]) h.append(el("th", null, x)); t.append(h);
+    rows.forEach((g, i) => {
+      const cand = now.filter((c) => c.k === g.pos + "|" + g.yr && c.v.bo != null).sort((a, b) => b.v.bo - a.v.bo).slice(0, 4).map((c) => `${c.e.n} ${Math.round(c.v.bo)}%`).join(", ") || "–";
+      const ex = g.ex.sort((a, b) => b.d - a.d).slice(0, 3).map((z) => `${z.n} '${String(z.y).slice(2)} +${z.d.toFixed(1)}`).join(", ");
+      const r = el("tr"); for (const x of [String(i + 1), `Year ${g.yr}${g.yr === 8 ? "+" : ""} ${g.pos}`, String(g.b), String(g.n), (g.rate * 100).toFixed(0) + "%", (g.rate / base).toFixed(1) + "×", ex, cand]) r.append(el("td", null, x)); t.append(r);
+    });
+    const bx = el("div", "fscroll brscroll"); bx.append(t); wrap.append(bx); main.append(wrap);
+  }
   async function preseasonPage(main) {
     await loadScript("data/pre.js").catch(() => {});
     const PR = window.FB_PRE; main.textContent = "";
@@ -2463,7 +2489,7 @@
   }
 
   // ---------- routing ----------
-  const PAGE_TITLE = { week: "This week", league: "League", leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", proj: "Projections", preseason: "Preseason", schedule: "Schedule", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
+  const PAGE_TITLE = { week: "This week", league: "League", leaders: "Leaders", teams: "Teams", roles: "Role Watch", trends: "Trends", proj: "Projections", preseason: "Preseason", archetypes: "Breakout types", schedule: "Schedule", backfields: "Backfields", team: "Backfield", coaches: "Coaches", coach: "Coach", dynasty: "Dynasty", player: "Player", settings: "Settings" };
   function route() {
     const h = location.hash.replace(/^#/, "") || "week", [page, a, b] = h.split("/");
     document.querySelectorAll(".nav a[data-page]").forEach((x) => { const on = x.dataset.page === page || (page === "team" && x.dataset.page === "backfields") || (page === "coach" && x.dataset.page === "coaches"); x.classList.toggle("on", on); if (on) x.setAttribute("aria-current", "page"); else x.removeAttribute("aria-current"); });
@@ -2475,7 +2501,7 @@
     const main = $("main"), same = S.lastPage === h;
     if (page === "player" && same) main.style.minHeight = main.offsetHeight + "px"; else main.style.minHeight = "";   // a player's page redrawn in place (a season, a tab) keeps its height through the Loading… line, so the page stays where it was
     main.innerHTML = '<p class="load">Loading…</p>';
-    const go = page === "week" ? weekPage(main) : page === "league" ? leaguePage(main) : page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "proj" ? projPage(main) : page === "preseason" ? preseasonPage(main) : page === "schedule" ? schedulePage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
+    const go = page === "week" ? weekPage(main) : page === "league" ? leaguePage(main) : page === "player" ? player(main, a) : page === "settings" ? settingsPage(main, a) : page === "backfields" ? backfields(main) : page === "team" ? teamPage(main, a, b) : page === "coaches" ? coaches(main) : page === "coach" ? coachPage(main, a) : page === "roles" ? roleWatch(main) : page === "trends" ? trendsPage(main) : page === "proj" ? projPage(main) : page === "preseason" ? preseasonPage(main) : page === "archetypes" ? archetypesPage(main) : page === "schedule" ? schedulePage(main) : page === "teams" ? teamsPage(main) : page === "dynasty" ? dynasty(main) : leaders(main);
     Promise.resolve(go).catch((err) => { main.textContent = ""; main.style.minHeight = ""; main.append(el("p", "load", "Couldn't load that season's data. Check the connection and reload.")); console.error(err); });
     if (S.lastPage !== h) { window.scrollTo(0, 0); S.lastPage = h; save(); }
   }
