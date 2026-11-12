@@ -434,7 +434,16 @@
     window.addEventListener("hashchange", () => setNav(false));
     document.addEventListener("click", (e) => { if (document.body.classList.contains("navopen") && !top.contains(e.target)) setNav(false); });
     nav.querySelectorAll("a").forEach((a) => a.addEventListener("click", () => setNav(false)));
-    inn.append(nav, sr, nt); top.append(inn); return top;
+    inn.append(nav, sr, nt); top.append(inn);
+    /* the phone's bottom bar (the baseball site's, 12 Nov 2026): the pages used most, one tap away; the Menu button still holds the rest */
+    { const pb = el("nav", "pbar"); pb.setAttribute("aria-label", "Main pages");
+      for (const [h, lab, ic] of [["#week", "This week", "M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"], ["#leaders", "Leaders", "M4 20V10m6 10V4m6 16v-8m4 8H2"], ["#roles", "Role Watch", "M12 3l2.6 5.6 6 .7-4.4 4.1 1.2 6L12 16.5 6.6 19.4l1.2-6L3.4 9.3l6-.7z"], ["#dynasty", "Dynasty", "M6 4h12v4a6 6 0 0 1-12 0zM9 20h6M12 14v6"], ["#settings", "Settings", "M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM3 12h3m12 0h3M12 3v3m0 12v3"]]) {
+        const a = el("a"); a.href = h; a.dataset.page = h.slice(1);
+        a.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${ic}"></path></svg><span>${lab}</span>`; pb.append(a); }
+      document.body.append(pb);
+      const lit = () => { const cur = (location.hash.replace(/^#/, "") || "week").split("/")[0]; pb.querySelectorAll("a").forEach((a) => a.classList.toggle("on", a.dataset.page === cur)); };
+      window.addEventListener("hashchange", lit); lit(); }
+    return top;
   }
   // the last five players opened, newest first (the header search lists them when tapped empty); per device
   const noteRecent = (id) => { const a = store.get("recent", []).filter((x) => x !== id); a.unshift(id); store.set("recent", a.slice(0, 5)); };
@@ -1968,6 +1977,15 @@
     const t2 = el("table", "br weekt"), h2 = el("tr"); for (const h of ["Player", "Pos", "Tm", "Preseason", "Now (ROS)", "Δ", "Next game", "Upside"]) h2.append(el("th", null, h)); t2.append(h2);
     for (const x of rs) { const tr = el("tr"), nm = el("td", "l"); nm.append(playerLink(x.p.n, x.p.id)); tr.append(nm, el("td", null, posGroup(x.p.pos)), el("td", null, x.p.tm || ""), el("td", null, num(x.pre)), el("td", null, num(x.ros)), el("td", "win", "+" + num(x.d)), el("td", null, x.nxt == null ? "–" : num(x.nxt)), el("td", null, x.bo == null ? "–" : Math.round(x.bo) + "%")); t2.append(tr); }
     wrap.append(rs.length ? t2 : el("p", "weeknote", "No risers over 2 points right now."));
+    // dynasty / trade value: points a game over a replacement starter, times an age curve — a single number to compare players across positions
+    const REP = { QB: 14, RB: 30, WR: 36, TE: 12 }, AGE = { QB: [[33, 1], [36, 0.8], [99, 0.5]], RB: [[24, 1.15], [26, 1.05], [27, 0.95], [28, 0.85], [29, 0.7], [99, 0.5]], WR: [[24, 1.15], [27, 1.05], [29, 0.95], [31, 0.8], [99, 0.6]], TE: [[25, 1.1], [28, 1.0], [31, 0.85], [99, 0.65]] };
+    const byPos = {}; for (const p of pool) (byPos[posGroup(p.pos)] = byPos[posGroup(p.pos)] || []).push(p);
+    const base = {}; for (const k in byPos) { const l = byPos[k].map((p) => RS.p[p.id].ros).sort((m, n) => n - m); base[k] = l[Math.min(REP[k], l.length) - 1] || 0; }
+    const dv = pool.map((p) => { const g = posGroup(p.pos), pr = PR && PR[p.id], age = pr && pr.age != null ? pr.age : null, ros = RS.p[p.id].ros; let mult = 1; if (age != null) for (const [lim, m] of AGE[g]) if (age < lim) { mult = m; break; } return { p, g, age, ros, v: Math.max(0, ros - base[g]) * mult * 10 + 0 }; }).filter((x) => x.v > 0).sort((m, n) => n.v - m.v).slice(0, 40);
+    wrap.append(el("h3", "weekh3", "Dynasty and trade value"), el("p", "weeknote", "Rest-of-season points a game over a replacement starter at his position (QB12, RB30, WR36, TE12 deep), times an age curve, scaled to a single number. Use it to compare across positions."));
+    const t3 = el("table", "br weekt"), h3 = el("tr"); for (const h of ["#", "Player", "Pos", "Age", "Proj/G", "Value"]) h3.append(el("th", null, h)); t3.append(h3);
+    dv.forEach((x, i) => { const tr = el("tr"), nm = el("td", "l"); nm.append(playerLink(x.p.n, x.p.id)); tr.append(el("td", null, String(i + 1)), nm, el("td", null, x.g), el("td", null, x.age == null ? "–" : num(x.age, 0)), el("td", null, num(x.ros)), el("td", "win", num(x.v, 0))); t3.append(tr); });
+    wrap.append(t3);
   }
 
 

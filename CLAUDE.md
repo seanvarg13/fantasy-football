@@ -1016,3 +1016,10 @@ Projections; Filters ▸ Position / Season). A row per player-season (his team =
   page shows (2017 on) is now a forward fit (`FWD_FROM`). They never change, so nothing rebuilds them.
 * **Result** (forward 2021-25, mean miss in FP / G): **3.11 / 2.44 / 2.39 / 1.67** (r .71 / .81 / .81 / .83); with ADP 3.11 / 2.40 / 2.38 / 1.63.
   Rookies 3.29 / 3.00 / 2.61 / 1.95. Why has one more group, the depth chart at kickoff and his contract.
+
+## This week and the upside model (Sean, 12 Nov 2026: "implement all of the changes" from the review of both sites)
+
+* **This week** (`#week`, `weekPage` in `fb.js`, the default page): a start/sit comparison of any two players on the projection models' next-game and rest-of-season numbers (`data/ros.js`) with the upside numbers beside them and a verdict (next game 60% / rest of season 40%; "close call" under 0.6), and **risers** — players whose rest-of-season line is 2+ points a game above the preseason model's, with the breakout odds. League-blind: the site has no league connection, so "available" is yours to check.
+* **Upside** (`tools/upside.py`, run after `build_pre.py` by the workflow's Preseason step, non-fatal): per skill player, forward-fitted on earlier seasons, **`bo`** = chance he beats his preseason projection by 4+ points a game (gradient-boosted classifier) and **`hi`** = his 80th-percentile points a game (quantile regressor), from the projection, last year's points, age, years in the league, draft round, the market gap and position; written into `data/pre.js` and shown on the Preseason page. Held out 2021-25: the top tenth by `bo` broke out 17.5% of the time against 8.2% for the rest (9.1% base); the ceiling covers 79%. It is a modest lift, not a Golden detector.
+* **ADP**: already automated — the workflow saves FFC's ADP from 15 August (`tools/fetch_adp.py`); 2026 has none only because the step was added after August.
+* Not built yet: a Sleeper League tab (needs a league id), draft tools, the phone bottom bar, a trade / dynasty value number.
